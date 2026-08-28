@@ -6,4 +6,4 @@
 
 | 编号 | 标题 | 状态 |
 |------|------|------|
-| — | 暂无 | — |
+| [0001](0001-inbox-cursor-connector.md) | 通知通道：inbox + cursor 保正确，connector gateway 唤起 runtime | 已接受 |

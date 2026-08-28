@@ -2,7 +2,7 @@
 
 > **状态：待补充。** 本文件不替你拍板，只把需要决定的事项列全，标注依赖关系与影响面。每定一项落一份 [ADR](adr/)，全部定完后本文件改写成结论。
 
-原 T1「Agent 接入协议」已经有方案了——它在补充需求时被提成了平台地基，方案见[接入与通知通道](04-connectivity.md)，待 review 确认后落 ADR-0001。
+原 T1「Agent 接入协议」已定案，见 [ADR-0001](adr/0001-inbox-cursor-connector.md)：inbox + cursor 保正确，SSE 只推信号，agent 侧 connector 分 Core + Runtime Adapter 两层。它顺带**约束**了下面几项——后端要能 hold 长连接（T5）、inbox 用表不用队列（T6）——并且新增了一个独立交付物 connector（T15）。
 
 ## A 组：写第一行代码前必须定
 
@@ -75,6 +75,24 @@ REST / GraphQL / RPC。以及给 agent 的 API 和给 admin 前端的 API 是同
 
 **倾向**：REST，两套路由（`/api/agent/*` 与 `/api/admin/*`），共用领域层。
 
+### T15 · Connector 的语言与分发形态
+
+Connector 要装在**别人的机器上**，所以取舍和后端不一样：分发体积、零依赖、跨平台，比"和后端同语言"重要得多。
+
+| 方案 | 优点 | 代价 |
+|---|---|---|
+| 单文件静态二进制（Go / Rust） | 一个文件丢过去就能跑，无运行时依赖 | 与后端可能不同语言，两套代码 |
+| Python / Node 脚本 | 开发快，agent 机器上大概率已有运行时 | 依赖版本地狱；打包成单文件又绕回去了 |
+| 和后端同语言同仓 | 共享类型定义与 API client | 后端若是 JVM / Python，分发体验会很差 |
+
+**倾向**：单文件静态二进制。Connector 的逻辑不复杂（连接 + 队列 + 唤起子进程），换来的安装体验值这个代价。API 契约用 OpenAPI 生成 client，避免手工同步。
+
+### T16 · 适配器的注册机制
+
+内置适配器编译进二进制，第三方适配器怎么加？
+
+**倾向**：照搬 hermes 的两套注册——内置适配器写死，第三方走清单文件（声明命令模板、环境要求、并发上限、超时），Core 读清单即可加载。这样加一个 runtime 不用改 connector 代码。
+
 ### T11 · MCP 接入层（可选）
 
 要不要在 REST 之上再包一层 MCP server，把 hub 的操作暴露成工具给 Claude 类 agent 直接用？
@@ -96,8 +114,9 @@ REST / GraphQL / RPC。以及给 agent 的 API 和给 admin 前端的 API 是同
 ## 决策依赖
 
 ```
-[已定] 通道设计 ──> 模块 2 的实现 ──> T5 后端框架（长连接能力）
-                └──> T6 存储（inbox 用表）
+[已定 ADR-0001] ──┬──> 模块 2 的实现 ──> T5 后端框架（长连接能力）
+                  ├──> T6 存储（inbox / outbox 用表）
+                  └──> T15 connector 语言 ──> T16 适配器注册
 
 T2 内容模型 ──> 模块 1/4/6 的全部实现   ⚠️ 先定这个
 T3 Agent Card ──> 模块 5 的 skill 内容
