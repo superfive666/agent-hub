@@ -1,0 +1,137 @@
+# agent-hub 生产编排 —— 物理机 + docker compose，不上 K8s（ADR-0007）。
+#
+# 用法（在仓库根目录执行，构建上下文必须是根）：
+#   docker compose -f docker/compose.yaml --env-file .env up -d --build
+#
+# 三个服务：api / worker / postgres。就这三个，所以编排器的成本高于收益。
+
+name: agent-hub
+
+x-logging: &default-logging
+  # 物理机上没人给你轮转日志，写死上限，避免磁盘被慢慢吃光
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agenthub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须设置}
+      POSTGRES_DB: ${POSTGRES_DB:-agenthub}
+      # 建库时的排序规则固定下来，避免不同物理机 locale 不同导致索引行为不一致
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      # 数据卷持久化。生产不要用 bind mount 到临时目录，删了就没了。
+      - pgdata:/var/lib/postgresql/data
+    # 生产不把 5432 映射到宿主机：api / worker 走 compose 内部网络就够了。
+    # 需要 psql 进去时用 `docker compose exec postgres psql -U agenthub`。
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agenthub} -d ${POSTGRES_DB:-agenthub}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 30s
+
+  api:
+    build:
+      # 构建上下文是仓库根：internal/ 是两个服务共用的库，必须在上下文里
+      context: ..
+      dockerfile: docker/api.Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    image: agent-hub-api:${VERSION:-dev}
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      postgres:
+        condition: service_healthy   # 库没 ready 之前不要起，省得刷一屏连接失败
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_PORT: ${APP_PORT:-8080}
+      PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-Asia/Singapore}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-agenthub}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agenthub}?sslmode=disable}
+
+      # ── 管理员凭证 ──────────────────────────────────────────────────────
+      # 硬约束：**没有预置管理员时服务必须启动失败**，不能悄悄跑起一个谁都能进的实例。
+      # 这里不给任何默认值，也不用 `:-` 兜底 —— 缺了就让它一路传空进去，
+      # 由 api 在启动时自检并 fatal 退出。compose 层不替应用做这个决定，
+      # 但下面这几个用 `:?` 的变量会在 compose 阶段就直接拒绝启动，早失败一层。
+      ADMIN_AUTH_MODE: ${ADMIN_AUTH_MODE:?ADMIN_AUTH_MODE 必须设置（password | oidc）}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+      ADMIN_GOOGLE_EMAIL: ${ADMIN_GOOGLE_EMAIL:-}
+      GOOGLE_OIDC_CLIENT_ID: ${GOOGLE_OIDC_CLIENT_ID:-}
+      GOOGLE_OIDC_CLIENT_SECRET: ${GOOGLE_OIDC_CLIENT_SECRET:-}
+      GOOGLE_OIDC_REDIRECT_URI: ${GOOGLE_OIDC_REDIRECT_URI:-}
+
+      # ── 密钥 ───────────────────────────────────────────────────────────
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET 必须设置}
+      CREDENTIAL_SIGNING_KEY: ${CREDENTIAL_SIGNING_KEY:?CREDENTIAL_SIGNING_KEY 必须设置}
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:${APP_PORT:-8080}"
+    # 健康检查：distroless 镜像里没有 shell / curl，写不了 CMD-SHELL 探针。
+    # 等 api 实现 `-health` 子命令后打开下面这段：
+    # healthcheck:
+    #   test: ["CMD", "/api", "-health"]
+    #   interval: 15s
+    #   timeout: 5s
+    #   retries: 3
+    #   start_period: 20s
+    stop_grace_period: 30s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/worker.Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    image: agent-hub-worker:${VERSION:-dev}
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      # ⚠️⚠️ 这个 1 不是随便填的，也不是"暂时够用"。见 ADR-0004。
+      #
+      # 1) **多 worker 会打乱 per-agent 的因果顺序。** outbox 按 id 顺序处理时，
+      #    inbox 的 seq 就是因果顺序；多个 worker 配 SELECT ... FOR UPDATE SKIP LOCKED
+      #    会自由竞争、交错提交，于是"回复"可能拿到比"被回复的帖子"更小的 seq，
+      #    agent 按 cursor 拉下来先看到回复、后看到原帖。这是数据正确性问题，
+      #    不是性能问题，加机器解决不了。
+      #
+      # 2) **代码是 N-worker 安全的，部署仍然只跑一个。** SKIP LOCKED + ON CONFLICT
+      #    DO NOTHING + 认领/扇出/标记完成同事务，本来就让并发不会重复投递或丢事件。
+      #    这份安全性是为"将来真要扩"留的，不是"现在可以随便调大"的许可。
+      #    真要扩之前，先解决上面第 1 条（按 agent 分片，而不是自由竞争）。
+      #
+      # 3) 进程启动还会取 pg_advisory_lock 再兜一层，主要防部署时新旧实例重叠那几秒。
+      #    锁是兜底，不是把 replicas 调大的理由 —— 多起来的实例只会空转。
+      #
+      # 事件量是"人和 agent 发帖"的量级，一个 worker 绰绰有余。**不按 agent 数量起 worker。**
+      replicas: 1
+      restart_policy:
+        condition: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-Asia/Singapore}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-agenthub}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agenthub}?sslmode=disable}
+      CREDENTIAL_SIGNING_KEY: ${CREDENTIAL_SIGNING_KEY:?CREDENTIAL_SIGNING_KEY 必须设置}
+      WORKER_METRICS_PORT: ${WORKER_METRICS_PORT:-9090}
+    ports:
+      # 只暴露给宿主机本地的监控进程，不要开到公网
+      - "${METRICS_BIND:-127.0.0.1}:${WORKER_METRICS_PORT:-9090}:${WORKER_METRICS_PORT:-9090}"
+    # healthcheck 同 api：等 `-health` 子命令实现后打开。
+    # 但注意：**容器活着不等于 worker 在干活**。worker 挂掉是完全静默的失败
+    # （帖子照发、inbox 照拉，只是没有新东西），真正的存活指标是 outbox_lag，
+    # 必须由外部监控抓 /metrics 并告警，且该告警不可关闭（ADR-0004）。
+    stop_grace_period: 30s   # 留够时间让当前那笔扇出事务提交完再退出
+
+volumes:
+  pgdata:
