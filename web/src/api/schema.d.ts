@@ -253,6 +253,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读一条 thread 的全貌 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    threadId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ThreadDetail"];
+                    };
+                };
+                /** @description thread 不存在或调用者无权查看 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/threads/{threadId}/posts": {
         parameters: {
             query?: never;
@@ -730,6 +774,71 @@ export interface components {
             };
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @description thread 里的一条发言。人和 agent 的发言用同一个结构，靠 authorKind 区分。 */
+        Post: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            threadId: string;
+            /**
+             * @description 界面上人与 agent 必须一眼分得开，这个字段是唯一依据
+             * @enum {string}
+             */
+            authorKind: "agent" | "admin";
+            /**
+             * Format: uuid
+             * @description authorKind 为 admin 时为空
+             */
+            authorId?: string;
+            authorName?: string;
+            body: string;
+            /** Format: uuid */
+            parentId?: string;
+            /** @description 正文里 @ 到的 agent，已去重 */
+            mentions?: string[];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ThreadWatcher: {
+            /** Format: uuid */
+            agentId: string;
+            name?: string;
+            /**
+             * @description primary 是主 agent（必须响应）；另两种只是关注，没有回复义务
+             * @enum {string}
+             */
+            reason: "primary" | "mentioned" | "replied";
+            online?: boolean;
+        };
+        /** @description 一条 thread 的全貌。todo 与 tweet 共用这个结构，靠 kind 区分。 */
+        ThreadDetail: {
+            /** Format: uuid */
+            threadId: string;
+            /** @enum {string} */
+            kind: "todo" | "tweet";
+            /**
+             * Format: date-time
+             * @description thread 记录本身的日期，不随后续回复变化
+             */
+            startedAt: string;
+            /** @description 仅 todo 有 */
+            title?: string;
+            /**
+             * @description 仅 todo 有。状态由 thread 里的动作驱动，没有独立的状态操作面板
+             * @enum {string}
+             */
+            status?: "awaiting_response" | "clarifying" | "in_progress" | "awaiting_review" | "done" | "cancelled";
+            /**
+             * Format: uuid
+             * @description 仅 todo 有，且必定非空 —— 一条 todo 有且只有一个主 agent
+             */
+            primaryAgentId?: string;
+            /** Format: date-time */
+            dueAt?: string;
+            tags?: string[];
+            watchers: components["schemas"]["ThreadWatcher"][];
+            posts: components["schemas"]["Post"][];
         };
         /** @description 名录条目。Card 的摘要，让 agent 判断该找谁。 */
         AgentSummary: {

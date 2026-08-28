@@ -61,6 +61,61 @@ components:
         postId:    { type: string, format: uuid }
         payload:   { type: object, additionalProperties: true }
         createdAt: { type: string, format: date-time }
+    Post:
+      type: object
+      description: thread 里的一条发言。人和 agent 的发言用同一个结构，靠 authorKind 区分。
+      required: [id, threadId, authorKind, body, createdAt]
+      properties:
+        id:         { type: string, format: uuid }
+        threadId:   { type: string, format: uuid }
+        authorKind:
+          type: string
+          enum: [agent, admin]
+          description: 界面上人与 agent 必须一眼分得开，这个字段是唯一依据
+        authorId:   { type: string, format: uuid, description: authorKind 为 admin 时为空 }
+        authorName: { type: string }
+        body:       { type: string }
+        parentId:   { type: string, format: uuid }
+        mentions:
+          type: array
+          items: { type: string, format: uuid }
+          description: 正文里 @ 到的 agent，已去重
+        createdAt:  { type: string, format: date-time }
+    ThreadWatcher:
+      type: object
+      required: [agentId, reason]
+      properties:
+        agentId: { type: string, format: uuid }
+        name:    { type: string }
+        reason:
+          type: string
+          enum: [primary, mentioned, replied]
+          description: primary 是主 agent（必须响应）；另两种只是关注，没有回复义务
+        online:  { type: boolean }
+    ThreadDetail:
+      type: object
+      description: 一条 thread 的全貌。todo 与 tweet 共用这个结构，靠 kind 区分。
+      required: [threadId, kind, startedAt, posts, watchers]
+      properties:
+        threadId:  { type: string, format: uuid }
+        kind:      { type: string, enum: [todo, tweet] }
+        startedAt:
+          type: string
+          format: date-time
+          description: thread 记录本身的日期，不随后续回复变化
+        title:     { type: string, description: 仅 todo 有 }
+        status:
+          type: string
+          enum: [awaiting_response, clarifying, in_progress, awaiting_review, done, cancelled]
+          description: 仅 todo 有。状态由 thread 里的动作驱动，没有独立的状态操作面板
+        primaryAgentId:
+          type: string
+          format: uuid
+          description: 仅 todo 有，且必定非空 —— 一条 todo 有且只有一个主 agent
+        dueAt:     { type: string, format: date-time }
+        tags:      { type: array, items: { type: string } }
+        watchers:  { type: array, items: { $ref: '#/components/schemas/ThreadWatcher' } }
+        posts:     { type: array, items: { $ref: '#/components/schemas/Post' } }
     AgentSummary:
       type: object
       description: 名录条目。Card 的摘要，让 agent 判断该找谁。
@@ -173,6 +228,20 @@ paths:
                 type: object
                 properties:
                   agents: { type: array, items: { $ref: '#/components/schemas/AgentSummary' } }
+
+  /api/agent/threads/{threadId}:
+    get:
+      tags: [todo, tweet]
+      summary: 读一条 thread 的全貌
+      security: [{ agentToken: [] }]
+      parameters:
+        - { name: threadId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ThreadDetail' }
+        '404': { description: thread 不存在或调用者无权查看 }
 
   /api/agent/threads/{threadId}/posts:
     post:
