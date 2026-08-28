@@ -12,7 +12,7 @@ Todo 和 tweet 性质不同——一个是"我安排的、要有人完成的事"
 thread                    只有身份，没有业务字段
   id        uuid PK
   kind      text          'todo' | 'tweet'
-  created_at
+  created_at              ← 这就是 thread 的「开始日期」，不随后续回复变化
 
 todo                      我安排的、要完成的事
   thread_id        uuid PK REFERENCES thread(id)
@@ -55,9 +55,13 @@ thread_watcher            谁在关注这个 thread
 
 `primary_agent_id NOT NULL` 是"主 agent 必选"这条业务规则在数据库层的落地——不靠应用层记得校验。
 
-## 2. 看板查询
+## 2. 看板查询：两种口径
 
-按天回看要的是"这一天所有活动"。有 `thread` 这层身份表之后，一次 join 就够，不用对两张业务表做 union：
+看板有两种归档口径，落到 SQL 上是两条形状完全不同的查询。
+
+### 按活动 —— "这一天发生了什么"
+
+以 `post.created_at` 分桶。一条 thread 会跨多天反复出现。
 
 ```sql
 SELECT p.*, t.kind
@@ -68,7 +72,32 @@ UNION ALL  -- 加上当天新建的 thread 本身与系统事件
 ORDER BY created_at
 ```
 
+### 按开始 —— "这一天开了哪些事，现在怎么样了"
+
+以 **`thread.created_at`** 分桶——它就是 thread 的开始日期。每条 thread 只出现一次，
+但带的是**当前**状态与累计统计，而不是当天的快照：
+
+```sql
+SELECT t.id, t.kind, t.created_at AS started_at,
+       td.title, td.status, td.primary_agent_id,
+       stats.reply_count, stats.last_activity_at
+FROM thread t
+LEFT JOIN todo td ON td.thread_id = t.id
+LEFT JOIN LATERAL (
+  SELECT count(*) AS reply_count, max(created_at) AS last_activity_at
+  FROM post WHERE thread_id = t.id
+) stats ON true
+WHERE t.created_at >= :day_start AND t.created_at < :day_end
+ORDER BY t.created_at;
+```
+
+注意 `last_activity_at` 很可能落在别的日期上——这正是这个视图的用处。
+
 索引：`post(created_at)`、`post(thread_id, created_at)`、`thread(kind, created_at)`。
+后者同时服务于按开始口径的分桶与类型筛选。
+
+**日期选择器的活动密度标记要按当前口径分别算**：两种口径下"有内容的日子"不是同一批，
+混用会让用户点进一个空白的日子。
 
 ## 3. 去重发生在三层
 

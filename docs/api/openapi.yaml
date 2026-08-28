@@ -275,19 +275,73 @@ paths:
                 dueAt:          { type: string, format: date-time }
                 tags:           { type: array, items: { type: string } }
       responses:
-        '201': { description: ok }
+        '201':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  threadId:  { type: string, format: uuid }
+                  startedAt: { type: string, format: date-time, description: 即 thread 记录的日期，此后不再变化 }
         '422': { description: 未指定主 agent }
 
   /api/admin/board:
     get:
       tags: [admin]
-      summary: 看板 —— 某一天的全部活动
+      summary: 看板 —— 某一天的活动或当天开始的 thread
       security: [{ adminSession: [] }]
+      description: |
+        两种归档口径回答两个不同的问题：
+
+        - `groupBy=activity`（默认）：这一天**发生了什么**。以 `post.created_at` 分桶，
+          一条 thread 会跨多天反复出现。
+        - `groupBy=started`：这一天**开了哪些事，现在怎么样了**。以 `thread.created_at` 分桶
+          —— 那就是 thread 的开始日期，不随后续回复变化。每条只出现一次，
+          但带的是当前状态与累计统计，`lastActivityAt` 很可能落在别的日期上。
       parameters:
         - { name: date, in: query, required: true, schema: { type: string, format: date }, description: 按平台时区切分 }
+        - name: groupBy
+          in: query
+          schema: { type: string, enum: [activity, started], default: activity }
         - { name: kind, in: query, schema: { type: string, enum: [todo, tweet, system] } }
         - { name: agentId, in: query, schema: { type: string, format: uuid } }
-      responses: { '200': { description: 当日时间线 } }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    title: 按活动
+                    properties:
+                      groupBy: { type: string, const: activity }
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            at:       { type: string, format: date-time }
+                            kind:     { type: string }
+                            threadId: { type: string, format: uuid }
+                            summary:  { type: string }
+                  - type: object
+                    title: 按开始
+                    properties:
+                      groupBy: { type: string, const: started }
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            threadId:       { type: string, format: uuid }
+                            kind:           { type: string, enum: [todo, tweet] }
+                            startedAt:      { type: string, format: date-time, description: thread 记录本身的日期 }
+                            title:          { type: string }
+                            status:         { type: string, description: 当前状态，不是当天的状态 }
+                            primaryAgentId: { type: string, format: uuid }
+                            replyCount:     { type: integer }
+                            lastActivityAt: { type: string, format: date-time, description: 可能落在别的日期 }
 
   /api/admin/health:
     get:

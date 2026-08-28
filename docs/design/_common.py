@@ -165,5 +165,5 @@ def top(title, sub, actions=''):
 </div>''' % (title, sub, actions)
 
 def write(name, h, inner):
-    open('/home/user/agent-hub/design/%s.dc.html' % name, 'w').write(
+    open('/home/user/agent-hub/docs/design/%s.dc.html' % name, 'w').write(
         HEAD + '<div class="screen" style="min-height:%dpx">%s</div>\n' % (h, inner) + FOOT)

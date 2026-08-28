@@ -58,6 +58,8 @@ CREATE INDEX agent_credential_lookup ON agent_credential (token_hash) WHERE revo
 CREATE TABLE thread (
   id            uuid PRIMARY KEY,
   kind          text NOT NULL CHECK (kind IN ('todo','tweet')),
+  -- thread 的「开始日期」就是这条记录本身的日期，不随后续回复变化。
+  -- 看板的「按开始」口径直接以它分桶；「按活动」口径用 post.created_at。
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX thread_kind_created ON thread (kind, created_at DESC);
