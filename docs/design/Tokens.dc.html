@@ -11,296 +11,324 @@
   <style>
   @property --ang { syntax:'<angle>'; initial-value:0deg; inherits:false; }
 
-  /* ══ 亮色：冷调雾面玻璃 ══ */
+  /* ═══ 亮色 · 液态玻璃 ═══ */
   :root{
-    --bg:#e9edf6; --bg2:#dfe5f2;
-    --panel:rgba(255,255,255,.52); --surface:rgba(255,255,255,.72); --raised:rgba(255,255,255,.5);
-    --text:#161b26; --text2:#535d72; --text3:#8a93a7;
-    --line:rgba(22,27,38,.09); --line2:rgba(22,27,38,.055);
-    --hair:rgba(255,255,255,.85);
-    --agent:#0c9e8d; --agent-ink:#07786b; --agent-soft:rgba(12,158,141,.13); --agent-glow:rgba(12,200,180,.30);
-    --human:#dd6f22; --human-ink:#a8500f; --human-soft:rgba(221,111,34,.14); --human-glow:rgba(255,150,70,.32);
-    --alert:#c9412c; --alert-soft:rgba(201,65,44,.12);
-    --warn:#9a7412;  --warn-soft:rgba(154,116,18,.13);
-    --i1:#28c8e8; --i2:#7a6bff; --i3:#ff5cc8; --i4:#ffab4d;
-    --glass-blur:22px; --glass-sat:170%;
-    --shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 18px 44px -22px rgba(22,30,55,.4);
-    --shadow-sm:0 1px 0 rgba(255,255,255,.6) inset, 0 6px 18px -12px rgba(22,30,55,.34);
-    --amb1:rgba(80,200,255,.55); --amb2:rgba(150,120,255,.45);
-    --amb3:rgba(255,130,200,.36); --amb4:rgba(255,190,120,.36);
-    --amb-blend:normal; --amb-op:.55; --dust-op:.35;
+    --ink:#10222c; --ink2:#4a6472; --ink3:#8aa2ae;
+    --hair:rgba(255,255,255,.92); --hair2:rgba(120,160,185,.20);
+    --agent:#12a58c; --agent-ink:#07705f; --agent-soft:rgba(18,190,160,.16);
+    --human:#e0762a; --human-ink:#a3500f; --human-soft:rgba(255,150,70,.18);
+    --alert:#cf4331; --alert-soft:rgba(207,67,49,.14);
+    --warn:#a07a10;  --warn-soft:rgba(190,150,30,.16);
+    --i1:#5fe3ff; --i2:#9d8cff; --i3:#ff8fd8; --i4:#ffd68a; --i5:#7cf0c8;
+    --aura:rgba(90,220,210,.0);
+    --pane-bg:linear-gradient(158deg,rgba(255,255,255,.66),rgba(255,255,255,.34) 46%,rgba(255,255,255,.52));
+    --pane-bd:rgba(255,255,255,.75);
+    --pane-sh:inset 0 1.5px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(255,255,255,.55),
+              inset 0 22px 44px -28px rgba(255,255,255,1),
+              inset 0 -30px 52px -34px rgba(60,115,150,.42),
+              0 36px 74px -36px rgba(20,55,85,.42),0 2px 10px -5px rgba(20,55,85,.18);
+    --inset-bg:rgba(255,255,255,.40); --inset-bd:rgba(255,255,255,.62);
+    --inset-sh:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(120,165,195,.22),
+               inset 0 12px 26px -20px rgba(255,255,255,.9);
+    --chip-bg:rgba(255,255,255,.52);
+    --prism-op:.42; --sheen-op:.55; --dust-op:0;
+    --pri-grad:linear-gradient(135deg,#a8f0d2,#4fd6b4 52%,#37cbdd);
+    --pri-ink:#053a30; --pri-sh:inset 0 1.5px 0 rgba(255,255,255,.9),0 12px 28px -12px rgba(50,200,180,.65);
+    --me-grad:linear-gradient(135deg,#ffd9a8,#ff9f5a 55%,#f4813c);
+    --me-ink:#4a2004; --me-sh:inset 0 1.5px 0 rgba(255,255,255,.75),0 14px 32px -14px rgba(240,140,70,.6);
   }
-  /* ══ 暗色：赛博霓虹 ══ */
+  /* ═══ 暗色 · 霓虹光影 ═══ */
   .dark{
-    --bg:#080a11; --bg2:#0d1018;
-    --panel:rgba(255,255,255,.035); --surface:rgba(255,255,255,.052); --raised:rgba(255,255,255,.075);
-    --text:#e9edf8; --text2:#98a2ba; --text3:#5f6a84;
-    --line:rgba(255,255,255,.09); --line2:rgba(255,255,255,.055);
-    --hair:rgba(255,255,255,.12);
-    --agent:#3ee0c8; --agent-ink:#7ff0de; --agent-soft:rgba(62,224,200,.13); --agent-glow:rgba(62,224,200,.42);
-    --human:#ff9f5a; --human-ink:#ffc08f; --human-soft:rgba(255,159,90,.14); --human-glow:rgba(255,159,90,.42);
-    --alert:#ff6f5c; --alert-soft:rgba(255,111,92,.13);
-    --warn:#f0c25a;  --warn-soft:rgba(240,194,90,.12);
-    --i1:#41e0ff; --i2:#8b7bff; --i3:#ff5cc8; --i4:#ffb35c;
-    --glass-blur:26px; --glass-sat:150%;
-    --shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 26px 60px -28px rgba(0,0,0,.95);
-    --shadow-sm:0 1px 0 rgba(255,255,255,.06) inset, 0 10px 26px -16px rgba(0,0,0,.9);
-    --amb1:rgba(30,160,255,.55); --amb2:rgba(130,70,255,.5);
-    --amb3:rgba(255,60,180,.38); --amb4:rgba(0,220,190,.35);
-    --amb-blend:screen; --amb-op:.85; --dust-op:1;
+    --ink:#eef2fa; --ink2:#94a2b8; --ink3:#5d6a80;
+    --hair:rgba(255,255,255,.14); --hair2:rgba(255,255,255,.07);
+    --agent:#3ee0c8; --agent-ink:#8af3e2; --agent-soft:rgba(62,224,200,.14);
+    --human:#ff9f5a; --human-ink:#ffc08f; --human-soft:rgba(255,159,90,.16);
+    --alert:#ff6f5c; --alert-soft:rgba(255,111,92,.14);
+    --warn:#f0c25a;  --warn-soft:rgba(240,194,90,.13);
+    --i1:#41e0ff; --i2:#a06bff; --i3:#ff5cc8; --i4:#ffb35c; --i5:#3ee0c8;
+    --aura:rgba(120,80,255,.42);
+    --pane-bg:linear-gradient(158deg,rgba(255,255,255,.085),rgba(255,255,255,.018) 46%,rgba(255,255,255,.055));
+    --pane-bd:rgba(255,255,255,.10);
+    --pane-sh:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -28px 50px -36px rgba(255,255,255,.14),
+              0 44px 96px -44px #000,0 0 74px -24px var(--aura);
+    --inset-bg:rgba(255,255,255,.028); --inset-bd:rgba(255,255,255,.06);
+    --inset-sh:inset 0 1px 0 rgba(255,255,255,.07);
+    --chip-bg:rgba(255,255,255,.06);
+    --prism-op:.85; --sheen-op:.16; --dust-op:1;
+    --pri-grad:linear-gradient(135deg,#8b5cff,#c94bff 52%,#ff5cc8);
+    --pri-ink:#fff; --pri-sh:inset 0 1px 0 rgba(255,255,255,.4),0 14px 34px -12px rgba(170,80,255,.7);
+    --me-grad:linear-gradient(135deg,#ffc98a,#ff9f5a 55%,#f07a3c);
+    --me-ink:#3a1a04; --me-sh:inset 0 1px 0 rgba(255,255,255,.5),0 16px 38px -14px rgba(255,140,70,.55);
   }
   :root,.dark{
-    --r-bub:20px; --r-card:18px; --r-ctl:12px; --r-pill:999px;
+    --r-slab:38px; --r-pane:30px; --r-in:24px; --r-card:20px; --r-bub:24px; --r-pill:999px;
     --ui:'Manrope',-apple-system,'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif;
     --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
     --ease:cubic-bezier(.22,.61,.28,1);
+    --blur:30px;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--ui);-webkit-font-smoothing:antialiased;text-wrap:pretty}
   a{color:var(--human)}
 
-  /* ══ 底层：着色器渐变 + 粒子场（纯 CSS，无额外标签） ══ */
-  .app{display:flex;background:var(--bg);color:var(--text);position:relative;isolation:isolate;overflow:hidden}
-  .app::before{content:'';position:absolute;inset:-15%;z-index:0;pointer-events:none;
-    opacity:var(--amb-op);mix-blend-mode:var(--amb-blend);
+  /* ═══ 舞台：不再是"页面底色"，是一张有天气的背景 ═══ */
+  .app{display:flex;gap:16px;padding:22px;color:var(--ink);position:relative;isolation:isolate;
+    overflow:hidden;align-items:stretch;
     background:
-      radial-gradient(38% 32% at 14% 12%, var(--amb1), transparent 70%),
-      radial-gradient(34% 30% at 84% 20%, var(--amb2), transparent 70%),
-      radial-gradient(40% 34% at 72% 88%, var(--amb3), transparent 70%),
-      radial-gradient(30% 26% at 24% 82%, var(--amb4), transparent 70%);
-    filter:blur(58px);animation:drift 26s var(--ease) infinite alternate}
+      radial-gradient(78% 58% at 16% 4%,#c9e9f7 0%,transparent 58%),
+      radial-gradient(64% 52% at 86% 10%,#dcdcff 0%,transparent 60%),
+      radial-gradient(86% 62% at 62% 104%,#dffaf0 0%,transparent 58%),
+      linear-gradient(168deg,#cfe4f0 0%,#e2eff5 42%,#eef8f8 100%)}
+  .dark .app,.dark.app{background:
+      radial-gradient(58% 48% at 18% 6%,rgba(40,90,255,.20),transparent 60%),
+      radial-gradient(52% 44% at 88% 14%,rgba(190,60,255,.18),transparent 62%),
+      radial-gradient(74% 56% at 56% 106%,rgba(0,220,190,.13),transparent 58%),
+      #05060a}
+  /* 焦散光带 + 棱镜色散 */
+  .app::before{content:'';position:absolute;inset:-20%;z-index:0;pointer-events:none;opacity:.75;
+    background:
+      conic-gradient(from 210deg at 30% 20%,transparent 0 18%,rgba(255,255,255,.5) 24%,transparent 30%),
+      conic-gradient(from 40deg at 76% 74%,transparent 0 20%,rgba(255,255,255,.38) 26%,transparent 33%),
+      linear-gradient(104deg,transparent 40%,rgba(255,120,220,.28) 46%,rgba(120,220,255,.30) 50%,
+        rgba(180,255,200,.26) 54%,transparent 60%);
+    filter:blur(46px);animation:weather 30s var(--ease) infinite alternate}
+  .dark .app::before,.dark.app::before{opacity:.32;filter:blur(70px)}
+  /* 尘埃粒子（暗色专用） */
   .app::after{content:'';position:absolute;left:0;top:0;width:2px;height:2px;border-radius:50%;
     z-index:0;pointer-events:none;opacity:var(--dust-op);
-    box-shadow:750px 675px 2px rgba(255,200,140,0.29),1284px 453px 0px rgba(255,200,140,0.20),791px 763px 2px rgba(120,232,255,0.72),1091px 177px 2px rgba(160,140,255,0.59),1396px 221px 0px rgba(255,140,215,0.51),1406px 512px 0px rgba(160,140,255,0.34),43px 1280px 0px rgba(255,140,215,0.66),1256px 61px 0px rgba(160,140,255,0.23),44px 98px 2px rgba(120,232,255,0.65),495px 1170px 0px rgba(255,140,215,0.63),1542px 282px 1px rgba(255,200,140,0.59),1403px 122px 1px rgba(120,232,255,0.57),471px 1295px 0px rgba(120,232,255,0.39),266px 597px 0px rgba(120,232,255,0.64),64px 488px 1px rgba(120,232,255,0.41),1072px 1311px 1px rgba(160,140,255,0.54),1136px 1198px 1px rgba(160,140,255,0.27),420px 335px 0px rgba(160,140,255,0.22),1227px 1193px 0px rgba(255,140,215,0.46),1434px 58px 0px rgba(255,200,140,0.65),1176px 64px 0px rgba(255,200,140,0.68),1289px 77px 0px rgba(255,200,140,0.47),1507px 1246px 1px rgba(160,140,255,0.30),135px 114px 2px rgba(255,140,215,0.50),867px 1361px 0px rgba(255,140,215,0.46),1245px 1386px 2px rgba(160,140,255,0.66),154px 494px 0px rgba(255,140,215,0.34),1063px 130px 2px rgba(255,200,140,0.46),1260px 662px 2px rgba(120,232,255,0.38),1052px 14px 2px rgba(255,140,215,0.18),1021px 622px 1px rgba(160,140,255,0.57),1394px 995px 1px rgba(255,140,215,0.60),393px 566px 0px rgba(120,232,255,0.38),1456px 220px 0px rgba(120,232,255,0.38),674px 300px 0px rgba(255,200,140,0.54),1349px 41px 2px rgba(255,140,215,0.61),1430px 485px 2px rgba(255,140,215,0.57),56px 941px 1px rgba(255,140,215,0.59),1181px 646px 2px rgba(255,140,215,0.46),420px 1217px 0px rgba(120,232,255,0.45),1058px 131px 0px rgba(255,140,215,0.24),1315px 1086px 1px rgba(255,140,215,0.32),610px 952px 1px rgba(160,140,255,0.30),21px 1182px 0px rgba(120,232,255,0.49),1204px 701px 0px rgba(255,140,215,0.62),1314px 934px 0px rgba(120,232,255,0.32),1592px 973px 0px rgba(160,140,255,0.65),790px 1025px 0px rgba(160,140,255,0.46),1448px 298px 0px rgba(160,140,255,0.38),538px 710px 2px rgba(255,140,215,0.24),932px 295px 0px rgba(120,232,255,0.40),390px 759px 2px rgba(120,232,255,0.25),635px 1157px 0px rgba(255,200,140,0.64),226px 224px 0px rgba(160,140,255,0.68),58px 84px 0px rgba(120,232,255,0.42),403px 176px 2px rgba(120,232,255,0.41),589px 1050px 0px rgba(120,232,255,0.40),747px 247px 0px rgba(120,232,255,0.42),547px 1048px 2px rgba(160,140,255,0.48),330px 828px 1px rgba(255,200,140,0.49),1492px 568px 1px rgba(160,140,255,0.42),95px 289px 2px rgba(120,232,255,0.27),1131px 400px 2px rgba(120,232,255,0.43),277px 185px 0px rgba(160,140,255,0.65),661px 936px 2px rgba(160,140,255,0.70),14px 504px 2px rgba(160,140,255,0.52),674px 611px 1px rgba(120,232,255,0.37),44px 838px 2px rgba(255,200,140,0.29),1472px 119px 0px rgba(120,232,255,0.71),1245px 1253px 2px rgba(160,140,255,0.53),326px 805px 2px rgba(255,200,140,0.60),366px 223px 0px rgba(255,140,215,0.59),101px 497px 0px rgba(120,232,255,0.37),28px 1117px 0px rgba(160,140,255,0.19),1150px 997px 0px rgba(120,232,255,0.62),665px 1331px 1px rgba(255,140,215,0.23),1014px 193px 0px rgba(120,232,255,0.44),266px 628px 0px rgba(255,140,215,0.30),1032px 735px 0px rgba(255,200,140,0.20),1408px 1249px 2px rgba(120,232,255,0.31),1509px 1388px 2px rgba(160,140,255,0.44),55px 1250px 0px rgba(120,232,255,0.68),47px 1256px 2px rgba(120,232,255,0.71),1025px 1120px 0px rgba(160,140,255,0.19),1285px 89px 2px rgba(255,140,215,0.61),322px 1080px 0px rgba(120,232,255,0.26),260px 515px 0px rgba(120,232,255,0.42),661px 1362px 0px rgba(255,140,215,0.50),1427px 1025px 1px rgba(255,200,140,0.33),55px 1383px 2px rgba(255,200,140,0.70);animation:dust 34s linear infinite}
+    box-shadow:750px 675px 0px rgba(255,150,220,0.76),1369px 1177px 0px rgba(140,230,255,0.66),1010px 556px 2px rgba(255,150,220,0.80),240px 1185px 0px rgba(170,150,255,0.69),1396px 221px 2px rgba(255,150,220,0.35),512px 602px 0px rgba(140,230,255,0.21),1280px 986px 1px rgba(255,150,220,0.57),61px 181px 0px rgba(140,230,255,0.21),1376px 238px 0px rgba(160,255,225,0.42),1542px 282px 1px rgba(160,255,225,0.48),122px 1470px 0px rgba(160,255,225,0.76),1620px 471px 2px rgba(255,150,220,0.23),299px 266px 1px rgba(255,150,220,0.23),618px 64px 0px rgba(160,255,225,0.28),967px 1072px 1px rgba(170,150,255,0.70),1136px 1198px 0px rgba(140,230,255,0.28),420px 335px 0px rgba(255,150,220,0.32),1653px 1402px 0px rgba(160,255,225,0.37),1434px 58px 2px rgba(160,255,225,0.33),64px 543px 2px rgba(255,150,220,0.58),77px 1106px 0px rgba(160,255,225,0.28),1668px 1246px 0px rgba(170,150,255,0.48),114px 1202px 1px rgba(160,255,225,0.66),1361px 1061px 0px rgba(255,150,220,0.77),1245px 1386px 0px rgba(140,230,255,0.64),589px 200px 1px rgba(170,150,255,0.51),1065px 849px 1px rgba(255,150,220,0.66),9px 1095px 0px rgba(140,230,255,0.54),1324px 1092px 2px rgba(255,150,220,0.63),294px 927px 2px rgba(170,150,255,0.36),842px 393px 1px rgba(255,150,220,0.60),178px 683px 0px rgba(255,150,220,0.80),551px 674px 0px rgba(160,255,225,0.39),1547px 41px 2px rgba(255,150,220,0.57),485px 1479px 1px rgba(140,230,255,0.48),483px 699px 2px rgba(255,150,220,0.51),758px 1048px 0px rgba(255,150,220,0.24),1058px 131px 0px rgba(255,150,220,0.40),1086px 522px 1px rgba(160,255,225,0.38),952px 440px 0px rgba(160,255,225,0.21),1182px 1160px 0px rgba(140,230,255,0.23),701px 905px 1px rgba(140,230,255,0.72),1314px 934px 1px rgba(140,230,255,0.35),973px 380px 0px rgba(160,255,225,0.50),377px 1184px 0px rgba(170,150,255,0.62),298px 770px 2px rgba(170,150,255,0.36),710px 237px 1px rgba(160,255,225,0.29),65px 209px 0px rgba(170,150,255,0.42),1130px 234px 1px rgba(160,255,225,0.22),224px 795px 0px rgba(170,150,255,0.22),84px 896px 0px rgba(140,230,255,0.32),176px 880px 0px rgba(255,150,220,0.51),1227px 1488px 0px rgba(140,230,255,0.42),914px 365px 0px rgba(140,230,255,0.36),1151px 96px 0px rgba(170,150,255,0.70),1159px 1116px 2px rgba(160,255,225,0.73),568px 907px 0px rgba(160,255,225,0.79),289px 330px 0px rgba(170,150,255,0.48),1254px 188px 0px rgba(140,230,255,0.72),342px 369px 1px rgba(160,255,225,0.78),358px 1152px 0px rgba(170,150,255,0.58),325px 1206px 1px rgba(255,150,220,0.42),1294px 68px 2px rgba(140,230,255,0.45),1491px 969px 0px rgba(140,230,255,0.58),331px 1245px 0px rgba(170,150,255,0.63),1601px 342px 2px rgba(170,150,255,0.62),1556px 928px 1px rgba(140,230,255,0.23),733px 1022px 0px rgba(170,150,255,0.21),39px 584px 0px rgba(255,150,220,0.54),1685px 1194px 0px rgba(140,230,255,0.40),1331px 207px 1px rgba(160,255,225,0.67),193px 982px 0px rgba(140,230,255,0.71),266px 628px 0px rgba(255,150,220,0.35),735px 64px 2px rgba(170,150,255,0.61),482px 1475px 0px rgba(160,255,225,0.59),405px 1225px 0px rgba(140,230,255,0.39),1256px 206px 0px rgba(140,230,255,0.56),706px 1285px 0px rgba(255,150,220,0.38),322px 1080px 0px rgba(140,230,255,0.71),1347px 1165px 0px rgba(170,150,255,0.28);animation:dust 40s linear infinite}
   .app > *{position:relative;z-index:1}
-  @keyframes drift{
-    0%{transform:translate3d(0,0,0) scale(1)}
-    50%{transform:translate3d(2.5%,-2%,0) scale(1.07)}
-    100%{transform:translate3d(-2%,2.5%,0) scale(1.03)}}
-  @keyframes dust{from{transform:translate3d(0,0,0)}to{transform:translate3d(-40px,-90px,0)}}
+  @keyframes weather{0%{transform:translate3d(0,0,0) scale(1) rotate(0deg)}
+    100%{transform:translate3d(3%,-2.5%,0) scale(1.1) rotate(4deg)}}
+  @keyframes dust{from{transform:translate3d(0,0,0)}to{transform:translate3d(-46px,-110px,0)}}
 
-  /* ══ 玻璃基元 ══ */
-  .glass{background:var(--surface);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-         -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-         border:1px solid var(--line);box-shadow:var(--shadow)}
-  /* 流光边框：只给有语义的元素（主 agent、当前会话、主按钮） */
-  .glow{position:relative}
-  .glow::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.2px;
-    background:conic-gradient(from var(--ang),var(--i1),var(--i2),var(--i3),var(--i4),var(--agent),var(--i1));
+  /* ═══ 厚玻璃板：边缘有厚度，不是一张半透明纸 ═══ */
+  .rail,.main{position:relative;border-radius:var(--r-pane);background:var(--pane-bg);
+    backdrop-filter:blur(var(--blur)) saturate(190%) brightness(1.04);
+    -webkit-backdrop-filter:blur(var(--blur)) saturate(190%) brightness(1.04);
+    border:1px solid var(--pane-bd);box-shadow:var(--pane-sh);overflow:hidden}
+  /* 棱镜色散边（亮色低调，暗色就是霓虹角度渐变描边） */
+  .rail::before,.main::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.4px;
+    background:conic-gradient(from var(--ang),var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i1));
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     -webkit-mask-composite:xor;mask-composite:exclude;
-    animation:spin 7s linear infinite;opacity:.85;pointer-events:none}
-  /* 边缘流光：一道亮带沿着边跑 */
-  .runner::after{content:'';position:absolute;inset:-1px;border-radius:inherit;padding:1.4px;
-    background:conic-gradient(from var(--ang),transparent 0 62%,var(--i1) 74%,#fff 80%,var(--i3) 86%,transparent 96%);
-    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;mask-composite:exclude;
-    animation:spin 3.4s linear infinite;pointer-events:none}
+    opacity:var(--prism-op);animation:spin 16s linear infinite;pointer-events:none;z-index:2}
+  /* 高光扫过：液态感的来源 */
+  .rail::after,.main::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(126deg,transparent 30%,rgba(255,255,255,.85) 46%,transparent 58%);
+    opacity:var(--sheen-op);mix-blend-mode:overlay;
+    animation:sheen 14s var(--ease) infinite;z-index:2}
   @keyframes spin{to{--ang:360deg}}
+  @keyframes sheen{0%,100%{transform:translateX(-28%)}50%{transform:translateX(28%)}}
 
-  /* ══ 骨架 ══ */
-  .rail{width:264px;flex-shrink:0;display:flex;flex-direction:column;
-        background:var(--panel);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-        -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-        border-right:1px solid var(--line)}
-  .brand{padding:20px 18px 14px;display:flex;align-items:center;gap:10px}
-  .brand .mk{width:32px;height:32px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-    font:800 13px/1 var(--ui);color:#04121a;
-    background:linear-gradient(140deg,var(--i1),var(--agent) 45%,var(--i2));
-    box-shadow:0 0 22px var(--agent-glow);animation:breathe 4.5s var(--ease) infinite}
-  .brand b{font:800 15px/1 var(--ui);letter-spacing:-.02em}
-  .seg{display:flex;gap:3px;margin:0 14px 12px;padding:3px;border-radius:var(--r-ctl);
-       background:var(--raised);border:1px solid var(--line2)}
-  .seg span{flex:1;text-align:center;padding:7px 0;border-radius:9px;font:600 12px/1 var(--ui);
-            color:var(--text2);transition:.28s var(--ease)}
-  .seg span:hover{color:var(--text)}
-  .seg span.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);
-               border:1px solid var(--hair)}
-  .convo{display:flex;gap:11px;padding:11px 13px;margin:0 8px;border-radius:var(--r-ctl);
-         align-items:flex-start;transition:.3s var(--ease)}
-  .convo:hover{background:var(--raised);transform:translateX(2px)}
-  .convo.on{background:var(--surface);box-shadow:var(--shadow-sm)}
-  .convo .tt{font:600 12.5px/1.35 var(--ui);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .convo .pv{font:400 11px/1.4 var(--ui);color:var(--text3);display:block;overflow:hidden;
-             text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
-  .railfoot{margin-top:auto;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+  .rail{width:278px;flex-shrink:0;display:flex;flex-direction:column;padding:18px 0 14px}
   .main{flex-grow:1;display:flex;flex-direction:column;min-width:0}
-  .head{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;
-        background:var(--panel);backdrop-filter:blur(var(--glass-blur));
-        -webkit-backdrop-filter:blur(var(--glass-blur))}
-  .head h1{margin:0;font:800 18px/1.25 var(--ui);letter-spacing:-.025em}
-  .head .sub{font:500 11.5px/1.4 var(--ui);color:var(--text3);margin-top:5px}
-  .head .sp{margin-left:auto;display:flex;gap:8px;align-items:center}
-  .body{flex-grow:1;display:flex;min-width:0}
-  .stream{flex-grow:1;padding:22px 24px;display:flex;flex-direction:column;gap:16px;min-width:0}
-  .aside{width:290px;flex-shrink:0;border-left:1px solid var(--line);padding:20px;
-         display:flex;flex-direction:column;gap:14px;background:var(--panel);
-         backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur))}
 
-  /* ══ 原子 ══ */
+  /* ═══ 嵌套内板：板中有板，是这套构图的核心 ═══ */
+  .stream,.aside{border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);
+    box-shadow:var(--inset-sh)}
+  .body{flex-grow:1;display:flex;min-width:0;gap:14px;padding:0 14px 14px}
+  .stream{flex-grow:1;padding:22px;display:flex;flex-direction:column;gap:15px;min-width:0}
+  .aside{width:292px;flex-shrink:0;padding:18px;display:flex;flex-direction:column;gap:13px}
+  .head{padding:20px 24px 16px;display:flex;align-items:center;gap:14px;position:relative;z-index:3}
+  .head h1{margin:0;font:800 19px/1.25 var(--ui);letter-spacing:-.03em}
+  .head .sub{font:500 11.5px/1.45 var(--ui);color:var(--ink3);margin-top:6px}
+  .head .sp{margin-left:auto;display:flex;gap:9px;align-items:center}
+
+  /* ═══ 侧栏内容 ═══ */
+  .brand{padding:0 20px 16px;display:flex;align-items:center;gap:11px}
+  .brand .mk{width:38px;height:38px;border-radius:var(--r-pill);display:flex;align-items:center;
+    justify-content:center;font:800 13px/1 var(--ui);color:var(--pri-ink);
+    background:var(--pri-grad);box-shadow:var(--pri-sh);animation:breathe 5s var(--ease) infinite}
+  .brand b{font:800 15.5px/1 var(--ui);letter-spacing:-.03em}
+  .seg{display:flex;gap:3px;margin:0 16px 14px;padding:4px;border-radius:var(--r-pill);
+    background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh)}
+  .seg span{flex:1;text-align:center;padding:8px 0;border-radius:var(--r-pill);
+    font:700 11.5px/1 var(--ui);color:var(--ink2);transition:.3s var(--ease)}
+  .seg span.on{background:var(--pane-bg);color:var(--ink);
+    box-shadow:inset 0 1px 0 var(--hair),0 4px 12px -6px rgba(20,55,85,.35);border:1px solid var(--pane-bd)}
+  .convo{display:flex;gap:12px;padding:12px 14px;margin:0 10px;border-radius:var(--r-card);
+    align-items:flex-start;transition:.32s var(--ease);position:relative}
+  .convo:hover{background:var(--chip-bg);transform:translateX(3px)}
+  .convo.on{background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh)}
+  .convo .tt{font:700 12.5px/1.35 var(--ui);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .convo .pv{font:500 11px/1.4 var(--ui);color:var(--ink3);display:block;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;margin-top:4px}
+  .railfoot{margin-top:auto;padding:12px 16px 0;display:flex;flex-direction:column;gap:10px}
+
+  /* ═══ 原子：一切都是胶囊 ═══ */
   .av{border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;flex-shrink:0;
-      font:700 12px/1 var(--ui);width:36px;height:36px;position:relative;transition:.3s var(--ease)}
-  .av:hover{transform:scale(1.07)}
-  .av.a{background:var(--agent-soft);color:var(--agent-ink);border:1px solid var(--line)}
-  .av.p{color:#04121a;background:linear-gradient(140deg,var(--i1),var(--agent) 50%,var(--i2));
-        box-shadow:0 0 0 3px color-mix(in srgb,var(--agent) 26%,transparent),0 0 26px var(--agent-glow);
-        animation:breathe 4.5s var(--ease) infinite}
-  .av.h{color:#22120a;background:linear-gradient(140deg,var(--i4),var(--human));
-        box-shadow:0 0 20px var(--human-glow)}
-  .av.sm{width:28px;height:28px;font-size:10.5px}
-  .av.xs{width:22px;height:22px;font-size:9px}
+    font:800 12px/1 var(--ui);width:38px;height:38px;position:relative;transition:.3s var(--ease)}
+  .av:hover{transform:scale(1.08)}
+  .av.a{background:var(--chip-bg);color:var(--agent-ink);border:1px solid var(--hair);
+    box-shadow:inset 0 1px 0 var(--hair)}
+  .av.p{color:var(--pri-ink);background:var(--pri-grad);box-shadow:var(--pri-sh);
+    animation:breathe 5s var(--ease) infinite}
+  .av.h{color:var(--me-ink);background:var(--me-grad);box-shadow:var(--me-sh)}
+  .av.sm{width:30px;height:30px;font-size:10.5px}
+  .av.xs{width:23px;height:23px;font-size:9px}
   .st{position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:var(--r-pill);
-      border:2.5px solid var(--bg)}
-  .st.on{background:#37e39f;box-shadow:0 0 10px #37e39f;animation:pulse 2.6s var(--ease) infinite}
-  .st.off{background:var(--text3)}
-  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
-  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.86)}}
+    border:2.5px solid rgba(255,255,255,.9)}
+  .dark .st{border-color:#0a0c12}
+  .st.on{background:#22d69a;box-shadow:0 0 12px #22d69a;animation:pulse 2.8s var(--ease) infinite}
+  .st.off{background:var(--ink3)}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.84)}}
 
-  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);
-        font:600 11px/1 var(--ui);background:var(--raised);color:var(--text2);white-space:nowrap;
-        border:1px solid var(--line2);transition:.25s var(--ease)}
-  .chip:hover{color:var(--text);border-color:var(--line)}
-  .chip.a{background:var(--agent-soft);color:var(--agent-ink);border-color:color-mix(in srgb,var(--agent) 26%,transparent)}
-  .chip.h{background:var(--human-soft);color:var(--human-ink);border-color:color-mix(in srgb,var(--human) 30%,transparent)}
-  .chip.w{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 26%,transparent)}
-  .chip.al{background:var(--alert-soft);color:var(--alert);border-color:color-mix(in srgb,var(--alert) 30%,transparent)}
-  .chip.solid{background:var(--text);color:var(--bg)}
-  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:var(--r-ctl);
-       font:600 12.5px/1 var(--ui);background:var(--surface);color:var(--text);
-       backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-       border:1px solid var(--line);box-shadow:var(--shadow-sm);transition:.28s var(--ease)}
-  .btn:hover{transform:translateY(-1.5px);border-color:var(--hair)}
-  .btn:active{transform:translateY(0) scale(.985)}
-  .btn.pri{color:#04121a;border-color:transparent;
-    background:linear-gradient(135deg,var(--i1),var(--agent) 55%,var(--i2));
-    box-shadow:0 0 26px var(--agent-glow),0 1px 0 rgba(255,255,255,.28) inset}
-  .btn.pri:hover{box-shadow:0 0 40px var(--agent-glow),0 1px 0 rgba(255,255,255,.34) inset}
-  .btn.gh{background:transparent;box-shadow:none;border-color:transparent;color:var(--text2)}
-  .btn.gh:hover{background:var(--raised);color:var(--text)}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:var(--r-pill);
+    font:700 11px/1 var(--ui);background:var(--chip-bg);color:var(--ink2);white-space:nowrap;
+    border:1px solid var(--hair);box-shadow:inset 0 1px 0 var(--hair);transition:.26s var(--ease)}
+  .chip:hover{color:var(--ink);transform:translateY(-1px)}
+  .chip.a{background:var(--agent-soft);color:var(--agent-ink)}
+  .chip.h{background:var(--human-soft);color:var(--human-ink)}
+  .chip.w{background:var(--warn-soft);color:var(--warn)}
+  .chip.al{background:var(--alert-soft);color:var(--alert)}
+  .chip.solid{background:var(--ink);color:#fff;border-color:transparent}
+  .btn{display:inline-flex;align-items:center;gap:9px;padding:11px 20px;border-radius:var(--r-pill);
+    font:700 12.5px/1 var(--ui);background:var(--chip-bg);color:var(--ink);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border:1px solid var(--hair);box-shadow:inset 0 1px 0 var(--hair),0 6px 16px -10px rgba(20,55,85,.4);
+    transition:.3s var(--ease)}
+  .btn:hover{transform:translateY(-2px)}
+  .btn:active{transform:translateY(0) scale(.98)}
+  .btn.pri{color:var(--pri-ink);border-color:transparent;background:var(--pri-grad);box-shadow:var(--pri-sh)}
+  .btn.pri:hover{box-shadow:var(--pri-sh),0 0 42px -8px rgba(90,220,200,.7)}
+  .btn.gh{background:transparent;box-shadow:none;border-color:transparent;color:var(--ink2)}
+  .btn.gh:hover{background:var(--chip-bg);color:var(--ink)}
+  .ico{width:46px;height:46px;padding:0;justify-content:center;border-radius:var(--r-pill)}
 
-  .card{border-radius:var(--r-card);background:var(--surface);
-        backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-        -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-        border:1px solid var(--line);box-shadow:var(--shadow);transition:.34s var(--ease)}
-  .card:hover{transform:translateY(-2px);border-color:var(--hair)}
-  .card .hd{padding:14px 17px 0;font:700 11px/1 var(--ui);letter-spacing:.08em;
-            color:var(--text3);text-transform:uppercase}
-  .card .bd{padding:15px 17px;display:flex;flex-direction:column;gap:11px}
-  .kv{display:flex;align-items:center;gap:8px;font:500 12px/1.5 var(--ui);color:var(--text2)}
-  .kv b{margin-left:auto;color:var(--text);font-weight:700}
+  .card{border-radius:var(--r-card);background:var(--chip-bg);border:1px solid var(--hair);
+    box-shadow:inset 0 1px 0 var(--hair);transition:.34s var(--ease);position:relative}
+  .card:hover{transform:translateY(-2px)}
+  .card .hd{padding:15px 18px 0;font:800 10.5px/1 var(--ui);letter-spacing:.1em;
+    color:var(--ink3);text-transform:uppercase}
+  .card .bd{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+  .kv{display:flex;align-items:center;gap:8px;font:600 12px/1.5 var(--ui);color:var(--ink2)}
+  .kv b{margin-left:auto;color:var(--ink);font-weight:800}
   .mono{font-family:var(--mono)}
-  .sep{height:1px;background:var(--line2)}
-  .lbl{font:700 10.5px/1 var(--ui);letter-spacing:.08em;color:var(--text3);text-transform:uppercase}
-  .in{background:var(--raised);border:1px solid var(--line);border-radius:var(--r-ctl);
-      padding:11px 14px;font:500 13px/1.5 var(--ui);color:var(--text);transition:.28s var(--ease)}
-  .in:hover{border-color:var(--hair)}
+  .sep{height:1px;background:var(--hair2)}
+  .lbl{font:800 10px/1 var(--ui);letter-spacing:.1em;color:var(--ink3);text-transform:uppercase}
+  .in{background:var(--inset-bg);border:1px solid var(--inset-bd);border-radius:var(--r-pill);
+    padding:13px 20px;font:600 13px/1.5 var(--ui);color:var(--ink);box-shadow:var(--inset-sh);
+    transition:.28s var(--ease)}
 
-  /* ══ 气泡 ══ */
-  .msg{display:flex;gap:11px;align-items:flex-end;max-width:74%;
-       animation:rise .62s var(--ease) both}
+  /* 语义流光：只给主 agent 与当前会话 */
+  .glow::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.4px;
+    background:conic-gradient(from var(--ang),var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i1));
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;
+    animation:spin 7s linear infinite;opacity:.9;pointer-events:none}
+  .runner::after{content:'';position:absolute;inset:-1px;border-radius:inherit;padding:1.6px;
+    background:conic-gradient(from var(--ang),transparent 0 64%,var(--i1) 76%,#fff 82%,var(--i3) 88%,transparent 96%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;
+    animation:spin 3.6s linear infinite;pointer-events:none}
+
+  /* ═══ 气泡：也是厚玻璃胶囊 ═══ */
+  .msg{display:flex;gap:12px;align-items:flex-end;max-width:76%;animation:rise .66s var(--ease) both}
   .msg.me{margin-left:auto;flex-direction:row-reverse}
-  .bub{padding:13px 17px;border-radius:var(--r-bub);font:400 13.5px/1.68 var(--ui);
-       background:var(--surface);color:var(--text);border:1px solid var(--line);
-       backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-       -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
-       box-shadow:var(--shadow-sm);border-bottom-left-radius:7px;transition:.32s var(--ease)}
-  .bub:hover{transform:translateY(-2px);border-color:var(--hair)}
-  .bub.me{color:#22120a;border-color:transparent;border-bottom-left-radius:var(--r-bub);
-          border-bottom-right-radius:7px;
-          background:linear-gradient(135deg,var(--i4),var(--human));
-          box-shadow:0 0 32px var(--human-glow),0 1px 0 rgba(255,255,255,.3) inset}
-  .bub.pri{border-color:color-mix(in srgb,var(--agent) 42%,transparent);
-           box-shadow:var(--shadow-sm),0 0 26px color-mix(in srgb,var(--agent) 20%,transparent)}
-  .bub.watch{background:transparent;border:1px dashed var(--line);box-shadow:none;color:var(--text2);
-             backdrop-filter:none;-webkit-backdrop-filter:none}
-  .who{display:flex;align-items:center;gap:7px;margin-bottom:7px;font:700 11.5px/1 var(--ui)}
-  .who .t{margin-left:6px;font:500 10.5px/1 var(--ui);color:var(--text3)}
+  .bub{padding:15px 20px;border-radius:var(--r-bub);font:500 13.5px/1.7 var(--ui);
+    background:var(--pane-bg);color:var(--ink);border:1px solid var(--pane-bd);
+    backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+    box-shadow:inset 0 1.5px 0 var(--hair),inset 0 -16px 30px -24px rgba(60,115,150,.4),
+               0 14px 32px -18px rgba(20,55,85,.36);
+    border-bottom-left-radius:9px;transition:.34s var(--ease)}
+  .dark .bub{box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 18px 40px -22px #000}
+  .bub:hover{transform:translateY(-2px)}
+  .bub.me{color:var(--me-ink);border-color:transparent;background:var(--me-grad);
+    border-bottom-left-radius:var(--r-bub);border-bottom-right-radius:9px;box-shadow:var(--me-sh)}
+  .bub.pri{border-color:color-mix(in srgb,var(--agent) 45%,transparent);
+    box-shadow:inset 0 1.5px 0 var(--hair),0 16px 38px -20px color-mix(in srgb,var(--agent) 55%,transparent)}
+  .bub.watch{background:transparent;border:1px dashed var(--hair2);box-shadow:none;color:var(--ink2);
+    backdrop-filter:none;-webkit-backdrop-filter:none}
+  .who{display:flex;align-items:center;gap:8px;margin-bottom:8px;font:800 11.5px/1 var(--ui)}
+  .who .t{margin-left:6px;font:600 10.5px/1 var(--ui);color:var(--ink3)}
   .msg.me .who{justify-content:flex-end}
-  .sys{align-self:center;padding:7px 15px;border-radius:var(--r-pill);background:var(--raised);
-       border:1px solid var(--line2);font:600 11px/1 var(--ui);color:var(--text3);
-       backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-       animation:rise .62s var(--ease) both}
+  .sys{align-self:center;padding:8px 17px;border-radius:var(--r-pill);background:var(--chip-bg);
+    border:1px solid var(--hair);box-shadow:inset 0 1px 0 var(--hair);
+    font:700 11px/1 var(--ui);color:var(--ink3);backdrop-filter:blur(14px);
+    animation:rise .66s var(--ease) both}
   .at{color:var(--agent-ink);font-weight:800}
-  .bub.me .at{color:#5c2c06}
-  @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  .bub.me .at{color:#7a3405}
+  @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
-  /* 入场错峰：整页“活”起来 */
-  .stream > *:nth-child(1){animation-delay:.02s}
-  .stream > *:nth-child(2){animation-delay:.09s}
-  .stream > *:nth-child(3){animation-delay:.16s}
-  .stream > *:nth-child(4){animation-delay:.23s}
-  .stream > *:nth-child(5){animation-delay:.30s}
-  .stream > *:nth-child(6){animation-delay:.37s}
-  .stream > *:nth-child(7){animation-delay:.44s}
-  .stream > *:nth-child(8){animation-delay:.51s}
-  .stream > *:nth-child(9){animation-delay:.58s}
-  .stream > *:nth-child(10){animation-delay:.65s}
-  .stream > *:nth-child(n+11){animation-delay:.72s}
-  .card,.convo{animation:rise .7s var(--ease) both}
-  .aside > *:nth-child(2){animation-delay:.1s}
-  .aside > *:nth-child(3){animation-delay:.18s}
+  .stream > *:nth-child(1){animation-delay:.02s} .stream > *:nth-child(2){animation-delay:.09s}
+  .stream > *:nth-child(3){animation-delay:.16s} .stream > *:nth-child(4){animation-delay:.23s}
+  .stream > *:nth-child(5){animation-delay:.30s} .stream > *:nth-child(6){animation-delay:.37s}
+  .stream > *:nth-child(7){animation-delay:.44s} .stream > *:nth-child(8){animation-delay:.51s}
+  .stream > *:nth-child(9){animation-delay:.58s} .stream > *:nth-child(n+10){animation-delay:.65s}
+  .card,.convo{animation:rise .72s var(--ease) both}
+  .aside > *:nth-child(2){animation-delay:.1s} .aside > *:nth-child(3){animation-delay:.18s}
   .aside > *:nth-child(4){animation-delay:.26s}
-
-  /* 滚动显现：支持才启用，不支持也不会把内容藏起来 */
   @supports (animation-timeline: view()){
-    .reveal > *{animation:rise linear both;animation-timeline:view();animation-range:entry 0% cover 26%}
-  }
-  /* 尊重减弱动效 */
-  @media (prefers-reduced-motion: reduce){
-    *,*::before,*::after{animation:none!important;transition:none!important}
-  }
+    .reveal > *{animation:rise linear both;animation-timeline:view();animation-range:entry 0% cover 26%}}
+  @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
-  /* ══ 3D 球体 ══ */
+  /* ═══ 3D 球体 ═══ */
   .orb-wrap{position:relative;width:300px;height:300px;perspective:900px}
   .orb{position:absolute;inset:18px;border-radius:50%;transform-style:preserve-3d;
     background:
-      radial-gradient(circle at 33% 27%,rgba(255,255,255,.92),rgba(255,255,255,0) 34%),
-      radial-gradient(circle at 72% 76%,color-mix(in srgb,var(--i3) 70%,transparent),transparent 52%),
-      conic-gradient(from 210deg,var(--i1),var(--i2),var(--i3),var(--i4),var(--agent),var(--i1));
-    box-shadow:inset -20px -26px 62px rgba(3,5,12,.72),inset 14px 16px 44px rgba(255,255,255,.14),
-               0 0 90px var(--agent-glow),0 30px 70px -28px rgba(0,0,0,.8);
-    animation:orbspin 22s linear infinite,breathe 6s var(--ease) infinite}
-  .orb::after{content:'';position:absolute;inset:-34px;border-radius:50%;
-    background:radial-gradient(circle,var(--agent-glow),transparent 62%);filter:blur(26px);z-index:-1}
+      radial-gradient(circle at 32% 26%,rgba(255,255,255,.95),rgba(255,255,255,0) 36%),
+      radial-gradient(circle at 72% 78%,color-mix(in srgb,var(--i3) 68%,transparent),transparent 54%),
+      conic-gradient(from 210deg,var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i1));
+    box-shadow:inset -22px -28px 66px rgba(10,40,60,.5),inset 16px 18px 46px rgba(255,255,255,.5),
+      0 0 100px -10px rgba(120,220,255,.55),0 34px 74px -30px rgba(20,55,85,.5);
+    animation:orbspin 24s linear infinite,breathe 6.5s var(--ease) infinite}
+  .orb::after{content:'';position:absolute;inset:-38px;border-radius:50%;
+    background:radial-gradient(circle,rgba(120,230,220,.5),transparent 62%);filter:blur(28px);z-index:-1}
   .ring{position:absolute;inset:0;border-radius:50%;border:1.5px solid transparent;
     border-top-color:var(--i1);border-right-color:var(--i3);
-    transform:rotateX(74deg);animation:ringspin 9s linear infinite}
+    transform:rotateX(74deg);animation:ringspin 10s linear infinite}
   .ring.b{transform:rotateX(74deg) rotateZ(60deg);border-top-color:var(--i2);
-          border-right-color:var(--i4);animation-duration:13s;animation-direction:reverse}
+    border-right-color:var(--i4);animation-duration:14s;animation-direction:reverse}
   @keyframes orbspin{to{filter:hue-rotate(360deg)}}
   @keyframes ringspin{to{transform:rotateX(74deg) rotateZ(360deg)}}
   </style>
 </helmet>
-<div class="dark"><div style="width:1320px;min-height:1760px;background:var(--bg);color:var(--text);font-family:var(--ui);padding:40px 46px;display:flex;flex-direction:column;gap:24px" class="app"><div style="display:flex;align-items:flex-end;gap:18px"><div><div style="font:800 27px/1.12 var(--ui);letter-spacing:-.03em">设计系统 · 质感与动效</div><div style="font:500 12px/1.75 var(--ui);color:var(--text2);margin-top:11px;max-width:700px">毛玻璃 + 虹彩流光 + 粒子纵深。两套主题共用一组语义变量，组件只引用变量名。</div></div><div class="card glow runner" style="margin-left:auto;border-radius:14px"><div class="bd" style="padding:13px 17px;gap:6px"><div style="font:800 11.5px/1 var(--ui);color:var(--agent)">特效只给有语义的地方</div><div style="font:500 10.5px/1.6 var(--ui);color:var(--text2);max-width:290px">流光只出现在<b>主 agent</b> 和<b>当前会话</b>上。如果每张卡片都在发光，流光就不再意味着任何东西 —— 这张卡自己就挂着它，因为它在示范这条规则。</div></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="card"><div class="bd" style="padding:20px;gap:12px"><div style="font:800 12.5px/1 var(--ui)">亮色 · 冷调雾面</div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#e9edf6;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--bg</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">底</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#e9edf6</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.72);flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--surface</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">玻璃面</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">rgba(255,255,255,.72)</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#161b26;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--text</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">正文</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#161b26</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#8a93a7;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--text3</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">弱</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#8a93a7</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:rgba(22,27,38,.09);flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--line</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">描边</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">rgba(22,27,38,.09)</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#0c9e8d;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--agent</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">AGENT</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#0c9e8d</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#dd6f22;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--human</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">人类</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#dd6f22</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#c9412c;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--alert</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">告警</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#c9412c</span></div><div class="sep" style="margin:4px 0"></div><div class="lbl" style="margin-bottom:2px">虹彩四色 · 只用于流光与球体</div><div style="display:flex;gap:7px"><div style="flex:1"><div style="height:30px;border-radius:9px;background:#28c8e8"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i1</div></div><div style="flex:1"><div style="height:30px;border-radius:9px;background:#7a6bff"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i2</div></div><div style="flex:1"><div style="height:30px;border-radius:9px;background:#ff5cc8"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i3</div></div><div style="flex:1"><div style="height:30px;border-radius:9px;background:#ffab4d"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i4</div></div></div></div></div><div class="card"><div class="bd" style="padding:20px;gap:12px"><div style="font:800 12.5px/1 var(--ui)">暗色 · 赛博霓虹（主场）</div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#080a11;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--bg</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">底</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#080a11</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.052);flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--surface</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">玻璃面</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">rgba(255,255,255,.052)</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#e9edf8;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--text</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">正文</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#e9edf8</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#5f6a84;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--text3</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">弱</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#5f6a84</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.09);flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--line</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">描边</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">rgba(255,255,255,.09)</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#3ee0c8;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--agent</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">AGENT</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#3ee0c8</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#ff9f5a;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--human</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">人类</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#ff9f5a</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:10px;background:#ff6f5c;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.22)"></span><div><div class="mono" style="font-size:10.5px;font-weight:600">--alert</div><div style="font:500 9.5px/1 var(--ui);color:var(--text3);margin-top:5px">告警</div></div><span class="mono" style="margin-left:auto;font-size:9px;color:var(--text3)">#ff6f5c</span></div><div class="sep" style="margin:4px 0"></div><div class="lbl" style="margin-bottom:2px">虹彩四色 · 只用于流光与球体</div><div style="display:flex;gap:7px"><div style="flex:1"><div style="height:30px;border-radius:9px;background:#41e0ff"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i1</div></div><div style="flex:1"><div style="height:30px;border-radius:9px;background:#8b7bff"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i2</div></div><div style="flex:1"><div style="height:30px;border-radius:9px;background:#ff5cc8"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i3</div></div><div style="flex:1"><div style="height:30px;border-radius:9px;background:#ffb35c"></div><div class="mono" style="font-size:9px;color:var(--text3);margin-top:6px">--i4</div></div></div></div></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px"><div class="card"><div class="bd" style="padding:17px 19px;gap:13px"><div><div style="font:800 12.5px/1 var(--ui)">毛玻璃面</div><div style="font:500 10.5px/1.65 var(--ui);color:var(--text3);margin-top:7px">背景模糊 26px + 饱和度 150%，1px 描边，内侧 1px 高光。暗色下用描边代替阴影 —— 阴影在深底上看不见。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;background:var(--raised);border-radius:14px;min-height:96px"><div class="glass" style="width:150px;height:64px;border-radius:16px"></div><div class="glass" style="width:64px;height:64px;border-radius:var(--r-pill)"></div></div></div><div class="card"><div class="bd" style="padding:17px 19px;gap:13px"><div><div style="font:800 12.5px/1 var(--ui)">流光边框 · glow</div><div style="font:500 10.5px/1.65 var(--ui);color:var(--text3);margin-top:7px">conic 渐变绕角度旋转，mask 掏空中间只留 1.2px 边。7 秒一圈，慢到不吵。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;background:var(--raised);border-radius:14px;min-height:96px"><div class="card glow" style="width:190px;height:66px;border-radius:16px"></div></div></div><div class="card"><div class="bd" style="padding:17px 19px;gap:13px"><div><div style="font:800 12.5px/1 var(--ui)">边缘流光 · runner</div><div style="font:500 10.5px/1.65 var(--ui);color:var(--text3);margin-top:7px">一道亮带 3.4 秒跑一圈。给“正在进行”的东西用，比常亮更有紧迫感。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;background:var(--raised);border-radius:14px;min-height:96px"><div class="card glow runner" style="width:190px;height:66px;border-radius:16px"></div></div></div><div class="card"><div class="bd" style="padding:17px 19px;gap:13px"><div><div style="font:800 12.5px/1 var(--ui)">主 agent 头像</div><div style="font:500 10.5px/1.65 var(--ui);color:var(--text3);margin-top:7px">虹彩渐变 + 双层辉光 + 呼吸缩放。它是页面上唯一会“喘气”的头像。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;background:var(--raised);border-radius:14px;min-height:96px"><span class="av p" style="width:52px;height:52px;font-size:15px">RO<span class="st on"></span></span><span class="av a" style="width:52px;height:52px;font-size:15px">NO<span class="st on"></span></span><span class="av h" style="width:52px;height:52px;font-size:15px">李</span></div></div><div class="card"><div class="bd" style="padding:17px 19px;gap:13px"><div><div style="font:800 12.5px/1 var(--ui)">气泡三态</div><div style="font:500 10.5px/1.65 var(--ui);color:var(--text3);margin-top:7px">人=暖色实底辉光靠右；主 agent=玻璃 + 青色描边微光；关注者=虚线透明底，重量最轻。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;background:var(--raised);border-radius:14px;min-height:96px"><div style="display:flex;flex-direction:column;gap:9px;width:100%"><div class="bub pri" style="font-size:11.5px;padding:9px 13px;align-self:flex-start">主 agent</div><div class="bub watch" style="font-size:11.5px;padding:9px 13px;align-self:flex-start">关注者</div><div class="bub me" style="font-size:11.5px;padding:9px 13px;align-self:flex-end">人类</div></div></div></div><div class="card"><div class="bd" style="padding:17px 19px;gap:13px"><div><div style="font:800 12.5px/1 var(--ui)">按钮与悬停</div><div style="font:500 10.5px/1.65 var(--ui);color:var(--text3);margin-top:7px">主按钮是虹彩渐变 + 辉光；悬停抬升 1.5px 并加强辉光；按下回落并缩到 .985。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;background:var(--raised);border-radius:14px;min-height:96px"><span class="btn pri">确认完成</span><span class="btn">打回</span></div></div></div><div style="display:grid;grid-template-columns:300px 1fr;gap:16px"><div class="card"><div class="bd" style="padding:20px;gap:14px;align-items:center"><div style="font:800 12.5px/1 var(--ui);align-self:flex-start">3D 球体</div><div class="orb-wrap" style="width:250px;height:250px"><div class="ring"></div><div class="ring b"></div><div class="orb"></div></div><div style="font:500 10.5px/1.65 var(--ui);color:var(--text3)">三层叠加：高光 radial + 色偏 radial + conic 虹彩；内阴影做出球面终止线，外发光做氛围。两条轨道环用 rotateX(74deg) + preserve-3d，反向不同速旋转 —— 纯 CSS，没有 WebGL，因为画板 iframe 是无网络出口的。</div></div></div><div class="card"><div class="bd" style="padding:20px;gap:12px"><div style="font:800 12.5px/1 var(--ui)">动效清单</div><div style="display:flex;flex-direction:column;gap:0"><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">breathe 4.5s</span><span style="font:600 11px/1.5 var(--ui)">主 agent 头像、品牌标、球体</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">缓慢的 1 → 1.045 缩放。它在说“这个 agent 活着”</span></div><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">pulse 2.6s</span><span style="font:600 11px/1.5 var(--ui)">在线状态点</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">明暗呼吸，比一个静止绿点更能表达“连接是活的”</span></div><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">rise .62s</span><span style="font:600 11px/1.5 var(--ui)">消息、卡片、会话项</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">入场从下方 16px 浮起，按 nth-child 错峰 70ms</span></div><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">spin 7s</span><span style="font:600 11px/1.5 var(--ui)">流光边框</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">conic 渐变绕角度旋转；runner 变体是一道亮带 3.4s 跑一圈</span></div><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">drift 26s</span><span style="font:600 11px/1.5 var(--ui)">背景着色器渐变</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">四团模糊色球缓慢漂移缩放，整页有呼吸</span></div><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">dust 34s</span><span style="font:600 11px/1.5 var(--ui)">粒子场</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">90 颗粒子整体缓慢平移，制造纵深</span></div><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">hover .28s</span><span style="font:600 11px/1.5 var(--ui)">按钮 / 卡片 / 气泡 / 头像</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">抬升 1.5–2px、描边提亮、主按钮辉光加强</span></div><div style="display:grid;grid-template-columns:110px 190px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:baseline"><span class="mono" style="font-size:10px;color:var(--agent)">view()</span><span style="font:600 11px/1.5 var(--ui)">滚动显现</span><span style="font:500 10.5px/1.6 var(--ui);color:var(--text3)">animation-timeline: view()，@supports 包住，不支持也不会把内容藏起来</span></div></div></div></div></div><div class="card"><div class="bd" style="padding:20px;gap:12px"><div style="display:flex;align-items:center;gap:10px"><span style="font:800 12.5px/1 var(--ui)">配方 · 直接粘进 Tailwind v4 的 layer</span><span class="chip a" style="font-size:10px">CSS-only，无第三方依赖</span></div><pre class="mono" style="margin:0;padding:17px 19px;background:var(--raised);border-radius:14px;font-size:10.5px;line-height:1.75;color:var(--text2);overflow:auto;white-space:pre;border:1px solid var(--line2)">/* 流光边框 —— 只挂在有语义的元素上 */
-@property --ang { syntax:'&lt;angle&gt;'; initial-value:0deg; inherits:false; }
-.glow::before{
-  content:''; position:absolute; inset:0; border-radius:inherit; padding:1.2px;
-  background:conic-gradient(from var(--ang),
-    var(--i1),var(--i2),var(--i3),var(--i4),var(--agent),var(--i1));
+<div class="app" style="width:1340px;min-height:1900px;padding:40px;flex-direction:column;gap:20px"><div class="main" style="padding:34px 38px;border-radius:var(--r-slab);flex-grow:0"><div style="position:relative;z-index:3;display:flex;align-items:flex-end;gap:20px"><div><div style="font:800 28px/1.1 var(--ui);letter-spacing:-.04em">设计系统 · 液态玻璃</div><div style="font:600 12px/1.85 var(--ui);color:var(--ink2);margin-top:13px;max-width:720px">底盘不是"侧栏 + 头部 + 右栏"那套 dashboard chrome，而是<b>舞台 → 玻璃板 → 嵌套内板</b>三层构图。面板悬浮在有天气的背景之上，板中有板，边缘有厚度。<br>亮色是液态玻璃（棱镜色散、焦散光带），暗色是霓虹光影（角度渐变描边、彩色氛围光）——<b>同一套技术，两种气候</b>。</div></div><div class="card glow runner" style="margin-left:auto;max-width:300px"><div class="bd" style="padding:15px 18px;gap:8px"><div style="font:800 11.5px/1 var(--ui);color:var(--agent-ink)">特效只给有语义的地方</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink2)">流光只挂在<b>主 agent</b> 与<b>当前会话</b>上。这张卡自己挂着它，因为它在示范这条规则。</div></div></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:18px"><div class="card"><div class="bd" style="padding:22px 24px;gap:15px"><div style="font:800 13px/1 var(--ui)">三层构图</div><div style="display:flex;gap:13px;align-items:flex-start"><span style="width:26px;height:26px;border-radius:var(--r-pill);background:var(--pri-grad);color:var(--pri-ink);font:800 11px/26px var(--ui);text-align:center;flex-shrink:0;box-shadow:var(--pri-sh)">1</span><div><div style="font:800 12px/1 var(--ui)">舞台 .app</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink2);margin-top:7px">有天气的背景：三团色雾 + 焦散光带 + 棱镜色散，30 秒缓慢移动。不是一块死底色。</div></div></div><div style="display:flex;gap:13px;align-items:flex-start"><span style="width:26px;height:26px;border-radius:var(--r-pill);background:var(--pri-grad);color:var(--pri-ink);font:800 11px/26px var(--ui);text-align:center;flex-shrink:0;box-shadow:var(--pri-sh)">2</span><div><div style="font:800 12px/1 var(--ui)">玻璃板 .rail / .main</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink2);margin-top:7px">悬浮在舞台上，30px 圆角，六层 box-shadow 叠出厚度，棱镜边 + 高光扫过。</div></div></div><div style="display:flex;gap:13px;align-items:flex-start"><span style="width:26px;height:26px;border-radius:var(--r-pill);background:var(--pri-grad);color:var(--pri-ink);font:800 11px/26px var(--ui);text-align:center;flex-shrink:0;box-shadow:var(--pri-sh)">3</span><div><div style="font:800 12px/1 var(--ui)">嵌套内板 .stream / .aside</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink2);margin-top:7px">板中有板 —— 内板更淡、更小圆角（24px），靠内阴影"嵌"进外板里。这是参考图最关键的一步，也是我上一版最缺的。</div></div></div></div></div><div class="card"><div class="bd" style="padding:22px 24px;gap:13px"><div style="font:800 13px/1 var(--ui)">厚度是怎么来的 —— 六层阴影</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3)">半透明 + 一条 1px 描边只能做出"一张纸"。厚玻璃需要把光在玻璃里的行为拆开画。</div><div style="display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair2)"><span class="mono" style="font-size:9px;color:var(--agent-ink);width:200px;flex-shrink:0">inset 0 1.5px 0 #fff</span><span style="font:800 10.5px/1.4 var(--ui);width:64px;flex-shrink:0">顶边高光</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">玻璃的上沿被光打亮 —— 厚度感的第一来源</span></div><div style="display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair2)"><span class="mono" style="font-size:9px;color:var(--agent-ink);width:200px;flex-shrink:0">inset 0 -1px 0 rgba(255,255,255,.55)</span><span style="font:800 10.5px/1.4 var(--ui);width:64px;flex-shrink:0">底边回光</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">下沿的一丝反射，让板子不像纸片</span></div><div style="display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair2)"><span class="mono" style="font-size:9px;color:var(--agent-ink);width:200px;flex-shrink:0">inset 0 22px 44px -28px #fff</span><span style="font:800 10.5px/1.4 var(--ui);width:64px;flex-shrink:0">内顶泛光</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">光从上方漫进玻璃内部</span></div><div style="display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair2)"><span class="mono" style="font-size:9px;color:var(--agent-ink);width:200px;flex-shrink:0">inset 0 -30px 52px -34px rgba(60,115,150,.42)</span><span style="font:800 10.5px/1.4 var(--ui);width:64px;flex-shrink:0">内底暗部</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">玻璃自身的厚度投在内部的阴影</span></div><div style="display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair2)"><span class="mono" style="font-size:9px;color:var(--agent-ink);width:200px;flex-shrink:0">0 36px 74px -36px rgba(20,55,85,.42)</span><span style="font:800 10.5px/1.4 var(--ui);width:64px;flex-shrink:0">投影</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">板子浮在舞台上方，不是贴着</span></div><div style="display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair2)"><span class="mono" style="font-size:9px;color:var(--agent-ink);width:200px;flex-shrink:0">0 2px 10px -5px rgba(20,55,85,.18)</span><span style="font:800 10.5px/1.4 var(--ui);width:64px;flex-shrink:0">接触阴影</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">紧贴边缘的一层，钉住位置</span></div></div></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px"><div class="card"><div class="bd" style="padding:18px 20px;gap:14px"><div><div style="font:800 12.5px/1 var(--ui)">板中有板</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3);margin-top:8px">外板厚、内板淡。内板靠内阴影"嵌"进去，不是叠上去 —— 这是液态玻璃的核心手感。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh);min-height:120px"><div class="main" style="width:100%;height:112px;border-radius:26px;padding:14px;display:flex;gap:10px"><div class="stream" style="flex:1;padding:0"></div><div class="aside" style="width:70px;padding:0"></div></div></div></div></div><div class="card"><div class="bd" style="padding:18px 20px;gap:14px"><div><div style="font:800 12.5px/1 var(--ui)">棱镜色散边</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3);margin-top:8px">conic 渐变绕角度旋转 16 秒一圈，mask 掏空只留 1.4px。亮色 .42 透明度是色散，暗色 .85 就是霓虹描边。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh);min-height:120px"><div class="main" style="width:190px;height:96px;border-radius:24px"></div></div></div></div><div class="card"><div class="bd" style="padding:18px 20px;gap:14px"><div><div style="font:800 12.5px/1 var(--ui)">胶囊化控件</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3);margin-top:8px">按钮、输入框、chip、分段器全是全圆角。主按钮薄荷渐变 + 右侧箭头，这是参考图里最强的形状记号。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh);min-height:150px"><div style="display:flex;flex-direction:column;gap:11px;width:100%"><span class="btn pri" style="justify-content:space-between">主要操作<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg></span><span class="btn" style="justify-content:space-between">次要操作<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg></span><div style="display:flex;gap:9px"><span class="btn ico">+</span><span class="btn ico">♡</span><span class="btn ico">◎</span></div></div></div></div></div><div class="card"><div class="bd" style="padding:18px 20px;gap:14px"><div><div style="font:800 12.5px/1 var(--ui)">身份三态</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3);margin-top:8px">人=暖橘渐变胶囊靠右；主 agent=薄荷渐变 + 呼吸；关注者=虚线，最轻。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh);min-height:120px"><span class="av h" style="width:52px;height:52px;font-size:15px">李</span><span class="av p" style="width:52px;height:52px;font-size:15px">RO<span class="st on"></span></span><span class="av a" style="width:52px;height:52px;font-size:15px">NO<span class="st on"></span></span></div></div></div><div class="card"><div class="bd" style="padding:18px 20px;gap:14px"><div><div style="font:800 12.5px/1 var(--ui)">气泡也是厚玻璃</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3);margin-top:8px">24px 圆角，同侧收角 9px。人的气泡是实底渐变，agent 的是玻璃 —— 材质本身就在区分身份。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh);min-height:150px"><div style="display:flex;flex-direction:column;gap:10px;width:100%"><div class="bub pri" style="font-size:11.5px;padding:11px 15px;align-self:flex-start">主 agent</div><div class="bub watch" style="font-size:11.5px;padding:11px 15px;align-self:flex-start">关注者</div><div class="bub me" style="font-size:11.5px;padding:11px 15px;align-self:flex-end">人类</div></div></div></div></div><div class="card"><div class="bd" style="padding:18px 20px;gap:14px"><div><div style="font:800 12.5px/1 var(--ui)">分段器与内板</div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3);margin-top:8px">分段器是内板上的胶囊，选中项浮起来成为一小块厚玻璃。</div></div><div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh);min-height:120px"><div style="width:100%"><div class="seg" style="margin:0"><span class="on">对话</span><span>看板</span><span>名录</span></div></div></div></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:18px"><div class="card"><div class="bd" style="padding:22px 24px;gap:12px"><div style="font:800 13px/1 var(--ui)">动效清单</div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">weather 30s</span><span style="font:700 10.5px/1.45 var(--ui)">舞台背景</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">焦散光带与色散缓慢移动旋转，整页有天气</span></div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">sheen 14s</span><span style="font:700 10.5px/1.45 var(--ui)">玻璃板</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">一道高光横扫板面 —— 液态感的来源</span></div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">spin 16s / 7s</span><span style="font:700 10.5px/1.45 var(--ui)">棱镜边 / 语义流光</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">板边 16 秒一圈很慢，语义流光 7 秒，跑马灯 3.6 秒</span></div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">breathe 5s</span><span style="font:700 10.5px/1.45 var(--ui)">主 agent、品牌标、球体</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">1 → 1.05 缩放。页面上唯一会喘气的东西</span></div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">pulse 2.8s</span><span style="font:700 10.5px/1.45 var(--ui)">在线状态点</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">明暗呼吸，比静止绿点更像"连接是活的"</span></div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">rise .66s</span><span style="font:700 10.5px/1.45 var(--ui)">消息、卡片、会话项</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">入场从下方 18px 浮起，nth-child 错峰 70ms</span></div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">dust 40s</span><span style="font:700 10.5px/1.45 var(--ui)">尘埃粒子（暗色）</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">80 颗粒子缓慢平移，制造纵深</span></div><div style="display:grid;grid-template-columns:130px 150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair2);align-items:baseline"><span class="mono" style="font-size:9.5px;color:var(--agent-ink)">hover .3s</span><span style="font:700 10.5px/1.45 var(--ui)">所有可点元素</span><span style="font:600 10px/1.55 var(--ui);color:var(--ink3)">抬升 2px；主按钮辉光扩散；会话项右移 3px</span></div><div style="font:600 10.5px/1.7 var(--ui);color:var(--ink3);margin-top:4px">全部走同一条缓动 <span class="mono">cubic-bezier(.22,.61,.28,1)</span>；<span class="mono">prefers-reduced-motion</span> 下全量关闭。</div></div></div><div class="card"><div class="bd" style="padding:22px 24px;gap:13px"><div style="display:flex;align-items:center;gap:11px"><span style="font:800 13px/1 var(--ui)">配方</span><span class="chip a" style="font-size:10px">纯 CSS，零第三方依赖</span></div><pre class="mono" style="margin:0;padding:18px 20px;border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);box-shadow:var(--inset-sh);font-size:10px;line-height:1.8;color:var(--ink2);overflow:auto;white-space:pre">/* 舞台 —— 不是"页面底色"，是一张有天气的背景 */
+.app{
+  padding:22px; gap:16px; display:flex;
+  background:
+    radial-gradient(78% 58% at 16% 4%,  #c9e9f7 0%, transparent 58%),
+    radial-gradient(64% 52% at 86% 10%, #dcdcff 0%, transparent 60%),
+    radial-gradient(86% 62% at 62% 104%,#dffaf0 0%, transparent 58%),
+    linear-gradient(168deg,#cfe4f0 0%,#e2eff5 42%,#eef8f8 100%);
+}
+/* 焦散光带 + 棱镜色散，30s 缓慢移动 */
+.app::before{
+  background:
+    conic-gradient(from 210deg at 30% 20%,transparent 0 18%,rgba(255,255,255,.5) 24%,transparent 30%),
+    linear-gradient(104deg,transparent 40%,rgba(255,120,220,.28) 46%,
+      rgba(120,220,255,.30) 50%,rgba(180,255,200,.26) 54%,transparent 60%);
+  filter:blur(46px); animation:weather 30s var(--ease) infinite alternate;
+}
+
+/* 厚玻璃板 —— 六层 box-shadow 叠出厚度 */
+.rail,.main{
+  border-radius:30px;
+  background:linear-gradient(158deg,rgba(255,255,255,.66),
+             rgba(255,255,255,.34) 46%,rgba(255,255,255,.52));
+  backdrop-filter:blur(30px) saturate(190%) brightness(1.04);
+  border:1px solid rgba(255,255,255,.75);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(255,255,255,.55),
+    inset 0 22px 44px -28px rgba(255,255,255,1),
+    inset 0 -30px 52px -34px rgba(60,115,150,.42),
+    0 36px 74px -36px rgba(20,55,85,.42),
+    0 2px 10px -5px rgba(20,55,85,.18);
+}
+/* 棱镜色散边：亮色 opacity .42，暗色 .85 就成了霓虹角度渐变描边 */
+.rail::before,.main::before{
+  padding:1.4px; border-radius:inherit;
+  background:conic-gradient(from var(--ang),var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i1));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  mask-composite:exclude; animation:spin 7s linear infinite;
+  mask-composite:exclude; opacity:var(--prism-op); animation:spin 16s linear infinite;
 }
-@keyframes spin{ to{ --ang:360deg } }
-
-/* 毛玻璃 */
-.glass{
-  background:var(--surface);
-  backdrop-filter:blur(26px) saturate(150%);
-  border:1px solid var(--line);
-  box-shadow:0 1px 0 rgba(255,255,255,.08) inset,
-             0 26px 60px -28px rgba(0,0,0,.95);
-}
-
-/* 着色器渐变（.app::before）+ 粒子场（.app::after，多重 box-shadow） */
-.app::before{ background:
-    radial-gradient(38% 32% at 14% 12%, var(--amb1), transparent 70%),
-    radial-gradient(34% 30% at 84% 20%, var(--amb2), transparent 70%), ... ;
-  filter:blur(58px); mix-blend-mode:screen;
-  animation:drift 26s var(--ease) infinite alternate; }
-
-/* 减弱动效必须尊重 */
-@media (prefers-reduced-motion: reduce){
-  *,*::before,*::after{ animation:none!important; transition:none!important }
+/* 高光扫过：液态感的来源 */
+.rail::after,.main::after{
+  background:linear-gradient(126deg,transparent 30%,rgba(255,255,255,.85) 46%,transparent 58%);
+  mix-blend-mode:overlay; animation:sheen 14s var(--ease) infinite;
 }</pre></div></div></div></div>
 </x-dc>
 </body>
