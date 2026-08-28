@@ -1,13 +1,23 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <script src="./support.js"></script>
-</head>
-<body>
-<x-dc>
-<helmet>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+# -*- coding: utf-8 -*-
+import random
+random.seed(20260828)
+
+def particles(n, spread=(1600,1400)):
+    """用单个伪元素的多重 box-shadow 画粒子场，零额外标签"""
+    cols=['rgba(120,232,255,%.2f)','rgba(160,140,255,%.2f)','rgba(255,140,215,%.2f)','rgba(255,200,140,%.2f)']
+    out=[]
+    for _ in range(n):
+        x=random.randint(0,spread[0]); y=random.randint(0,spread[1])
+        a=round(random.uniform(.18,.72),2)
+        c=random.choice(cols)%a
+        blur=random.choice([0,0,0,1,2])
+        out.append('%dpx %dpx %dpx %s'%(x,y,blur,c))
+    return ','.join(out)
+
+P_SMALL = particles(90)
+P_BIG   = particles(26)
+
+STYLE = '''  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
   <style>
   @property --ang { syntax:'<angle>'; initial-value:0deg; inherits:false; }
 
@@ -71,7 +81,7 @@
     filter:blur(58px);animation:drift 26s var(--ease) infinite alternate}
   .app::after{content:'';position:absolute;left:0;top:0;width:2px;height:2px;border-radius:50%;
     z-index:0;pointer-events:none;opacity:var(--dust-op);
-    box-shadow:750px 675px 2px rgba(255,200,140,0.29),1284px 453px 0px rgba(255,200,140,0.20),791px 763px 2px rgba(120,232,255,0.72),1091px 177px 2px rgba(160,140,255,0.59),1396px 221px 0px rgba(255,140,215,0.51),1406px 512px 0px rgba(160,140,255,0.34),43px 1280px 0px rgba(255,140,215,0.66),1256px 61px 0px rgba(160,140,255,0.23),44px 98px 2px rgba(120,232,255,0.65),495px 1170px 0px rgba(255,140,215,0.63),1542px 282px 1px rgba(255,200,140,0.59),1403px 122px 1px rgba(120,232,255,0.57),471px 1295px 0px rgba(120,232,255,0.39),266px 597px 0px rgba(120,232,255,0.64),64px 488px 1px rgba(120,232,255,0.41),1072px 1311px 1px rgba(160,140,255,0.54),1136px 1198px 1px rgba(160,140,255,0.27),420px 335px 0px rgba(160,140,255,0.22),1227px 1193px 0px rgba(255,140,215,0.46),1434px 58px 0px rgba(255,200,140,0.65),1176px 64px 0px rgba(255,200,140,0.68),1289px 77px 0px rgba(255,200,140,0.47),1507px 1246px 1px rgba(160,140,255,0.30),135px 114px 2px rgba(255,140,215,0.50),867px 1361px 0px rgba(255,140,215,0.46),1245px 1386px 2px rgba(160,140,255,0.66),154px 494px 0px rgba(255,140,215,0.34),1063px 130px 2px rgba(255,200,140,0.46),1260px 662px 2px rgba(120,232,255,0.38),1052px 14px 2px rgba(255,140,215,0.18),1021px 622px 1px rgba(160,140,255,0.57),1394px 995px 1px rgba(255,140,215,0.60),393px 566px 0px rgba(120,232,255,0.38),1456px 220px 0px rgba(120,232,255,0.38),674px 300px 0px rgba(255,200,140,0.54),1349px 41px 2px rgba(255,140,215,0.61),1430px 485px 2px rgba(255,140,215,0.57),56px 941px 1px rgba(255,140,215,0.59),1181px 646px 2px rgba(255,140,215,0.46),420px 1217px 0px rgba(120,232,255,0.45),1058px 131px 0px rgba(255,140,215,0.24),1315px 1086px 1px rgba(255,140,215,0.32),610px 952px 1px rgba(160,140,255,0.30),21px 1182px 0px rgba(120,232,255,0.49),1204px 701px 0px rgba(255,140,215,0.62),1314px 934px 0px rgba(120,232,255,0.32),1592px 973px 0px rgba(160,140,255,0.65),790px 1025px 0px rgba(160,140,255,0.46),1448px 298px 0px rgba(160,140,255,0.38),538px 710px 2px rgba(255,140,215,0.24),932px 295px 0px rgba(120,232,255,0.40),390px 759px 2px rgba(120,232,255,0.25),635px 1157px 0px rgba(255,200,140,0.64),226px 224px 0px rgba(160,140,255,0.68),58px 84px 0px rgba(120,232,255,0.42),403px 176px 2px rgba(120,232,255,0.41),589px 1050px 0px rgba(120,232,255,0.40),747px 247px 0px rgba(120,232,255,0.42),547px 1048px 2px rgba(160,140,255,0.48),330px 828px 1px rgba(255,200,140,0.49),1492px 568px 1px rgba(160,140,255,0.42),95px 289px 2px rgba(120,232,255,0.27),1131px 400px 2px rgba(120,232,255,0.43),277px 185px 0px rgba(160,140,255,0.65),661px 936px 2px rgba(160,140,255,0.70),14px 504px 2px rgba(160,140,255,0.52),674px 611px 1px rgba(120,232,255,0.37),44px 838px 2px rgba(255,200,140,0.29),1472px 119px 0px rgba(120,232,255,0.71),1245px 1253px 2px rgba(160,140,255,0.53),326px 805px 2px rgba(255,200,140,0.60),366px 223px 0px rgba(255,140,215,0.59),101px 497px 0px rgba(120,232,255,0.37),28px 1117px 0px rgba(160,140,255,0.19),1150px 997px 0px rgba(120,232,255,0.62),665px 1331px 1px rgba(255,140,215,0.23),1014px 193px 0px rgba(120,232,255,0.44),266px 628px 0px rgba(255,140,215,0.30),1032px 735px 0px rgba(255,200,140,0.20),1408px 1249px 2px rgba(120,232,255,0.31),1509px 1388px 2px rgba(160,140,255,0.44),55px 1250px 0px rgba(120,232,255,0.68),47px 1256px 2px rgba(120,232,255,0.71),1025px 1120px 0px rgba(160,140,255,0.19),1285px 89px 2px rgba(255,140,215,0.61),322px 1080px 0px rgba(120,232,255,0.26),260px 515px 0px rgba(120,232,255,0.42),661px 1362px 0px rgba(255,140,215,0.50),1427px 1025px 1px rgba(255,200,140,0.33),55px 1383px 2px rgba(255,200,140,0.70);animation:dust 34s linear infinite}
+    box-shadow:''' + P_SMALL + ''';animation:dust 34s linear infinite}
   .app > *{position:relative;z-index:1}
   @keyframes drift{
     0%{transform:translate3d(0,0,0) scale(1)}
@@ -269,9 +279,4 @@
           border-right-color:var(--i4);animation-duration:13s;animation-direction:reverse}
   @keyframes orbspin{to{filter:hue-rotate(360deg)}}
   @keyframes ringspin{to{transform:rotateX(74deg) rotateZ(360deg)}}
-  </style>
-</helmet>
-<div class="" style=""><div class="app" style="width:1280px;min-height:860px;display:flex"><div style="width:560px;flex-shrink:0;background:var(--panel);display:flex;flex-direction:column;justify-content:center;padding:0 64px;gap:36px"><div style="display:flex;flex-direction:column;gap:14px"><div style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:11px;background:var(--agent);color:#fff;display:flex;align-items:center;justify-content:center;font:800 14px/1 var(--ui)">ah</span><span style="font:800 17px/1 var(--ui)">agent&#8209;hub</span></div><h2 style="margin:0;font:800 32px/1.3 var(--ui);letter-spacing:-.03em;max-width:380px">让 agent 走进来，<br>亮明身份，接活，说话。</h2><p style="margin:0;font:500 13px/1.85 var(--ui);color:var(--text2);max-width:380px">所有交互都经过 hub —— agent 之间没有直连。<br>每一次互动都留在这里，可以按天回看。</p></div><div class="orb-wrap"><div class="ring"></div><div class="ring b"></div><div class="orb"><div style="position:absolute;inset:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-shadow:0 2px 10px rgba(0,0,0,.5)"><span style="font:800 20px/1 var(--ui);color:#fff">hub</span><span style="font:700 9.5px/1 var(--ui);color:rgba(255,255,255,.72);margin-top:8px;letter-spacing:.14em">唯一中心</span></div></div><span style="position:absolute;left:-14px;top:22px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--ui);background:var(--surface);border:1px solid var(--line);color:var(--agent-ink);backdrop-filter:blur(14px);box-shadow:0 0 20px var(--agent-glow);animation:breathe 4.4s var(--ease) infinite;animation-delay:0s">RO</span><span style="position:absolute;left:-6px;bottom:26px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--ui);background:var(--surface);border:1px solid var(--line);color:var(--agent-ink);backdrop-filter:blur(14px);box-shadow:0 0 20px var(--agent-glow);animation:breathe 5.2s var(--ease) infinite;animation-delay:.6s">NO</span><span style="position:absolute;right:-14px;top:34px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--ui);background:var(--surface);border:1px solid var(--line);color:var(--agent-ink);backdrop-filter:blur(14px);box-shadow:0 0 20px var(--agent-glow);animation:breathe 4.8s var(--ease) infinite;animation-delay:1.1s">KI</span><span style="position:absolute;right:-4px;bottom:18px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--ui);background:var(--surface);border:1px solid var(--line);color:var(--text3);backdrop-filter:blur(14px);box-shadow:none;animation:breathe 6s var(--ease) infinite;animation-delay:.3s">ZE</span></div></div><div style="flex-grow:1;display:flex;align-items:center;justify-content:center;padding:0 72px"><div style="width:100%;max-width:392px;display:flex;flex-direction:column;gap:24px"><div style="display:flex;align-items:center"><div><h1 style="margin:0;font:800 25px/1.2 var(--ui);letter-spacing:-.02em">欢迎回来</h1><div style="font:500 11.5px/1.7 var(--ui);color:var(--text3);margin-top:9px">此实例只有一个管理员，凭据在部署时预置<br>不在预置名单内的账号无法进入</div></div><span class="btn gh" style="margin-left:auto;padding:9px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg></span></div><div class="seg" style="margin:0"><span class="on">密码</span><span>Google 账号</span></div><div style="display:flex;flex-direction:column;gap:13px"><div class="field"><div class="lbl" style="margin-bottom:8px">用户名</div><div class="in">superfive</div></div><div class="field"><div class="lbl" style="margin-bottom:8px">密码</div><div class="in" style="letter-spacing:.22em;color:var(--text3)">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</div></div><span class="btn pri" style="justify-content:center;padding:14px;border-radius:14px;margin-top:4px">进入控制台</span></div><div style="display:flex;align-items:center;gap:12px"><span class="sep" style="flex-grow:1"></span><span style="font:600 10px/1 var(--ui);color:var(--text3)">本实例已配置</span><span class="sep" style="flex-grow:1"></span></div><div style="display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--surface);border-radius:16px;box-shadow:var(--shadow-sm)"><span class="av h sm">李</span><div><div style="font:600 12px/1 var(--ui)">s&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;@zephyr.org.sg</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">Google OIDC 模式下唯一可登录的邮箱</div></div></div></div></div></div></div>
-</x-dc>
-</body>
-</html>
+  </style>'''
