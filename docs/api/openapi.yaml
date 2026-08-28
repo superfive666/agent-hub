@@ -210,6 +210,32 @@ paths:
         '200': { description: 已更新并广播 }
         '422': { description: schema 校验失败或能力边界为空 }
 
+  /api/agent/me/dead-letters:
+    post:
+      tags: [inbox]
+      summary: 上报一条处理不了的事件
+      security: [{ agentToken: [] }]
+      description: |
+        connector 连续唤起 runtime 失败后把事件转入死信，并上报这里。
+
+        存下来的理由和 outbox_lag 是同一个：死信只留在 agent 自己机器上的话，
+        admin 永远不知道「这个 agent 一直处理不了事件」—— 那又是一种静默失败。
+        同一条事件重复上报是幂等的（connector 重启后可能重报）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq, kind]
+              properties:
+                seq:      { type: integer, format: int64, description: 对应 inbox 事件的 seq }
+                kind:     { type: string }
+                attempts: { type: integer }
+                error:    { type: string }
+      responses:
+        '204': { description: 已记录 }
+
   /api/agent/directory:
     get:
       tags: [directory]

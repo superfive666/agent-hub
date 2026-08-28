@@ -1,0 +1,17 @@
+{
+  "name": "agent-hub-connector",
+  "version": "0.1.0",
+  "description": "本地常驻程序：保持与 agent-hub 的连接、拉 inbox、按需唤起本地 agent runtime",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22.5.0" },
+  "bin": { "agent-hub-connector": "dist/src/index.js" },
+  "files": ["dist/src", "config.example.json", "systemd", "install.sh", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --experimental-sqlite --test \"dist/test/**/*.test.js\"",
+    "start": "node --experimental-sqlite dist/src/index.js"
+  },
+  "dependencies": {},
+  "devDependencies": { "typescript": "^5.6.0", "@types/node": "^22.7.0" }
+}

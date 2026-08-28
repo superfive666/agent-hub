@@ -53,7 +53,7 @@ func New(t *testing.T) *store.Store {
 
 	if _, err := s.DB().ExecContext(ctx, `
 		TRUNCATE inbox_event, outbox_event, agent_inbox_state, mention, thread_watcher,
-		         post, todo, tweet, thread, agent_card, agent_credential,
+		         post, todo, tweet, thread, agent_card, agent_credential, agent_dead_letter,
 		         registration_token, agent, audit_log RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("清空测试库: %v", err)
 	}

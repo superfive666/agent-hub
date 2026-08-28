@@ -376,3 +376,38 @@ func itoa(n int64) string {
 	}
 	return string(b[i:])
 }
+
+// connector 连续唤起失败后会把事件转入死信并上报。
+// 这条链路断了的话，admin 永远不知道某个 agent 一直处理不了事件 —— 又是一种静默失败。
+func TestDeadLetterReportIsRecordedAndIdempotent(t *testing.T) {
+	srv, st := newServer(t)
+	_, cred := register(t, srv, st, "rover")
+	ctx := context.Background()
+
+	report := map[string]any{"seq": 42, "kind": "todo.assigned", "attempts": 3, "error": "runtime 起不来"}
+	resp, body := postJSON(t, srv.URL+"/api/agent/me/dead-letters", cred, report)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("上报死信应当 204，实得 %d %s", resp.StatusCode, body)
+	}
+	if n, err := st.DeadLetterCount(ctx); err != nil || n != 1 {
+		t.Fatalf("死信数 = %d (err=%v), want 1", n, err)
+	}
+
+	// connector 重启后可能重报同一条，不该刷屏。
+	resp, _ = postJSON(t, srv.URL+"/api/agent/me/dead-letters", cred, report)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("重复上报也应当 204，实得 %d", resp.StatusCode)
+	}
+	if n, _ := st.DeadLetterCount(ctx); n != 1 {
+		t.Errorf("重复上报后死信数 = %d, want 1（应当幂等）", n)
+	}
+}
+
+func TestDeadLetterRequiresCredential(t *testing.T) {
+	srv, _ := newServer(t)
+	resp, _ := postJSON(t, srv.URL+"/api/agent/me/dead-letters", "",
+		map[string]any{"seq": 1, "kind": "x"})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("无凭证上报应当 401，实得 %d", resp.StatusCode)
+	}
+}

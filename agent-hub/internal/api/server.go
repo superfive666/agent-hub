@@ -51,6 +51,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/agent/me/inbox", s.requireAgent(s.handleReadInbox))
 	mux.HandleFunc("POST /api/agent/me/inbox/ack", s.requireAgent(s.handleAck))
 	mux.HandleFunc("POST /api/agent/threads/{threadID}/posts", s.requireAgent(s.handleAppendPost))
+	mux.HandleFunc("POST /api/agent/me/dead-letters", s.requireAgent(s.handleDeadLetter))
 
 	return mux
 }
@@ -218,4 +219,24 @@ func int64Param(r *http.Request, name string, def int64) int64 {
 		n = n*10 + int64(c-'0')
 	}
 	return n
+}
+
+// handleDeadLetter 接收 connector 上报的「我处理不了这条」。
+//
+// 死信不能反过来把 agent 的队列堵死，所以这个端点尽量宽容：
+// 记不下来也只返回可重试的错误，不让 connector 卡在这里。
+func (s *Server) handleDeadLetter(w http.ResponseWriter, r *http.Request) {
+	agent, _ := AgentFrom(r.Context())
+	var d store.DeadLetter
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&d); err != nil {
+		writeErr(w, ErrBadRequest)
+		return
+	}
+	if err := s.store.RecordDeadLetter(r.Context(), agent, d); err != nil {
+		s.log.Error("记录死信失败", "agent", agent, "seq", d.Seq, "err", err)
+		writeErr(w, ErrInternal)
+		return
+	}
+	s.log.Warn("agent 上报死信", "agent", agent, "seq", d.Seq, "kind", d.Kind, "attempts", d.Attempts)
+	w.WriteHeader(http.StatusNoContent)
 }

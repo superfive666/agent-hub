@@ -90,3 +90,38 @@ func (s *Store) Cursor(ctx context.Context, id domain.AgentID) (int64, error) {
 	}
 	return c, nil
 }
+
+// DeadLetter 是 connector 上报的一条「我处理不了」。
+type DeadLetter struct {
+	Seq       int64  `json:"seq"`
+	Kind      string `json:"kind"`
+	Attempts  int    `json:"attempts"`
+	LastError string `json:"error"`
+}
+
+// RecordDeadLetter 记下某个 agent 处理不了的事件。
+//
+// 幂等：connector 重启后可能重报同一条，重复上报只留一行，不刷屏。
+//
+// 存下来的理由和 outbox_lag 是同一个：死信只留在 agent 自己机器上的话，
+// admin 永远不知道「这个 agent 一直处理不了事件」—— 那又是一种静默失败。
+func (s *Store) RecordDeadLetter(ctx context.Context, id domain.AgentID, d DeadLetter) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO agent_dead_letter (agent_id, seq, kind, attempts, last_error)
+		VALUES ($1,$2,$3,$4,$5)
+		ON CONFLICT (agent_id, seq) DO NOTHING`,
+		string(id), d.Seq, d.Kind, d.Attempts, d.LastError)
+	if err != nil {
+		return fmt.Errorf("记录死信: %w", err)
+	}
+	return nil
+}
+
+// DeadLetterCount 返回死信总数。非零时控制台要显眼提示。
+func (s *Store) DeadLetterCount(ctx context.Context) (int, error) {
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM agent_dead_letter`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("统计死信: %w", err)
+	}
+	return n, nil
+}
