@@ -1,4 +1,8 @@
-<!doctype html>
+# -*- coding: utf-8 -*-
+import os
+OUT = os.path.dirname(os.path.abspath(__file__))
+
+HEAD = '''<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -127,7 +131,35 @@
   .bub.me .at{color:#ffe6d2}
   </style>
 </helmet>
-<div class="dark" style=""><div class="app" style="width:390px;min-height:844px;flex-direction:column"><div style="position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 14px 12px;display:flex;align-items:center;gap:11px;z-index:5"><span class="btn gh" style="padding:6px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><div style="min-width:0;flex-grow:1"><div style="font:700 13.5px/1.3 var(--ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">重写 connector 的重试退避逻辑</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">开始于今天 09:14 · 3 人</div></div><span class="chip h" style="font-size:10px">待确认</span></div><div style="display:flex;align-items:center;gap:9px;padding:10px 14px;background:var(--agent-soft)"><span class="av p xs">RO<span class="st on"></span></span><div style="min-width:0"><span style="font:700 11.5px/1 var(--ui);color:var(--agent-ink)">@rover</span><span style="font:600 10px/1 var(--ui);color:var(--agent-ink);opacity:.75;margin-left:7px">主 agent · 在线 · ~2 分钟</span></div><div style="margin-left:auto;display:flex"><span class="av a xs">NO</span><span class="av a xs">KI</span></div></div><div style="padding:16px 14px;display:flex;flex-direction:column;gap:13px;flex-grow:1"><div class="sys" style="font-size:10px">8月28日</div><div class="msg me" style="max-width:86%"><span class="av h xs">李</span><div><div class="who"><span class="t">09:14</span><span style="font-size:11px">你</span></div><div class="bub me" style="font-size:13px;padding:11px 14px">退避改成指数加抖动，上限要能配。<span class="at">@nova</span> <span class="at">@kilo</span> 看下。</div></div></div><div class="msg" style="max-width:86%"><span class="av p xs">RO<span class="st on"></span></span><div><div class="who"><span style="font-size:11px">@rover</span><span class="chip a" style="padding:2px 7px;font-size:9.5px">主 agent</span><span class="t">09:21</span></div><div class="bub pri" style="font-size:13px;padding:11px 14px">两个问题先确认：上限走配置清单还是硬编码？抖动用全量随机还是 decorrelated jitter？</div></div></div><div class="msg me" style="max-width:86%"><span class="av h xs">李</span><div><div class="who"><span class="t">09:38</span><span style="font-size:11px">你</span></div><div class="bub me" style="font-size:13px;padding:11px 14px">走配置清单，用 decorrelated jitter。</div></div></div><div class="msg" style="max-width:86%"><span class="av a xs">NO<span class="st on"></span></span><div><div class="who"><span style="font-size:11px">@nova</span><span class="chip " style="padding:2px 7px;font-size:9.5px">关注</span><span class="t">09:52</span></div><div class="bub watch" style="font-size:13px;padding:11px 14px">上限别超过长轮询超时，建议 30s 以内。</div></div></div><div class="sys" style="font-size:10px">rover 开始工作 · 澄清中 &#8594; 进行中</div><div class="msg" style="max-width:86%"><span class="av p xs">RO<span class="st on"></span></span><div><div class="who"><span style="font-size:11px">@rover</span><span class="chip a" style="padding:2px 7px;font-size:9.5px">主 agent</span><span class="t">15:02</span></div><div class="bub pri" style="font-size:13px;padding:11px 14px">做完了。base 200ms、max 30s、decorrelated jitter，schema 同步更新。</div></div></div><div class="sys" style="font-size:10px">进行中 &#8594; 待确认</div></div><div style="position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:11px 14px calc(11px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:9px"><div style="flex-grow:1;background:var(--surface);border-radius:var(--r-pill);padding:11px 16px;font:400 12.5px/1 var(--ui);color:var(--text3)">回复… 输入 @ 拉人关注</div><span class="btn pri" style="border-radius:var(--r-pill);padding:11px 13px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12 20 5l-4 7 4 7z"/></svg></span></div></div></div>
-</x-dc>
-</body>
-</html>
+'''
+FOOT = '</x-dc>\n</body>\n</html>\n'
+
+def ic(p,w=16,sw=1.8):
+    return ('<svg width="%d" height="%d" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            'stroke-width="%s" stroke-linecap="round" stroke-linejoin="round">%s</svg>')%(w,w,sw,p)
+I={
+ 'chat': ic('<path d="M20.5 11.4a7.9 7.9 0 0 1-8.5 7.9 8.9 8.9 0 0 1-3.6-.8L3.5 20l1.3-4.4a7.7 7.7 0 0 1-1.3-4.2A7.9 7.9 0 0 1 12 3.5a7.9 7.9 0 0 1 8.5 7.9z"/>'),
+ 'cal':  ic('<rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M3.5 10h17M8.5 3v4M15.5 3v4"/>'),
+ 'bot':  ic('<rect x="3.5" y="7.5" width="17" height="13" rx="5"/><path d="M12 7.5V4M9 13.5h.01M15 13.5h.01M9.8 17.2c1.4.9 3 .9 4.4 0"/>'),
+ 'cog':  ic('<circle cx="12" cy="12" r="3.4"/><path d="M12 2.6v3M12 18.4v3M21.4 12h-3M5.6 12h-3M18.6 5.4l-2 2M7.4 16.6l-2 2M18.6 18.6l-2-2M7.4 7.4l-2-2"/>'),
+ 'send': ic('<path d="M4.5 12 20 5l-4 7 4 7z"/>'),
+ 'plus': ic('<path d="M12 5.5v13M5.5 12h13"/>',15),
+ 'chk':  ic('<path d="M4.5 12.5 9.5 17.5 20 6.5"/>',14),
+ 'alert':ic('<path d="M12 8.5v5M12 17h.01"/><rect x="2.6" y="2.6" width="18.8" height="18.8" rx="6"/>',14),
+ 'left': ic('<path d="M14.5 5.5 8 12l6.5 6.5"/>',17),
+ 'right':ic('<path d="M9.5 5.5 16 12l-6.5 6.5"/>',17),
+ 'sun':  ic('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M21.5 12h-2M4.5 12h-2M18.4 5.6l-1.4 1.4M7 17l-1.4 1.4M18.4 18.4 17 17M7 7 5.6 5.6"/>',14),
+ 'moon': ic('<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',14),
+ 'dot3': ic('<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',16),
+ 'link': ic('<path d="M10.5 13.5a4.6 4.6 0 0 0 6.9.5l2.8-2.8a4.6 4.6 0 0 0-6.5-6.5L12.1 6.3"/><path d="M13.5 10.5a4.6 4.6 0 0 0-6.9-.5l-2.8 2.8a4.6 4.6 0 0 0 6.5 6.5l1.6-1.6"/>',14),
+ 'bell': ic('<path d="M18 8.6a6 6 0 1 0-12 0c0 6-2.5 7.4-2.5 7.4h17S18 14.6 18 8.6z"/><path d="M13.7 19.8a2 2 0 0 1-3.4 0"/>',14),
+}
+
+def av(kind, txt, size='', status=None):
+    s=('<span class="st %s"></span>'%status) if status else ''
+    return '<span class="av %s %s">%s%s</span>'%(kind,size,txt,s)
+
+def write(name, root_style, inner, dark=False):
+    cls = 'dark' if dark else ''
+    open(os.path.join(OUT, name+'.dc.html'),'w',encoding='utf-8').write(
+        HEAD + '<div class="%s" style="%s">%s</div>\n'%(cls, root_style, inner) + FOOT)

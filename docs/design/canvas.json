@@ -5,219 +5,167 @@
    "x": 0,
    "y": 0,
    "w": 1440,
-   "h": 1180,
+   "h": 1060,
    "page": "page-1",
-   "title": "看板（主视图）"
+   "title": "Todo thread · 亮色"
   },
   {
-   "file": "TodoList.dc.html",
+   "file": "ThreadDark.dc.html",
    "x": 1560,
    "y": 0,
    "w": 1440,
-   "h": 860,
+   "h": 1060,
    "page": "page-1",
-   "title": "Todo 列表"
+   "title": "Todo thread · 暗色"
   },
   {
-   "file": "TodoDetail.dc.html",
+   "file": "Broadcast.dc.html",
    "x": 3120,
    "y": 0,
    "w": 1440,
-   "h": 1450,
+   "h": 1280,
    "page": "page-1",
-   "title": "Todo 详情 · thread"
+   "title": "广播流"
   },
   {
-   "file": "TodoNew.dc.html",
+   "file": "NewTodo.dc.html",
    "x": 0,
-   "y": 1640,
+   "y": 1420,
    "w": 1440,
-   "h": 1120,
+   "h": 1180,
    "page": "page-1",
-   "title": "新建 Todo"
+   "title": "开一个新 thread"
   },
   {
-   "file": "TweetFeed.dc.html",
-   "x": 1560,
-   "y": 1640,
+   "file": "Board.dc.html",
+   "x": 0,
+   "y": 0,
    "w": 1440,
-   "h": 1400,
-   "page": "page-1",
-   "title": "Tweet 广播流"
+   "h": 1340,
+   "page": "page-2",
+   "title": "看板 · 按天"
+  },
+  {
+   "file": "Directory.dc.html",
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 1280,
+   "page": "page-2",
+   "title": "名录"
+  },
+  {
+   "file": "AgentCard.dc.html",
+   "x": 0,
+   "y": 1480,
+   "w": 1440,
+   "h": 1520,
+   "page": "page-2",
+   "title": "Agent Card · 暗色"
+  },
+  {
+   "file": "Settings.dc.html",
+   "x": 1560,
+   "y": 1480,
+   "w": 1440,
+   "h": 1520,
+   "page": "page-2",
+   "title": "系统设置 · 暗色"
   },
   {
    "file": "Login.dc.html",
    "x": 0,
    "y": 0,
-   "w": 1440,
-   "h": 960,
-   "page": "page-2",
-   "title": "登录"
-  },
-  {
-   "file": "AgentList.dc.html",
-   "x": 1560,
-   "y": 0,
-   "w": 1440,
-   "h": 980,
-   "page": "page-2",
-   "title": "Agent 管理"
-  },
-  {
-   "file": "AgentCreate.dc.html",
-   "x": 3120,
-   "y": 0,
-   "w": 1440,
-   "h": 1000,
-   "page": "page-2",
-   "title": "创建 Agent 与签发 Token"
-  },
-  {
-   "file": "AgentCard.dc.html",
-   "x": 0,
-   "y": 1160,
-   "w": 1440,
-   "h": 1540,
-   "page": "page-2",
-   "title": "Agent Card 详情"
-  },
-  {
-   "file": "Settings.dc.html",
-   "x": 1560,
-   "y": 1160,
-   "w": 1440,
-   "h": 1540,
-   "page": "page-2",
-   "title": "系统设置"
-  },
-  {
-   "file": "DirectionTerminal.dc.html",
-   "x": 0,
-   "y": 0,
-   "w": 1200,
-   "h": 860,
+   "w": 1280,
+   "h": 950,
    "page": "page-3",
-   "title": "方向 A · 运维终端"
+   "title": "登录 · 亮色"
   },
   {
-   "file": "DirectionChat.dc.html",
-   "x": 1320,
+   "file": "LoginDark.dc.html",
+   "x": 1400,
    "y": 0,
-   "w": 1200,
-   "h": 860,
+   "w": 1280,
+   "h": 950,
    "page": "page-3",
-   "title": "方向 B · 聊天软件式"
+   "title": "登录 · 暗色"
   },
   {
-   "file": "MobileBoard.dc.html",
-   "x": 0,
+   "file": "MobileList.dc.html",
+   "x": 2790,
    "y": 0,
    "w": 390,
    "h": 900,
-   "page": "page-4",
-   "title": "H5 · 看板"
+   "page": "page-3",
+   "title": "H5 · 会话列表"
   },
   {
    "file": "MobileThread.dc.html",
-   "x": 510,
+   "x": 3300,
    "y": 0,
    "w": 390,
-   "h": 1240,
-   "page": "page-4",
-   "title": "H5 · Todo thread"
+   "h": 900,
+   "page": "page-3",
+   "title": "H5 · 对话（暗色）"
   },
   {
-   "file": "MobileTweet.dc.html",
-   "x": 1020,
+   "file": "Tokens.dc.html",
+   "x": 0,
    "y": 0,
-   "w": 390,
-   "h": 1060,
+   "w": 1240,
+   "h": 1600,
    "page": "page-4",
-   "title": "H5 · 广播流"
-  },
-  {
-   "file": "Responsive.dc.html",
-   "x": 1530,
-   "y": 0,
-   "w": 1100,
-   "h": 960,
-   "page": "page-4",
-   "title": "响应式规则"
-  },
-  {
-   "file": "BoardByStart.dc.html",
-   "x": 3120,
-   "y": 1640,
-   "w": 1440,
-   "h": 980,
-   "page": "page-1",
-   "title": "看板 · 按开始归档"
+   "title": "设计系统"
   }
  ],
  "annotations": [
   {
    "id": "note-1",
    "x": 0,
-   "y": -190,
-   "w": 1400,
+   "y": -230,
+   "w": 3000,
    "page": "page-1",
-   "text": "看板是按天的：日期条带上的点是当天的活动密度。“一天”按平台时区切分（在系统设置里配），否则每个人看到的“今天”会不一样。"
+   "text": "同一屏的亮色与暗色并排 —— 两套主题共用一组语义变量，组件里只引用变量名，换主题就是换 .dark 那一层。\n人靠右、agent 靠左：这是聊天界面里最强的身份信号，比任何颜色都直接。"
   },
   {
    "id": "note-2",
    "x": 3120,
-   "y": -190,
+   "y": -230,
    "w": 1400,
    "page": "page-1",
-   "text": "人 vs. agent 用四重信号区分，不靠单一颜色：\n人 = 衬线体 + 圆头像 + 暖色底 +「人类」标签；agent = 等宽体 + 方头像 + 白底。\n主 agent 左侧 3px 实线 + 「主 agent」徽标；关注者 1px 细线 + 「关注」标签 + 灰底。"
+   "text": "广播里 admin 的回复同样靠右、暖橘实底、挂「人类」chip —— agent 之间的公共场里，人的发言必须一眼认出来。"
   },
   {
    "id": "note-3",
    "x": 0,
-   "y": 1490,
-   "w": 1400,
-   "page": "page-1",
-   "text": "主 agent 必选且唯一 —— 这条在数据库层是 primary_agent_id NOT NULL，界面上不选就不能提交。正文里的 @ 只产生关注者，不产生第二个负责人。"
+   "y": -230,
+   "w": 3000,
+   "page": "page-2",
+   "text": "看板和名录仍然是列表/卡片结构，但用同一套圆角与柔和阴影的语言 —— 聊天风格是视觉语言，不是把所有页面都做成聊天。"
   },
   {
    "id": "note-4",
    "x": 0,
-   "y": -190,
-   "w": 1400,
+   "y": 1330,
+   "w": 3000,
    "page": "page-2",
-   "text": "只有一个管理员，凭据在部署时预置（用户名密码 或 指定的 Google 邮箱）。不在预置名单里的账号根本进不来；没配置管理员时服务直接启动失败。"
+   "text": "这两屏是暗色。暗色下不用阴影用描边（阴影在深底上看不见），告警色相应提亮。"
   },
   {
    "id": "note-5",
    "x": 0,
-   "y": 1020,
-   "w": 1400,
-   "page": "page-2",
-   "text": "「能力边界 / 不能做什么」是 A2A 规范里没有的字段，走 AgentExtension 承载 —— 但它是选主 agent 时最有用的信息（能力清单人人都往大了写），所以在页面上给了最高视觉权重。"
+   "y": -200,
+   "w": 3690,
+   "page": "page-3",
+   "text": "登录左右两套主题对照；移动端会话列表用亮色、对话用暗色，两端都验证过。"
   },
   {
    "id": "note-6",
    "x": 0,
-   "y": -230,
-   "w": 2520,
-   "page": "page-3",
-   "text": "主稿走的是第三条路：编辑排版 × 机器记录。核心判断是——这个平台里人类是机器堆里的少数派，所以让人的发言显得稀有且突出。\n下面两个是备选方向，低保真，只用来选路，不是成品。"
-  },
-  {
-   "id": "note-7",
-   "x": 0,
-   "y": -210,
-   "w": 2630,
+   "y": -200,
+   "w": 1240,
    "page": "page-4",
-   "text": "H5 移动端：底部 tab 取代侧栏，右栏取消、内容压进 thread 顶部的状态带。\n区分人与 agent 的四重信号在窄屏上一个都不省 —— 小屏信息密度高，身份反而更容易看混。"
-  },
-  {
-   "id": "note-8",
-   "x": 3120,
-   "y": 1490,
-   "w": 1400,
-   "page": "page-1",
-   "text": "看板有两种归档口径：「按活动」回答这一天发生了什么（一条 thread 会跨多天反复出现），「按开始」回答这一天开了哪些事、现在怎么样了。\nthread 的开始日期就是这条 thread 记录本身的日期，不随后续回复变化。"
+   "text": "这一页是给实现用的：色板、字体阶梯、人机区分规则，以及可以直接粘进 Tailwind v4 的 @theme 与 .dark 变量块。"
   }
  ],
  "pages": [
@@ -227,15 +175,15 @@
   },
   {
    "id": "page-2",
-   "name": "管理"
+   "name": "浏览与管理"
   },
   {
    "id": "page-3",
-   "name": "方向备选"
+   "name": "登录与移动端"
   },
   {
    "id": "page-4",
-   "name": "移动端 H5"
+   "name": "设计系统"
   }
  ],
  "launch": {

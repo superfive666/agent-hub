@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <style>
+  /* ── 亮色（默认） ───────────────────────────────── */
+  :root{
+    --bg:#f6f3ee; --panel:#efeae2; --surface:#ffffff; --raised:#faf8f4;
+    --text:#292521; --text2:#6e675e; --text3:#a49c90;
+    --line:#e7e0d5; --line2:#f0ebe2;
+    --agent:#12897a; --agent-ink:#0d6c60; --agent-soft:#dff0ec; --agent-ring:#a8d8cf;
+    --human:#c4642c; --human-ink:#9d4d1d; --human-soft:#fce8d7; --human-ring:#eab98d;
+    --alert:#b23c2c; --alert-soft:#fbe3de;
+    --warn:#8f6f18;  --warn-soft:#f9eed2;
+    --shadow:0 1px 2px rgba(41,37,33,.05), 0 8px 24px -12px rgba(41,37,33,.14);
+    --shadow-sm:0 1px 2px rgba(41,37,33,.06);
+  }
+  /* ── 暗色 ──────────────────────────────────────── */
+  .dark{
+    --bg:#151719; --panel:#1b1e21; --surface:#212528; --raised:#272b2f;
+    --text:#ece7e0; --text2:#a49d94; --text3:#6d675f;
+    --line:#31363a; --line2:#282c30;
+    --agent:#4ec8b2; --agent-ink:#7fdbc9; --agent-soft:#16302d; --agent-ring:#2d6b60;
+    --human:#f0a069; --human-ink:#f5bb90; --human-soft:#35251a; --human-ring:#8a5a33;
+    --alert:#f07f6b; --alert-soft:#3a201c;
+    --warn:#e0b757;  --warn-soft:#332a13;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.55);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.28);
+  }
+  :root, .dark{
+    --r-bub:20px; --r-card:16px; --r-ctl:11px; --r-pill:999px;
+    --ui:'Manrope',-apple-system,'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--ui);-webkit-font-smoothing:antialiased;text-wrap:pretty}
+  a{color:var(--human)} a:hover{color:var(--human-ink)}
+  .app{display:flex;background:var(--bg);color:var(--text)}
+
+  /* ── 左侧会话栏 ── */
+  .rail{width:264px;flex-shrink:0;background:var(--panel);display:flex;flex-direction:column;
+        border-right:1px solid var(--line)}
+  .brand{padding:20px 18px 14px;display:flex;align-items:center;gap:10px}
+  .brand .mk{width:30px;height:30px;border-radius:10px;background:var(--agent);color:#fff;
+             display:flex;align-items:center;justify-content:center;font:800 13px/1 var(--ui)}
+  .brand b{font:800 15px/1 var(--ui);letter-spacing:-.02em}
+  .seg{display:flex;gap:3px;margin:0 14px 12px;background:var(--bg);padding:3px;border-radius:var(--r-ctl)}
+  .seg span{flex:1;text-align:center;padding:7px 0;border-radius:8px;font:600 12px/1 var(--ui);color:var(--text2)}
+  .seg span.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
+  .convo{display:flex;gap:11px;padding:11px 13px;margin:0 8px;border-radius:var(--r-ctl);align-items:flex-start}
+  .convo.on{background:var(--surface);box-shadow:var(--shadow-sm)}
+  .convo .tt{font:600 12.5px/1.35 var(--ui);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .convo .pv{font:400 11px/1.4 var(--ui);color:var(--text3);display:block;overflow:hidden;
+             text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+  .railfoot{margin-top:auto;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+
+  /* ── 主区 ── */
+  .main{flex-grow:1;display:flex;flex-direction:column;min-width:0}
+  .head{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;
+        background:color-mix(in oklab, var(--bg) 82%, transparent)}
+  .head h1{margin:0;font:700 18px/1.25 var(--ui);letter-spacing:-.02em}
+  .head .sub{font:400 11.5px/1.4 var(--ui);color:var(--text3);margin-top:4px}
+  .head .sp{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .body{flex-grow:1;display:flex;min-width:0}
+  .stream{flex-grow:1;padding:22px 24px;display:flex;flex-direction:column;gap:16px;min-width:0}
+  .aside{width:290px;flex-shrink:0;border-left:1px solid var(--line);padding:20px;
+         display:flex;flex-direction:column;gap:14px;background:var(--panel)}
+
+  /* ── 原子 ── */
+  .av{border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;flex-shrink:0;
+      font:700 12px/1 var(--ui);width:36px;height:36px;position:relative}
+  .av.a{background:var(--agent-soft);color:var(--agent-ink)}
+  .av.p{background:var(--agent);color:#fff;box-shadow:0 0 0 3px var(--agent-ring)}
+  .av.h{background:var(--human);color:#fff}
+  .av.sm{width:28px;height:28px;font-size:10.5px}
+  .av.xs{width:22px;height:22px;font-size:9px}
+  .st{position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:var(--r-pill);
+      border:2.5px solid var(--bg)}
+  .st.on{background:#2fbf8f} .st.off{background:var(--text3)}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);
+        font:600 11px/1 var(--ui);background:var(--raised);color:var(--text2);white-space:nowrap}
+  .chip.a{background:var(--agent-soft);color:var(--agent-ink)}
+  .chip.h{background:var(--human-soft);color:var(--human-ink)}
+  .chip.w{background:var(--warn-soft);color:var(--warn)}
+  .chip.al{background:var(--alert-soft);color:var(--alert)}
+  .chip.solid{background:var(--text);color:var(--bg)}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:var(--r-ctl);
+       font:600 12.5px/1 var(--ui);background:var(--surface);color:var(--text);
+       box-shadow:var(--shadow-sm);border:1px solid var(--line)}
+  .btn.pri{background:var(--agent);color:#fff;border-color:transparent}
+  .btn.gh{background:transparent;box-shadow:none;border-color:transparent;color:var(--text2)}
+  .card{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--shadow);
+        border:1px solid var(--line2)}
+  .card .hd{padding:13px 16px 0;font:700 11px/1 var(--ui);letter-spacing:.07em;
+            color:var(--text3);text-transform:uppercase}
+  .card .bd{padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+  .kv{display:flex;align-items:center;gap:8px;font:500 12px/1.5 var(--ui);color:var(--text2)}
+  .kv b{margin-left:auto;color:var(--text);font-weight:600}
+  .mono{font-family:var(--mono)}
+  .sep{height:1px;background:var(--line2)}
+  .lbl{font:700 10.5px/1 var(--ui);letter-spacing:.07em;color:var(--text3);text-transform:uppercase}
+  .in{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-ctl);
+      padding:11px 14px;font:500 13px/1.5 var(--ui);color:var(--text)}
+
+  /* ── 气泡 ── */
+  .msg{display:flex;gap:11px;align-items:flex-end;max-width:74%}
+  .msg.me{margin-left:auto;flex-direction:row-reverse}
+  .bub{padding:12px 16px;border-radius:var(--r-bub);font:400 13.5px/1.65 var(--ui);
+       background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);
+       border-bottom-left-radius:6px}
+  .bub.me{background:var(--human);color:#fff;border-bottom-left-radius:var(--r-bub);
+          border-bottom-right-radius:6px}
+  .bub.pri{border-left:2.5px solid var(--agent)}
+  .bub.watch{background:transparent;border:1px dashed var(--line);box-shadow:none;color:var(--text2)}
+  .who{display:flex;align-items:center;gap:7px;margin-bottom:6px;font:600 11.5px/1 var(--ui)}
+  .who .t{margin-left:6px;font:500 10.5px/1 var(--ui);color:var(--text3)}
+  .msg.me .who{justify-content:flex-end}
+  .sys{align-self:center;padding:6px 14px;border-radius:var(--r-pill);background:var(--raised);
+       font:600 11px/1 var(--ui);color:var(--text3)}
+  .at{color:var(--agent-ink);font-weight:700}
+  .bub.me .at{color:#ffe6d2}
+  </style>
+</helmet>
+<div class="" style=""><div style="width:1240px;min-height:1500px;background:var(--bg);color:var(--text);font-family:var(--ui);padding:38px 44px;display:flex;flex-direction:column;gap:26px"><div style="display:flex;align-items:flex-end;gap:16px"><div><div style="font:800 26px/1.15 var(--ui);letter-spacing:-.03em">设计系统</div><div style="font:500 12px/1.7 var(--ui);color:var(--text2);margin-top:10px;max-width:660px">聊天优先的语言：大圆角、柔和阴影、气泡分左右。两套主题共用同一组语义变量，组件里只引用变量名，不写死颜色 —— 换主题就是换 <span class="mono">.dark</span> 那一层。</div></div><div style="margin-left:auto;display:flex;gap:8px"><span class="chip a"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M21.5 12h-2M4.5 12h-2M18.4 5.6l-1.4 1.4M7 17l-1.4 1.4M18.4 18.4 17 17M7 7 5.6 5.6"/></svg> 亮色</span><span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg> 暗色</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="card"><div class="bd" style="padding:20px;gap:13px"><div style="display:flex;align-items:center;gap:8px"><span style="color:var(--warn)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M21.5 12h-2M4.5 12h-2M18.4 5.6l-1.4 1.4M7 17l-1.4 1.4M18.4 18.4 17 17M7 7 5.6 5.6"/></svg></span><span style="font:800 13px/1 var(--ui)">亮色</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#f6f3ee;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--bg</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">底</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#f6f3ee</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#efeae2;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--panel</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">侧栏/面板</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#efeae2</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#ffffff;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--surface</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">卡片/气泡</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#ffffff</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#faf8f4;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--raised</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">轻凸起</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#faf8f4</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#292521;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--text</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">正文</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#292521</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#6e675e;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--text2</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">次要</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#6e675e</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#a49c90;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--text3</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">弱</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#a49c90</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#e7e0d5;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--line</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">分隔</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#e7e0d5</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#12897a;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--agent</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">AGENT</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#12897a</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#dff0ec;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--agent-soft</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">agent 底</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#dff0ec</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#c4642c;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--human</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">人类</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#c4642c</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#fce8d7;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--human-soft</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">人类底</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#fce8d7</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#b23c2c;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--alert</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">告警</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#b23c2c</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#8f6f18;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--warn</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">提示</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#8f6f18</span></div></div></div><div class="dark" style="border-radius:var(--r-card);background:var(--bg);padding:2px"><div class="card"><div class="bd" style="padding:20px;gap:13px"><div style="display:flex;align-items:center;gap:8px"><span style="color:var(--agent)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg></span><span style="font:800 13px/1 var(--ui);color:var(--text)">暗色</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#151719;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--bg</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">底</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#151719</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#1b1e21;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--panel</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">侧栏/面板</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#1b1e21</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#212528;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--surface</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">卡片/气泡</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#212528</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#272b2f;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--raised</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">轻凸起</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#272b2f</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#ece7e0;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--text</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">正文</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#ece7e0</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#a49d94;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--text2</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">次要</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#a49d94</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#6d675f;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--text3</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">弱</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#6d675f</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#31363a;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--line</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">分隔</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#31363a</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#4ec8b2;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--agent</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">AGENT</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#4ec8b2</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#16302d;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--agent-soft</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">agent 底</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#16302d</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#f0a069;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--human</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">人类</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#f0a069</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#35251a;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--human-soft</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">人类底</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#35251a</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#f07f6b;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--alert</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">告警</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#f07f6b</span></div><div style="display:flex;align-items:center;gap:11px"><span style="width:34px;height:34px;border-radius:11px;background:#e0b757;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(128,128,128,.18)"></span><div style="min-width:0"><div class="mono" style="font-size:10.5px;font-weight:600">--warn</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">提示</div></div><span class="mono" style="margin-left:auto;font-size:10px;color:var(--text3)">#e0b757</span></div></div></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px"><div class="card"><div class="bd" style="padding:18px 20px;gap:13px"><div style="font:800 13.5px/1 var(--ui);color:var(--human)">人 vs. agent</div><div style="font:500 11.5px/1.7 var(--ui);color:var(--text2)">旧稿用「方形=机器、圆形=人」，聊天语言里全是圆的，所以换成 IM 自己的语汇。四重信号叠加，不靠单一颜色 —— 少一重都不行。</div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--human);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)"><b>位置</b>：agent 靠左，人靠右。这是聊天界面最强的身份信号</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--human);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)"><b>气泡</b>：人是暖橘实底白字，agent 是 surface 底</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--human);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)"><b>名字</b>：agent 带 <span class="mono">@</span> 前缀，人不带</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--human);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)"><b>标签</b>：人的气泡上永远挂一个「人类」chip</span></div></div></div><div class="card"><div class="bd" style="padding:18px 20px;gap:13px"><div style="font:800 13.5px/1 var(--ui);color:var(--agent)">主 agent vs. 关注者</div><div style="font:500 11.5px/1.7 var(--ui);color:var(--text2)">谁负责这件事必须一眼看出来。主 agent 是唯一的，关注者可以有很多且没有回复义务。</div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--agent);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">主 agent：头像带 <b>3px 青色光环</b>，气泡左侧 2.5px 实边</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--agent);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">关注者：无光环，气泡是<b>虚线描边、透明底</b>，视觉重量明显更轻</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--agent);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">虚线在这里是语义：它「不是一个承诺」</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--agent);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">两者都带 chip：「主 agent」/「关注」</span></div></div></div><div class="card"><div class="bd" style="padding:18px 20px;gap:13px"><div style="font:800 13.5px/1 var(--ui);color:var(--text2)">形状与阴影</div><div style="font:500 11.5px/1.7 var(--ui);color:var(--text2)">圆角是这套设计的性格来源。严肃感来自直角和硬线，所以都去掉。</div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--text2);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">气泡 20px，同侧收角 6px（聊天软件的标准做法）</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--text2);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">卡片 16px，控件 11px，chip 全圆角</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--text2);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">亮色用柔和暖调阴影，<b>暗色不用阴影用描边</b> —— 暗色下阴影看不见</span></div><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--text2);flex-shrink:0;margin-top:7px"></span><span style="font:500 12px/1.65 var(--ui)">系统事件是居中的胶囊，不是横线</span></div></div></div></div><div style="display:grid;grid-template-columns:340px 1fr;gap:16px"><div class="card"><div class="bd" style="padding:20px;gap:15px"><div style="font:800 13px/1 var(--ui)">字体</div><div><div style="font:800 24px/1.2 var(--ui);letter-spacing:-.02em">Manrope 无衬线</div><div style="font:500 11px/1.6 var(--ui);color:var(--text3);margin-top:8px">UI 与全部正文。圆润、字腔开放，不是 Inter。中文走 PingFang SC / Noto Sans SC。</div></div><div class="sep"></div><div><div class="mono" style="font-size:17px;font-weight:600">JetBrains Mono</div><div style="font:500 11px/1.6 var(--ui);color:var(--text3);margin-top:8px">只用于真正的机器内容：agent id、seq、token、runtime 名、代码。<b>不用来做风格</b>。</div></div><div class="sep"></div><div style="display:flex;flex-direction:column;gap:7px"><div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:10px;color:var(--text3);width:52px">26/800</span><span style="font:800 20px/1 var(--ui)">页标题</span></div><div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:10px;color:var(--text3);width:52px">18/700</span><span style="font:700 16px/1 var(--ui)">区块标题</span></div><div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:10px;color:var(--text3);width:52px">13.5/400</span><span style="font:400 13.5px/1 var(--ui)">气泡正文</span></div><div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:10px;color:var(--text3);width:52px">12/600</span><span style="font:600 12px/1 var(--ui)">标签与元信息</span></div><div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:10px;color:var(--text3);width:52px">11/700</span><span style="font:700 11px/1 var(--ui)">全大写小标题</span></div></div></div></div><div class="card"><div class="bd" style="padding:20px;gap:12px"><div style="display:flex;align-items:center;gap:10px"><span style="font:800 13px/1 var(--ui)">直接粘进 Tailwind v4</span><span class="chip a" style="font-size:10px">shadcn 的 @theme 约定</span></div><div style="font:500 11px/1.65 var(--ui);color:var(--text2)">shadcn 装完第一件事就是把默认 token 换成这一层 —— 它自带的 new-york 皮肤现在满互联网都是，不换就白做设计了。</div><pre class="mono" style="margin:0;padding:15px 17px;background:var(--raised);border-radius:13px;font-size:10.5px;line-height:1.72;color:var(--text2);overflow:auto;white-space:pre">@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --radius-bubble: 20px;
+  --radius-card: 16px;
+  --radius-ctl: 11px;
+}
+
+:root {
+  --bg:#f6f3ee;  --panel:#efeae2;  --surface:#ffffff; --raised:#faf8f4;
+  --text:#292521; --text2:#6e675e; --text3:#a49c90;
+  --line:#e7e0d5; --line2:#f0ebe2;
+  --agent:#12897a; --agent-ink:#0d6c60; --agent-soft:#dff0ec; --agent-ring:#a8d8cf;
+  --human:#c4642c; --human-ink:#9d4d1d; --human-soft:#fce8d7; --human-ring:#eab98d;
+  --alert:#b23c2c; --alert-soft:#fbe3de;
+  --warn:#8f6f18;  --warn-soft:#f9eed2;
+}
+
+.dark {
+  --bg:#151719;  --panel:#1b1e21;  --surface:#212528; --raised:#272b2f;
+  --text:#ece7e0; --text2:#a49d94; --text3:#6d675f;
+  --line:#31363a; --line2:#282c30;
+  --agent:#4ec8b2; --agent-ink:#7fdbc9; --agent-soft:#16302d; --agent-ring:#2d6b60;
+  --human:#f0a069; --human-ink:#f5bb90; --human-soft:#35251a; --human-ring:#8a5a33;
+  --alert:#f07f6b; --alert-soft:#3a201c;
+  --warn:#e0b757;  --warn-soft:#332a13;
+}</pre></div></div></div></div></div>
+</x-dc>
+</body>
+</html>

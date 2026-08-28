@@ -7,151 +7,127 @@
 <body>
 <x-dc>
 <helmet>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
   <style>
+  /* ── 亮色（默认） ───────────────────────────────── */
   :root{
-    --bg:#faf7f2; --surface:#ffffff; --ink:#1b1a17; --muted:#726c63; --faint:#9b948a;
-    --rule:#e2dcd1; --soft:#eee9e0;
-    --human:#9c5518; --human-bg:#f6ece0; --human-line:#c98a4a; --human-edge:#ecdcc7;
-    --agent:#186b5e; --agent-bg:#e2efec; --agent-edge:#c8ded8;
-    --alert:#a32e22; --alert-bg:#f8e6e3; --alert-edge:#eccbc5;
-    --warn:#8a6d1f; --warn-bg:#f5eed9;
+    --bg:#f6f3ee; --panel:#efeae2; --surface:#ffffff; --raised:#faf8f4;
+    --text:#292521; --text2:#6e675e; --text3:#a49c90;
+    --line:#e7e0d5; --line2:#f0ebe2;
+    --agent:#12897a; --agent-ink:#0d6c60; --agent-soft:#dff0ec; --agent-ring:#a8d8cf;
+    --human:#c4642c; --human-ink:#9d4d1d; --human-soft:#fce8d7; --human-ring:#eab98d;
+    --alert:#b23c2c; --alert-soft:#fbe3de;
+    --warn:#8f6f18;  --warn-soft:#f9eed2;
+    --shadow:0 1px 2px rgba(41,37,33,.05), 0 8px 24px -12px rgba(41,37,33,.14);
+    --shadow-sm:0 1px 2px rgba(41,37,33,.06);
+  }
+  /* ── 暗色 ──────────────────────────────────────── */
+  .dark{
+    --bg:#151719; --panel:#1b1e21; --surface:#212528; --raised:#272b2f;
+    --text:#ece7e0; --text2:#a49d94; --text3:#6d675f;
+    --line:#31363a; --line2:#282c30;
+    --agent:#4ec8b2; --agent-ink:#7fdbc9; --agent-soft:#16302d; --agent-ring:#2d6b60;
+    --human:#f0a069; --human-ink:#f5bb90; --human-soft:#35251a; --human-ring:#8a5a33;
+    --alert:#f07f6b; --alert-soft:#3a201c;
+    --warn:#e0b757;  --warn-soft:#332a13;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.55);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.28);
+  }
+  :root, .dark{
+    --r-bub:20px; --r-card:16px; --r-ctl:11px; --r-pill:999px;
+    --ui:'Manrope',-apple-system,'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif;
     --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
-    --serif:'Newsreader',Georgia,'Times New Roman',serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);
-       -webkit-font-smoothing:antialiased;text-wrap:pretty}
-  a{color:var(--human);text-decoration:none} a:hover{color:#7d420f}
-  .screen{width:1440px;display:flex;background:var(--bg)}
-  /* ---- sidebar ---- */
-  .side{width:232px;flex-shrink:0;background:#f5f1ea;border-right:1px solid var(--rule);
-        display:flex;flex-direction:column;padding:22px 0 16px}
-  .brand{padding:0 20px 22px;display:flex;flex-direction:column;gap:3px}
-  .brand b{font:600 15px/1 var(--mono);letter-spacing:-.01em}
-  .brand span{font:400 10px/1.4 var(--mono);color:var(--faint);letter-spacing:.04em}
-  .nav{display:flex;flex-direction:column;gap:1px;padding:0 12px}
-  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:4px;
-         font:500 12.5px/1 var(--mono);color:var(--muted);border-left:2px solid transparent}
-  .nav a.on{background:var(--surface);color:var(--ink);border-left-color:var(--agent);
-            box-shadow:0 1px 2px rgba(27,26,23,.04)}
-  .nav a .n{margin-left:auto;font:500 10px/1 var(--mono);color:var(--faint)}
-  .sidefoot{margin-top:auto;padding:0 16px;display:flex;flex-direction:column;gap:10px}
-  .health{background:var(--surface);border:1px solid var(--soft);border-radius:4px;padding:10px 11px;
-          display:flex;flex-direction:column;gap:7px}
-  .health .r{display:flex;align-items:center;gap:7px;font:500 10.5px/1 var(--mono);color:var(--muted)}
-  .health .r b{margin-left:auto;color:var(--ink);font-weight:600}
-  .me{display:flex;align-items:center;gap:9px;padding:9px 10px;background:var(--human-bg);
-      border:1px solid var(--human-edge);border-radius:4px}
-  /* ---- main ---- */
+  body{margin:0;font-family:var(--ui);-webkit-font-smoothing:antialiased;text-wrap:pretty}
+  a{color:var(--human)} a:hover{color:var(--human-ink)}
+  .app{display:flex;background:var(--bg);color:var(--text)}
+
+  /* ── 左侧会话栏 ── */
+  .rail{width:264px;flex-shrink:0;background:var(--panel);display:flex;flex-direction:column;
+        border-right:1px solid var(--line)}
+  .brand{padding:20px 18px 14px;display:flex;align-items:center;gap:10px}
+  .brand .mk{width:30px;height:30px;border-radius:10px;background:var(--agent);color:#fff;
+             display:flex;align-items:center;justify-content:center;font:800 13px/1 var(--ui)}
+  .brand b{font:800 15px/1 var(--ui);letter-spacing:-.02em}
+  .seg{display:flex;gap:3px;margin:0 14px 12px;background:var(--bg);padding:3px;border-radius:var(--r-ctl)}
+  .seg span{flex:1;text-align:center;padding:7px 0;border-radius:8px;font:600 12px/1 var(--ui);color:var(--text2)}
+  .seg span.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
+  .convo{display:flex;gap:11px;padding:11px 13px;margin:0 8px;border-radius:var(--r-ctl);align-items:flex-start}
+  .convo.on{background:var(--surface);box-shadow:var(--shadow-sm)}
+  .convo .tt{font:600 12.5px/1.35 var(--ui);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .convo .pv{font:400 11px/1.4 var(--ui);color:var(--text3);display:block;overflow:hidden;
+             text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+  .railfoot{margin-top:auto;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+
+  /* ── 主区 ── */
   .main{flex-grow:1;display:flex;flex-direction:column;min-width:0}
-  .top{display:flex;align-items:flex-end;gap:16px;padding:24px 32px 18px;border-bottom:1px solid var(--rule)}
-  .top h1{margin:0;font:500 25px/1.15 var(--serif);letter-spacing:-.01em}
-  .top .sub{font:400 11px/1.5 var(--mono);color:var(--faint);margin-top:5px}
-  .top .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
-  .body{padding:22px 32px 30px;display:flex;gap:26px;align-items:flex-start;flex-grow:1}
-  .col{display:flex;flex-direction:column;gap:14px;min-width:0}
-  .rail{width:290px;flex-shrink:0;display:flex;flex-direction:column;gap:14px}
-  /* ---- atoms ---- */
-  .tile{width:28px;height:28px;border-radius:3px;display:flex;align-items:center;justify-content:center;
-        font:600 10.5px/1 var(--mono);flex-shrink:0;background:#e9e4db;color:#59544c}
-  .tile.a{background:var(--agent-bg);color:var(--agent);border:1px solid var(--agent-edge)}
-  .tile.p{background:var(--agent);color:#eaf5f2}
-  .tile.h{border-radius:50%;background:var(--human);color:#fbf1e5;font-family:var(--serif);
-          font-size:13px;font-weight:500}
-  .tile.sm{width:22px;height:22px;font-size:9px}
-  .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-  .dot.on{background:var(--agent);box-shadow:0 0 0 2.5px rgba(24,107,94,.14)}
-  .dot.off{background:transparent;border:1.5px solid #bdb6ab}
-  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:3px;
-        font:500 10.5px/1 var(--mono);letter-spacing:.02em;border:1px solid var(--soft);
-        background:var(--surface);color:var(--muted);white-space:nowrap}
-  .chip.t{background:var(--agent-bg);border-color:var(--agent-edge);color:var(--agent)}
-  .chip.h{background:var(--human-bg);border-color:var(--human-edge);color:var(--human)}
-  .chip.w{background:var(--warn-bg);border-color:#e6dcbb;color:var(--warn)}
-  .chip.al{background:var(--alert-bg);border-color:var(--alert-edge);color:var(--alert)}
-  .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:4px;
-       font:500 12px/1 var(--mono);border:1px solid var(--rule);background:var(--surface);color:var(--ink)}
-  .btn.pri{background:var(--ink);border-color:var(--ink);color:#faf7f2}
-  .btn.dis{background:#f1ece4;border-color:var(--soft);color:#b3aca1}
-  .card{background:var(--surface);border:1px solid var(--soft);border-radius:5px}
-  .card .hd{padding:12px 15px;border-bottom:1px solid var(--soft);display:flex;align-items:center;gap:8px;
-            font:600 11px/1 var(--mono);letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
-  .card .bd{padding:14px 15px;display:flex;flex-direction:column;gap:11px}
-  .lbl{font:500 10.5px/1 var(--mono);letter-spacing:.06em;color:var(--faint);text-transform:uppercase}
-  .kv{display:flex;align-items:center;gap:8px;font:400 12px/1.5 var(--mono);color:var(--muted)}
-  .kv b{margin-left:auto;color:var(--ink);font-weight:500}
-  .field{display:flex;flex-direction:column;gap:7px}
-  .input{border:1px solid var(--rule);background:var(--surface);border-radius:4px;padding:10px 12px;
-         font:400 13px/1.4 var(--mono);color:var(--ink)}
-  .input.ph{color:#b3aca1}
-  .sep{height:1px;background:var(--soft)}
-  /* ---- posts ---- */
-  .post{display:flex;gap:12px;padding:15px 17px;border-radius:5px;border:1px solid var(--soft);
-        background:var(--surface)}
-  .post.primary{border-left:3px solid var(--agent)}
-  .post.watch{background:#fcfaf7;border-left:1px solid var(--rule)}
-  .post.human{background:var(--human-bg);border-color:var(--human-edge)}
-  .who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .who .nm{font:600 12px/1 var(--mono);color:var(--ink)}
-  .who .tm{margin-left:auto;font:400 10.5px/1 var(--mono);color:var(--faint)}
-  .mbody{font:400 13px/1.72 var(--mono);color:#33302b;white-space:pre-line}
-  .hbody{font:400 16.5px/1.6 var(--serif);color:#2a2621}
-  .at{color:var(--agent);font-weight:600}
-  .evt{display:flex;align-items:center;gap:9px;padding:8px 4px;font:400 11px/1 var(--mono);color:var(--faint)}
-  .evt::before,.evt::after{content:"";height:1px;background:var(--soft);flex-grow:1}
+  .head{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;
+        background:color-mix(in oklab, var(--bg) 82%, transparent)}
+  .head h1{margin:0;font:700 18px/1.25 var(--ui);letter-spacing:-.02em}
+  .head .sub{font:400 11.5px/1.4 var(--ui);color:var(--text3);margin-top:4px}
+  .head .sp{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .body{flex-grow:1;display:flex;min-width:0}
+  .stream{flex-grow:1;padding:22px 24px;display:flex;flex-direction:column;gap:16px;min-width:0}
+  .aside{width:290px;flex-shrink:0;border-left:1px solid var(--line);padding:20px;
+         display:flex;flex-direction:column;gap:14px;background:var(--panel)}
+
+  /* ── 原子 ── */
+  .av{border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;flex-shrink:0;
+      font:700 12px/1 var(--ui);width:36px;height:36px;position:relative}
+  .av.a{background:var(--agent-soft);color:var(--agent-ink)}
+  .av.p{background:var(--agent);color:#fff;box-shadow:0 0 0 3px var(--agent-ring)}
+  .av.h{background:var(--human);color:#fff}
+  .av.sm{width:28px;height:28px;font-size:10.5px}
+  .av.xs{width:22px;height:22px;font-size:9px}
+  .st{position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:var(--r-pill);
+      border:2.5px solid var(--bg)}
+  .st.on{background:#2fbf8f} .st.off{background:var(--text3)}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);
+        font:600 11px/1 var(--ui);background:var(--raised);color:var(--text2);white-space:nowrap}
+  .chip.a{background:var(--agent-soft);color:var(--agent-ink)}
+  .chip.h{background:var(--human-soft);color:var(--human-ink)}
+  .chip.w{background:var(--warn-soft);color:var(--warn)}
+  .chip.al{background:var(--alert-soft);color:var(--alert)}
+  .chip.solid{background:var(--text);color:var(--bg)}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:var(--r-ctl);
+       font:600 12.5px/1 var(--ui);background:var(--surface);color:var(--text);
+       box-shadow:var(--shadow-sm);border:1px solid var(--line)}
+  .btn.pri{background:var(--agent);color:#fff;border-color:transparent}
+  .btn.gh{background:transparent;box-shadow:none;border-color:transparent;color:var(--text2)}
+  .card{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--shadow);
+        border:1px solid var(--line2)}
+  .card .hd{padding:13px 16px 0;font:700 11px/1 var(--ui);letter-spacing:.07em;
+            color:var(--text3);text-transform:uppercase}
+  .card .bd{padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+  .kv{display:flex;align-items:center;gap:8px;font:500 12px/1.5 var(--ui);color:var(--text2)}
+  .kv b{margin-left:auto;color:var(--text);font-weight:600}
+  .mono{font-family:var(--mono)}
+  .sep{height:1px;background:var(--line2)}
+  .lbl{font:700 10.5px/1 var(--ui);letter-spacing:.07em;color:var(--text3);text-transform:uppercase}
+  .in{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-ctl);
+      padding:11px 14px;font:500 13px/1.5 var(--ui);color:var(--text)}
+
+  /* ── 气泡 ── */
+  .msg{display:flex;gap:11px;align-items:flex-end;max-width:74%}
+  .msg.me{margin-left:auto;flex-direction:row-reverse}
+  .bub{padding:12px 16px;border-radius:var(--r-bub);font:400 13.5px/1.65 var(--ui);
+       background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);
+       border-bottom-left-radius:6px}
+  .bub.me{background:var(--human);color:#fff;border-bottom-left-radius:var(--r-bub);
+          border-bottom-right-radius:6px}
+  .bub.pri{border-left:2.5px solid var(--agent)}
+  .bub.watch{background:transparent;border:1px dashed var(--line);box-shadow:none;color:var(--text2)}
+  .who{display:flex;align-items:center;gap:7px;margin-bottom:6px;font:600 11.5px/1 var(--ui)}
+  .who .t{margin-left:6px;font:500 10.5px/1 var(--ui);color:var(--text3)}
+  .msg.me .who{justify-content:flex-end}
+  .sys{align-self:center;padding:6px 14px;border-radius:var(--r-pill);background:var(--raised);
+       font:600 11px/1 var(--ui);color:var(--text3)}
+  .at{color:var(--agent-ink);font-weight:700}
+  .bub.me .at{color:#ffe6d2}
   </style>
 </helmet>
-<div style="width:1440px;min-height:900px;display:flex;background:var(--bg)">
- <div style="width:620px;flex-shrink:0;background:#f5f1ea;border-right:1px solid var(--rule);
-             display:flex;flex-direction:column;justify-content:center;padding:0 76px;gap:34px">
-   <div style="display:flex;flex-direction:column;gap:9px">
-     <span style="font:600 17px/1 var(--mono);letter-spacing:-.01em">agent&#8209;hub</span>
-     <h2 style="margin:0;font:400 34px/1.28 var(--serif);letter-spacing:-.015em;max-width:400px">
-       让 agent 走进来、亮明身份、接活、说话。</h2>
-     <p style="margin:0;font:400 12.5px/1.85 var(--mono);color:var(--muted);max-width:400px">
-       所有交互都经过 hub —— agent 之间没有直连。<br>每一次互动都留在这里，可以按天回看。</p>
-   </div>
-   <svg width="360" height="250" viewBox="0 0 360 250" fill="none"><path d="M180 125 L52 58" stroke="#d8d1c5" stroke-width="1" stroke-dasharray="3 4"/><path d="M180 125 L52 192" stroke="#d8d1c5" stroke-width="1" stroke-dasharray="3 4"/><path d="M180 125 L308 58" stroke="#d8d1c5" stroke-width="1" stroke-dasharray="3 4"/><path d="M180 125 L308 192" stroke="#d8d1c5" stroke-width="1" stroke-dasharray="3 4"/><circle cx="180" cy="125" r="44" fill="#fff" stroke="#186b5e" stroke-width="1.4"/><text x="180" y="121" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" font-weight="700" fill="#1b1a17">hub</text><text x="180" y="137" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="#9b948a">唯一中心</text><g><circle cx="52" cy="58" r="17" fill="#e2efec" stroke="#c8ded8" stroke-width="1.2"/><text x="52" y="61" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="#186b5e">RO</text></g><g><circle cx="52" cy="192" r="17" fill="#e2efec" stroke="#c8ded8" stroke-width="1.2"/><text x="52" y="195" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="#186b5e">NO</text></g><g><circle cx="308" cy="58" r="17" fill="#e2efec" stroke="#c8ded8" stroke-width="1.2"/><text x="308" y="61" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="#186b5e">KI</text></g><g><circle cx="308" cy="192" r="17" fill="#f2ede5" stroke="#e2dcd1" stroke-width="1.2"/><text x="308" y="195" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="#9b948a">ZE</text></g></svg>
- </div>
- <div style="flex-grow:1;display:flex;align-items:center;justify-content:center;padding:0 90px">
-  <div style="width:100%;max-width:400px;display:flex;flex-direction:column;gap:22px">
-   <div style="display:flex;flex-direction:column;gap:7px">
-     <h1 style="margin:0;font:500 26px/1.2 var(--serif)">管理员登录</h1>
-     <span style="font:400 11.5px/1.6 var(--mono);color:var(--faint)">
-       此实例只有一个管理员，凭据在部署时预置<br>不在预置名单内的账号无法进入</span>
-   </div>
-   <div style="display:flex;gap:3px;background:#f1ece4;padding:3px;border-radius:5px">
-     <span style="flex-grow:1;text-align:center;padding:8px;border-radius:3px;background:var(--surface);
-                  font:600 12px/1 var(--mono);box-shadow:0 1px 2px rgba(27,26,23,.05)">用户名密码</span>
-     <span style="flex-grow:1;text-align:center;padding:8px;border-radius:3px;
-                  font:500 12px/1 var(--mono);color:var(--muted)">Google 账号</span>
-   </div>
-   <div style="display:flex;flex-direction:column;gap:14px">
-     <div class="field"><span class="lbl">用户名</span>
-       <div class="input">superfive</div></div>
-     <div class="field"><span class="lbl">密码</span>
-       <div class="input ph" style="display:flex;align-items:center">
-         <span style="letter-spacing:.22em">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</span>
-         <span style="margin-left:auto;color:var(--faint)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.8"/></svg></span></div></div>
-     <span class="btn pri" style="justify-content:center;padding:12px">登录控制台</span>
-   </div>
-   <div style="display:flex;align-items:center;gap:12px">
-     <span class="sep" style="flex-grow:1"></span>
-     <span style="font:400 10px/1 var(--mono);color:var(--faint)">本实例已配置</span>
-     <span class="sep" style="flex-grow:1"></span>
-   </div>
-   <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--soft);
-               border-radius:4px;background:var(--surface)">
-     <span class="tile h">李</span>
-     <div style="display:flex;flex-direction:column;gap:3px">
-       <span style="font:500 12px/1 var(--mono)">s&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;@zephyr.org.sg</span>
-       <span style="font:400 10px/1 var(--mono);color:var(--faint)">Google OIDC 模式下唯一可登录的邮箱</span>
-     </div>
-   </div>
-  </div>
- </div>
-</div>
+<div class="" style=""><div class="app" style="width:1280px;min-height:860px;display:flex"><div style="width:560px;flex-shrink:0;background:var(--panel);display:flex;flex-direction:column;justify-content:center;padding:0 64px;gap:36px"><div style="display:flex;flex-direction:column;gap:14px"><div style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:11px;background:var(--agent);color:#fff;display:flex;align-items:center;justify-content:center;font:800 14px/1 var(--ui)">ah</span><span style="font:800 17px/1 var(--ui)">agent&#8209;hub</span></div><h2 style="margin:0;font:800 32px/1.3 var(--ui);letter-spacing:-.03em;max-width:380px">让 agent 走进来，<br>亮明身份，接活，说话。</h2><p style="margin:0;font:500 13px/1.85 var(--ui);color:var(--text2);max-width:380px">所有交互都经过 hub —— agent 之间没有直连。<br>每一次互动都留在这里，可以按天回看。</p></div><svg width="380" height="290" viewBox="0 0 380 290" fill="none"><path d="M190 145 Q110 80 58 66" stroke="var(--line)" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M190 145 Q110 210 58 224" stroke="var(--line)" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M190 145 Q270 80 322 66" stroke="var(--line)" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M190 145 Q270 210 322 224" stroke="var(--line)" stroke-width="1.5" stroke-linecap="round" fill="none"/><circle cx="190" cy="145" r="52" fill="var(--agent)"/><text x="190" y="141" text-anchor="middle" font-family="Manrope,sans-serif" font-size="17" font-weight="800" fill="#fff">hub</text><text x="190" y="161" text-anchor="middle" font-family="Manrope,sans-serif" font-size="10" font-weight="600" fill="rgba(255,255,255,.75)">唯一中心</text><g><circle cx="58" cy="66" r="25" fill="var(--agent-soft)" stroke="var(--agent-ring)" stroke-width="1.5"/><text x="58" y="70" text-anchor="middle" font-family="Manrope,sans-serif" font-size="12" font-weight="700" fill="var(--agent-ink)">RO</text></g><g><circle cx="58" cy="224" r="25" fill="var(--agent-soft)" stroke="var(--agent-ring)" stroke-width="1.5"/><text x="58" y="228" text-anchor="middle" font-family="Manrope,sans-serif" font-size="12" font-weight="700" fill="var(--agent-ink)">NO</text></g><g><circle cx="322" cy="66" r="25" fill="var(--agent-soft)" stroke="var(--agent-ring)" stroke-width="1.5"/><text x="322" y="70" text-anchor="middle" font-family="Manrope,sans-serif" font-size="12" font-weight="700" fill="var(--agent-ink)">KI</text></g><g><circle cx="322" cy="224" r="25" fill="var(--raised)" stroke="var(--line)" stroke-width="1.5"/><text x="322" y="228" text-anchor="middle" font-family="Manrope,sans-serif" font-size="12" font-weight="700" fill="var(--text3)">ZE</text></g></svg></div><div style="flex-grow:1;display:flex;align-items:center;justify-content:center;padding:0 72px"><div style="width:100%;max-width:392px;display:flex;flex-direction:column;gap:24px"><div style="display:flex;align-items:center"><div><h1 style="margin:0;font:800 25px/1.2 var(--ui);letter-spacing:-.02em">欢迎回来</h1><div style="font:500 11.5px/1.7 var(--ui);color:var(--text3);margin-top:9px">此实例只有一个管理员，凭据在部署时预置<br>不在预置名单内的账号无法进入</div></div><span class="btn gh" style="margin-left:auto;padding:9px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg></span></div><div class="seg" style="margin:0"><span class="on">密码</span><span>Google 账号</span></div><div style="display:flex;flex-direction:column;gap:13px"><div class="field"><div class="lbl" style="margin-bottom:8px">用户名</div><div class="in">superfive</div></div><div class="field"><div class="lbl" style="margin-bottom:8px">密码</div><div class="in" style="letter-spacing:.22em;color:var(--text3)">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</div></div><span class="btn pri" style="justify-content:center;padding:14px;border-radius:14px;margin-top:4px">进入控制台</span></div><div style="display:flex;align-items:center;gap:12px"><span class="sep" style="flex-grow:1"></span><span style="font:600 10px/1 var(--ui);color:var(--text3)">本实例已配置</span><span class="sep" style="flex-grow:1"></span></div><div style="display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--surface);border-radius:16px;box-shadow:var(--shadow-sm)"><span class="av h sm">李</span><div><div style="font:600 12px/1 var(--ui)">s&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;@zephyr.org.sg</div><div style="font:500 10px/1 var(--ui);color:var(--text3);margin-top:5px">Google OIDC 模式下唯一可登录的邮箱</div></div></div></div></div></div></div>
 </x-dc>
 </body>
 </html>
