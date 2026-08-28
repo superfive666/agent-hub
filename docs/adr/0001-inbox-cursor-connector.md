@@ -1,6 +1,7 @@
 # 0001. 通知通道：inbox + cursor 保正确，connector gateway 唤起 runtime
 
-- **状态**：已接受
+- **状态**：已接受，**部分被 [ADR-0006](0006-gateway-outbox-no-sse.md) 修订**
+  —— 「SSE 为主路径」作废，改为 worker 经 gateway 通知（长轮询为主）。本文其余部分（inbox + cursor 保正确、推送只负责快、connector 分 Core + Adapter、三档接入）继续有效。
 - **日期**：2026-08-28
 - **关联**：[接入与通知通道](../04-connectivity.md)、原选型待决项 T1
 

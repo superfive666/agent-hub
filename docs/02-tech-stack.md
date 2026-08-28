@@ -1,125 +1,40 @@
 # 技术选型
 
-> **状态：待补充。** 本文件不替你拍板，只把需要决定的事项列全，标注依赖关系与影响面。每定一项落一份 [ADR](adr/)，全部定完后本文件改写成结论。
+> **状态：已定案。** 技术栈已经定完，结论在下面，每项都有对应 [ADR](adr/)。剩下的只有前端框架一项。
 
-原 T1「Agent 接入协议」已定案，见 [ADR-0001](adr/0001-inbox-cursor-connector.md)：inbox + cursor 保正确，SSE 只推信号，agent 侧 connector 分 Core + Runtime Adapter 两层。它顺带**约束**了下面几项——后端要能 hold 长连接（T5）、inbox 用表不用队列（T6）——并且新增了一个独立交付物 connector（T15）。
+## 已定
 
-## A 组：写第一行代码前必须定
-
-### ~~T2 · 内容模型~~ → 已定，见 [ADR-0002](adr/0002-todo-tweet-separate-tables.md)
-
-Todo 与 tweet **分表**（性质不同：一个是要完成的事，一个是对话），共用一张极薄的 `thread` 身份表与单张 `post` 表。字段各自干净、`primary_agent_id NOT NULL` 可由 DB 强制、外键是真的、@ 与通知逻辑只写一遍。完整 schema 见[数据模型](05-data-model.md)。
-
-### ~~T3 · Agent Card 规范~~ → 已定，见 [ADR-0003](adr/0003-agent-card-a2a.md)
-
-采用 **A2A v1.0.0** AgentCard；hub 代为发布在 `/agents/{id}/.well-known/agent-card.json`；能力边界、runtime、接入档位等 A2A 没有的字段走 `AgentExtension`。详见 [Agent Card 设计](06-agent-card.md)。
-
-### T4 · 部署形态
-
-单体（前后端同仓、一个服务）/ 前后端分离 / 微服务。
-
-**影响**：仓库结构、CI、本地开发体验、SSE 的部署复杂度。
-**倾向**：单体。SSE 需要长连接，进程越少越省心；规模也远没到要拆的程度。
-
-### T5 · 后端语言与框架
-
-无预设。选型要考虑：
-
-- **长连接能力**（SSE 要 hold 住 N 个连接，N = agent 数量，不会很大但不能是每连接一线程的模型）
-- 团队熟悉度
-- OIDC / JWT 生态成熟度
-
-### T6 · 数据存储
-
-关系型是主库（todo、post、agent、凭证、inbox 都是强一致的结构化数据）。需要评估的是要不要额外组件：
-
-- **Inbox 用表还是消息队列？**——**倾向用表**。事件量小，需要按 cursor 随机读、需要保留可回溯，这些恰好是队列不擅长的。
-- 缓存：agent 在线状态、限流计数。可以先放数据库或进程内存。
-- 全文检索：看板搜索。M4 再说。
-
-**倾向**：M1 只上一个关系型数据库，其余按需引入。
-
-## B 组：可以边做边定
-
-### T7 · 前端技术栈
-
-Admin 控制台的框架、组件库、构建工具。依赖 T4。需要考虑 thread 视图与看板日期导航的交互复杂度。
-
-### T8 · 管理员认证实现
-
-- 密码方式：哈希算法、配置注入方式（环境变量 / 配置文件 / secret）。
-- OIDC 方式：直接对接 Google，还是走托管认证服务。
-- 会话形态：Cookie session 还是 JWT。**倾向 Cookie session**——只有一个管理员，无状态的好处用不上。
-
-### T9 · Agent 凭证形态
-
-不透明 token（服务端查表）还是签名 JWT（无状态）？
-
-**注意冲突**：模块 3 要求"吊销后立即失效"，且 SSE 连接要被主动断开。无状态 JWT 做不到前者，除非再加一张吊销表——那就退化成查表了。
-**倾向**：不透明 token + 服务端查表。规模小，查表成本可忽略。
-
-### T10 · API 风格
-
-REST / GraphQL / RPC。以及给 agent 的 API 和给 admin 前端的 API 是同一套还是分两套（鉴权模型和数据形状差异不小）。
-
-**倾向**：REST，两套路由（`/api/agent/*` 与 `/api/admin/*`），共用领域层。
-
-### T15 · Connector 的语言与分发形态 ⚠️ 现在是最高优先级
-
-Connector 要装在**别人的机器上**，所以取舍和后端不一样：分发体积、零依赖、跨平台，比"和后端同语言"重要得多。
-
-| 方案 | 优点 | 代价 |
+| 项 | 结论 | ADR |
 |---|---|---|
-| 单文件静态二进制（Go / Rust） | 一个文件丢过去就能跑，无运行时依赖 | 与后端可能不同语言，两套代码 |
-| Python / Node 脚本 | 开发快，agent 机器上大概率已有运行时 | 依赖版本地狱；打包成单文件又绕回去了 |
-| 和后端同语言同仓 | 共享类型定义与 API client | 后端若是 JVM / Python，分发体验会很差 |
+| 通知通道 | **弃用 SSE**。worker 消费 outbox 后经 gateway 通知，长轮询为主、webhook 次之、cron 兜底 | [0006](adr/0006-gateway-outbox-no-sse.md) |
+| 内容模型 | todo 与 tweet 分表，共用 `thread` 身份表与单张 `post` 表 | [0002](adr/0002-todo-tweet-separate-tables.md) |
+| Agent Card | A2A v1.0，hub 代为发布，自定义字段走 `AgentExtension` | [0003](adr/0003-agent-card-a2a.md) |
+| 事件同步 | outbox + 单 worker，事务内扇出，提交后通知 | [0004](adr/0004-outbox-single-worker.md) |
+| 连接策略 | 一个 agent 一个 hub、一个身份一条连接，新连接顶替旧的 | [0005](adr/0005-single-hub-single-connection.md) |
+| 后端 | **Go**（`agent-hub` / `agent-hub-worker` / `internal`） | [0007](adr/0007-tech-stack.md) |
+| 存储 | **PostgreSQL** —— `SKIP LOCKED`、`advisory lock`、`jsonb` 都是 outbox 方案直接依赖的 | [0007](adr/0007-tech-stack.md) |
+| 测试 | 所有 Go 代码必须有单元测试，**用例按需求写不按实现写** | [0007](adr/0007-tech-stack.md) |
+| 部署 | Docker + compose，跑在物理机；worker `replicas: 1` | [0007](adr/0007-tech-stack.md) |
+| Connector | TypeScript 或 Python，systemd 常驻，参考 hermes gateway | [0007](adr/0007-tech-stack.md) |
+| 仓库布局 | monorepo，见根 [CLAUDE.md](../CLAUDE.md) | — |
 
-**倾向**：单文件静态二进制。Connector 的逻辑不复杂（连接 + 队列 + 唤起子进程），换来的安装体验值这个代价。API 契约用 OpenAPI 生成 client，避免手工同步。
+## 还没定
 
-### T16 · 适配器的注册机制
+### T7 · 前端框架 ⚠️ 唯一剩下的阻塞项
 
-内置适配器编译进二进制，第三方适配器怎么加？
+`web/` 要同时适配**桌面网页**与 **H5 移动端**。需要考虑：
 
-**倾向**：照搬 hermes 的两套注册——内置适配器写死，第三方走清单文件（声明命令模板、环境要求、并发上限、超时），Core 读清单即可加载。这样加一个 runtime 不用改 connector 代码。
+- thread 视图与看板日期导航的交互复杂度
+- 长轮询在浏览器侧的处理（admin 控制台也要实时看到 thread 更新）
+- 移动端的导航形态（侧栏在窄屏怎么收）
 
-### T11 · MCP 接入层（可选）
+设计基线在 [design/](design/)，`web/.claude/skills/` 里 vendor 了 impeccable 与 taste-skill。
 
-要不要在 REST 之上再包一层 MCP server，把 hub 的操作暴露成工具给 Claude 类 agent 直接用？
+### 局部待定
 
-**注**：这是**动作面**的便利层，不是通知通道——它不解决"agent 没在跑"的问题。M2+ 再考虑。
+这些不阻塞开工，散在各文档的「待定」小节里：
 
-### T12 · 可观测性
-
-日志、指标、追踪；审计日志单独存储还是与应用日志共用（倾向单独存，它是业务数据不是运维数据）。
-
-### T13 · 测试策略
-
-重点是端到端：**在 CI 里模拟一个 agent 完成"注册 → 收到指派 → 在 thread 里澄清 → 交付"的全流程**。这条链路跑通了，平台的核心就是活的。
-
-### T14 · 部署与 CI/CD
-
-运行环境、容器化、环境划分、密钥管理。注意管理员凭证是部署期注入的，密钥管理方案要覆盖它。
-
-## 决策依赖
-
-```
-[已定 0001] 通道 ──┬──> 模块 2 ──> T5 后端框架（长连接能力）
-                   ├──> T6 存储（inbox / outbox 用表）
-                   └──> T15 connector 语言 ──> T16 适配器注册
-[已定 0002] 内容模型 ──> 模块 1/4/6 的实现
-[已定 0003] A2A Card ──> 模块 5 的 skill 内容
-[已定 0004] outbox 单 worker ──> T6 存储、T12 可观测性（lag 告警必须有）
-[已定 0005] 单连接 ──> 连接层要实现顶替逻辑
-
-剩下的：
-T4 部署形态 ──┬──> T5 后端框架 ──> T6 存储细节
-              └──> T7 前端栈
-T9 凭证形态 ──> 模块 3 的吊销能力（有冲突，已给倾向）
-T15 connector 语言 ──> 可独立于 T4/T5 先定
-```
-
-**现在的阻塞点只剩 T4 + T5**（部署形态与后端栈）和 **T15**（connector 语言）。前两个要你给约束——团队熟什么、部署在哪；T15 可以独立先定。
-
-## 已知约束
-
-目前没有硬性约束（无遗留系统、无强制技术栈）。补充选型时若有约束（团队技能、已有基础设施、部署环境、合规要求），写在这里——它会直接改变上面若干项的答案。
+- Connector 具体用 TypeScript 还是 Python
+- inbox 事件保留期与清理策略
+- 一个 connector 进程能否带多个不同 agent 身份
+- `skills[]` 是否需要 hub 给一份 tag 词表以便做能力匹配

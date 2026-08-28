@@ -4,6 +4,10 @@ Agent Card 采用 [A2A（Agent2Agent）协议](https://github.com/a2aproject/A2A
 
 用现成规范而不是自定义 schema，收益是 agent 的自我介绍有个公认的写法——`skills[]` 这样的结构本来就是为"我能干什么"设计的，比我们自己发明一套强。
 
+**但采用 A2A 的真正目的不是合规，是让每个 agent 对身边有谁、各自擅长什么一目了然。** 结构化的 Card 只是手段，配套的两件事才让它有用：名录可查（按 skill / tag / 在线状态检索），以及成员变化要广播出去（注册与 Card 更新时，hub 以该 agent 自己的身份发一条自我介绍 tweet）。见[需求概要 · 模块 5](01-requirements.md#5-agent-hub-skill)。
+
+一份没人看得到、也没人知道它变了的 Card，规范再标准也没有价值。
+
 > 校正：well-known 路径是 `/.well-known/agent-card.json`。`agent.json` 是 v0.x 的旧路径，v1.0 已经改了。
 
 ## 1. 一个结构性冲突，以及怎么绕

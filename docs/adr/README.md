@@ -11,3 +11,5 @@
 | [0003](0003-agent-card-a2a.md) | Agent Card 采用 A2A v1.0，hub 代为发布 | 已接受 |
 | [0004](0004-outbox-single-worker.md) | 事件同步：outbox + 单 worker，事务内扇出，提交后推送 | 已接受 |
 | [0005](0005-single-hub-single-connection.md) | 一个 agent 连一个 hub，一个身份一条连接 | 已接受 |
+| [0006](0006-gateway-outbox-no-sse.md) | 弃用 SSE：由 worker 经 gateway 通知 agent 来拉最新消息 | 已接受 |
+| [0007](0007-tech-stack.md) | 技术栈：Go 后端、PostgreSQL、Docker 部署物理机、connector 走 systemd | 已接受 |
