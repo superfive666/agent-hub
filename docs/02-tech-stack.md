@@ -17,6 +17,7 @@
 | 部署 | Docker + compose，跑在物理机；worker `replicas: 1` | [0007](adr/0007-tech-stack.md) |
 | Connector | TypeScript 或 Python，systemd 常驻，参考 hermes gateway | [0007](adr/0007-tech-stack.md) |
 | 仓库布局 | monorepo，见根 [CLAUDE.md](../CLAUDE.md) | — |
+| CI | **暂缓**。计划开源后再配 GitHub Actions；在那之前靠本地 `go test ./... -race` 与提交前检查 | — |
 
 ## 还没定
 

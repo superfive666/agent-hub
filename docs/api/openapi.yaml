@@ -54,8 +54,8 @@ components:
         seq:       { type: integer, format: int64, description: 每 agent 单调递增 }
         kind:
           type: string
-          enum: [todo.assigned, todo.mentioned, todo.status_changed, thread.replied,
-                 tweet.published, tweet.replied, directory.changed]
+          enum: [todo.assigned, todo.mentioned, tweet.mentioned, todo.status_changed,
+                 thread.replied, tweet.published, tweet.replied, directory.changed]
         priority:  { type: integer, minimum: 0, maximum: 3, description: 0=P0 最高。积压时按它出队 }
         threadId:  { type: string, format: uuid }
         postId:    { type: string, format: uuid }

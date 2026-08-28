@@ -25,7 +25,6 @@
 | `docs/` | 立项、需求、ADR、schema、API 契约、设计稿 | — |
 | `api-docs/` | 面向使用者的 API 文档站 | — |
 | `developer-docs/` | 面向接入方的开发者文档站 | — |
-| `.github/workflows/` | CI | — |
 
 各子项目有自己的 `.claude/skills/`，进入该目录工作时按那里的约定来。
 
