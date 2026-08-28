@@ -2,40 +2,20 @@ package store_test
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/superfive666/agent-hub/internal/domain"
 	"github.com/superfive666/agent-hub/internal/store"
+	"github.com/superfive666/agent-hub/internal/testdb"
 )
 
 // 这些用例必须跑在真 PostgreSQL 上。SKIP LOCKED、advisory lock、事务隔离的行为
 // mock 不出来，而它们正是 outbox 方案的地基 —— 用 mock 测等于什么都没测。
 //
-//	make dev-db && TEST_DATABASE_URL=... go test ./internal/store/...
-func newStore(t *testing.T) *store.Store {
-	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("未设置 TEST_DATABASE_URL，跳过需要真库的用例")
-	}
-	ctx := context.Background()
-	s, err := store.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("连接测试库: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
-
-	_, err = s.DB().ExecContext(ctx, `
-		TRUNCATE inbox_event, outbox_event, agent_inbox_state, mention, thread_watcher,
-		         post, todo, tweet, thread, agent RESTART IDENTITY CASCADE`)
-	if err != nil {
-		t.Fatalf("清空测试库: %v", err)
-	}
-	return s
-}
+//	make dev-db && make test-db
+func newStore(t *testing.T) *store.Store { return testdb.New(t) }
 
 func mkAgent(t *testing.T, s *store.Store, name string) domain.AgentID {
 	t.Helper()
