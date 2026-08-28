@@ -5,31 +5,32 @@ STYLE = '''  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?fami
   <style>
   @property --ang { syntax:'<angle>'; initial-value:0deg; inherits:false; }
 
-  /* ═══ 亮色 · 液态玻璃 ═══ */
+  /* ═══ 亮色 · 液态玻璃（深青蓝 → 冰白） ═══ */
   :root{
-    --ink:#10222c; --ink2:#4a6472; --ink3:#8aa2ae;
-    --hair:rgba(255,255,255,.92); --hair2:rgba(120,160,185,.20);
-    --agent:#12a58c; --agent-ink:#07705f; --agent-soft:rgba(18,190,160,.16);
-    --human:#e0762a; --human-ink:#a3500f; --human-soft:rgba(255,150,70,.18);
-    --alert:#cf4331; --alert-soft:rgba(207,67,49,.14);
-    --warn:#a07a10;  --warn-soft:rgba(190,150,30,.16);
-    --i1:#5fe3ff; --i2:#9d8cff; --i3:#ff8fd8; --i4:#ffd68a; --i5:#7cf0c8;
-    --aura:rgba(90,220,210,.0);
-    --pane-bg:linear-gradient(158deg,rgba(255,255,255,.66),rgba(255,255,255,.34) 46%,rgba(255,255,255,.52));
-    --pane-bd:rgba(255,255,255,.75);
-    --pane-sh:inset 0 1.5px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(255,255,255,.55),
-              inset 0 22px 44px -28px rgba(255,255,255,1),
-              inset 0 -30px 52px -34px rgba(60,115,150,.42),
-              0 36px 74px -36px rgba(20,55,85,.42),0 2px 10px -5px rgba(20,55,85,.18);
-    --inset-bg:rgba(255,255,255,.40); --inset-bd:rgba(255,255,255,.62);
-    --inset-sh:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(120,165,195,.22),
-               inset 0 12px 26px -20px rgba(255,255,255,.9);
-    --chip-bg:rgba(255,255,255,.52);
-    --prism-op:.42; --sheen-op:.55; --dust-op:0;
-    --pri-grad:linear-gradient(135deg,#a8f0d2,#4fd6b4 52%,#37cbdd);
-    --pri-ink:#053a30; --pri-sh:inset 0 1.5px 0 rgba(255,255,255,.9),0 12px 28px -12px rgba(50,200,180,.65);
-    --me-grad:linear-gradient(135deg,#ffd9a8,#ff9f5a 55%,#f4813c);
-    --me-ink:#4a2004; --me-sh:inset 0 1.5px 0 rgba(255,255,255,.75),0 14px 32px -14px rgba(240,140,70,.6);
+    --ink:#123243; --ink2:#3f6a7d; --ink3:#7ba2b2;
+    --hair:rgba(255,255,255,.95); --hair2:rgba(90,150,175,.20);
+    --agent:#10b493; --agent-ink:#087a64; --agent-soft:rgba(16,200,160,.17);
+    --human:#e8792a; --human-ink:#a85210; --human-soft:rgba(255,150,70,.20);
+    --alert:#d24634; --alert-soft:rgba(210,70,52,.15);
+    --warn:#a37c10;  --warn-soft:rgba(195,155,30,.18);
+    --i1:#6ceaff; --i2:#a4b8ff; --i3:#ffa3e2; --i4:#ffe3a0; --i5:#8df0d2;
+    --aura:rgba(90,220,210,0);
+    /* 玻璃更奶白：底下是深青蓝，太透会吃掉深色文字 */
+    --pane-bg:linear-gradient(158deg,rgba(255,255,255,.80),rgba(255,255,255,.56) 46%,rgba(255,255,255,.70));
+    --pane-bd:rgba(255,255,255,.92);
+    --pane-sh:inset 0 1.5px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(255,255,255,.6),
+              inset 0 24px 46px -28px rgba(255,255,255,1),
+              inset 0 -32px 56px -34px rgba(30,95,130,.36),
+              0 40px 80px -34px rgba(8,45,70,.52),0 2px 12px -5px rgba(8,45,70,.24);
+    --inset-bg:rgba(255,255,255,.55); --inset-bd:rgba(255,255,255,.78);
+    --inset-sh:inset 0 1px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(90,150,180,.24),
+               inset 0 14px 28px -20px rgba(255,255,255,1);
+    --chip-bg:rgba(255,255,255,.66);
+    --prism-op:.48; --sheen-op:.6; --dust-op:0;
+    --pri-grad:linear-gradient(135deg,#bdf6d8,#7ce3bd 48%,#5ed9cb);
+    --pri-ink:#04443a; --pri-sh:inset 0 1.5px 0 rgba(255,255,255,.95),0 14px 30px -12px rgba(40,200,175,.7);
+    --me-grad:linear-gradient(135deg,#ffdcae,#ff9f5a 55%,#f2803a);
+    --me-ink:#4a2004; --me-sh:inset 0 1.5px 0 rgba(255,255,255,.8),0 16px 34px -14px rgba(240,140,70,.6);
   }
   /* ═══ 暗色 · 霓虹光影 ═══ */
   .dark{
@@ -66,26 +67,28 @@ STYLE = '''  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?fami
   a{color:var(--human)}
 
   /* ═══ 舞台：不再是"页面底色"，是一张有天气的背景 ═══ */
-  .app{display:flex;gap:16px;padding:22px;color:var(--ink);position:relative;isolation:isolate;
+  .app{display:flex;gap:18px;padding:38px;color:var(--ink);position:relative;isolation:isolate;
     overflow:hidden;align-items:stretch;
     background:
-      radial-gradient(78% 58% at 16% 4%,#c9e9f7 0%,transparent 58%),
-      radial-gradient(64% 52% at 86% 10%,#dcdcff 0%,transparent 60%),
-      radial-gradient(86% 62% at 62% 104%,#dffaf0 0%,transparent 58%),
-      linear-gradient(168deg,#cfe4f0 0%,#e2eff5 42%,#eef8f8 100%)}
+      radial-gradient(120% 62% at 74% 118%, #f4fcfe 0%, #dcf0f7 34%, transparent 66%),
+      radial-gradient(70% 46% at 8% -6%, #0a2f45 0%, rgba(10,47,69,0) 62%),
+      linear-gradient(172deg,#164a63 0%,#20687e 15%,#3f93a8 33%,#88c4d6 52%,
+                      #c2e4ee 68%, #dff2f8 82%,#f0fbfd 100%)}
   .dark .app,.dark.app{background:
       radial-gradient(58% 48% at 18% 6%,rgba(40,90,255,.20),transparent 60%),
       radial-gradient(52% 44% at 88% 14%,rgba(190,60,255,.18),transparent 62%),
       radial-gradient(74% 56% at 56% 106%,rgba(0,220,190,.13),transparent 58%),
       #05060a}
   /* 焦散光带 + 棱镜色散 */
-  .app::before{content:'';position:absolute;inset:-20%;z-index:0;pointer-events:none;opacity:.75;
+  .app::before{content:'';position:absolute;inset:-20%;z-index:0;pointer-events:none;opacity:.9;
     background:
-      conic-gradient(from 210deg at 30% 20%,transparent 0 18%,rgba(255,255,255,.5) 24%,transparent 30%),
-      conic-gradient(from 40deg at 76% 74%,transparent 0 20%,rgba(255,255,255,.38) 26%,transparent 33%),
-      linear-gradient(104deg,transparent 40%,rgba(255,120,220,.28) 46%,rgba(120,220,255,.30) 50%,
-        rgba(180,255,200,.26) 54%,transparent 60%);
-    filter:blur(46px);animation:weather 30s var(--ease) infinite alternate}
+      linear-gradient(101deg,transparent 30%,rgba(255,255,255,.5) 34%,transparent 39%),
+      linear-gradient(96deg,transparent 46%,rgba(255,255,255,.38) 50%,transparent 55%),
+      conic-gradient(from 200deg at 22% 12%,transparent 0 16%,rgba(190,240,255,.55) 23%,transparent 31%),
+      radial-gradient(42% 24% at 82% 92%,rgba(255,150,220,.42),transparent 62%),
+      linear-gradient(76deg,transparent 52%,rgba(255,120,190,.34) 57%,rgba(255,215,120,.32) 60%,
+        rgba(140,255,190,.32) 63%,rgba(120,215,255,.34) 66%,transparent 71%);
+    filter:blur(42px);animation:weather 30s var(--ease) infinite alternate}
   .dark .app::before,.dark.app::before{opacity:.32;filter:blur(70px)}
   /* 尘埃粒子（暗色专用） */
   .app::after{content:'';position:absolute;left:0;top:0;width:2px;height:2px;border-radius:50%;
