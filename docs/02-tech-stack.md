@@ -6,24 +6,13 @@
 
 ## A 组：写第一行代码前必须定
 
-### T2 · 内容模型的统一程度 ⚠️ 最高优先级
+### ~~T2 · 内容模型~~ → 已定，见 [ADR-0002](adr/0002-todo-tweet-separate-tables.md)
 
-Todo 和 Tweet 共用一张 `thread` / `post` 表（加类型字段），还是各自建表？
+Todo 与 tweet **分表**（性质不同：一个是要完成的事，一个是对话），共用一张极薄的 `thread` 身份表与单张 `post` 表。字段各自干净、`primary_agent_id NOT NULL` 可由 DB 强制、外键是真的、@ 与通知逻辑只写一遍。完整 schema 见[数据模型](05-data-model.md)。
 
-| 方案 | 优点 | 代价 |
-|------|------|------|
-| 单表 + 类型字段 | 看板一次查询搞定；@ / watcher / 通知逻辑只写一遍 | Todo 独有字段（主 agent、状态、截止）在 tweet 行上恒为空 |
-| 分表 + 共用 post 表 | 各自字段干净 | 看板要 union；watcher 与通知要处理两种父类型 |
+### ~~T3 · Agent Card 规范~~ → 已定，见 [ADR-0003](adr/0003-agent-card-a2a.md)
 
-**影响**：模块 1、4、6 的全部实现。
-**倾向**：`thread` 分表（`todo` / `tweet` 各自建表存自己的字段），`post` 单表用 `thread_type` + `thread_id` 关联。这样字段干净、通知逻辑仍只写一遍。需要确认。
-
-### T3 · Agent Card 规范
-
-自定义 schema，还是对齐 A2A（Agent2Agent）Agent Card 规范以便跨平台互认？
-
-**影响**：模块 5 的核心产出、主 agent 的能力匹配。
-**注**：选 A2A 前需先核实当前规范版本与字段定义，不要凭印象实现。我们额外需要的"接入档位""能力边界"字段，看能否放进扩展字段。
+采用 **A2A v1.0.0** AgentCard；hub 代为发布在 `/agents/{id}/.well-known/agent-card.json`；能力边界、runtime、接入档位等 A2A 没有的字段走 `AgentExtension`。详见 [Agent Card 设计](06-agent-card.md)。
 
 ### T4 · 部署形态
 
@@ -75,7 +64,7 @@ REST / GraphQL / RPC。以及给 agent 的 API 和给 admin 前端的 API 是同
 
 **倾向**：REST，两套路由（`/api/agent/*` 与 `/api/admin/*`），共用领域层。
 
-### T15 · Connector 的语言与分发形态
+### T15 · Connector 的语言与分发形态 ⚠️ 现在是最高优先级
 
 Connector 要装在**别人的机器上**，所以取舍和后端不一样：分发体积、零依赖、跨平台，比"和后端同语言"重要得多。
 
@@ -114,16 +103,22 @@ Connector 要装在**别人的机器上**，所以取舍和后端不一样：分
 ## 决策依赖
 
 ```
-[已定 ADR-0001] ──┬──> 模块 2 的实现 ──> T5 后端框架（长连接能力）
-                  ├──> T6 存储（inbox / outbox 用表）
-                  └──> T15 connector 语言 ──> T16 适配器注册
+[已定 0001] 通道 ──┬──> 模块 2 ──> T5 后端框架（长连接能力）
+                   ├──> T6 存储（inbox / outbox 用表）
+                   └──> T15 connector 语言 ──> T16 适配器注册
+[已定 0002] 内容模型 ──> 模块 1/4/6 的实现
+[已定 0003] A2A Card ──> 模块 5 的 skill 内容
+[已定 0004] outbox 单 worker ──> T6 存储、T12 可观测性（lag 告警必须有）
+[已定 0005] 单连接 ──> 连接层要实现顶替逻辑
 
-T2 内容模型 ──> 模块 1/4/6 的全部实现   ⚠️ 先定这个
-T3 Agent Card ──> 模块 5 的 skill 内容
-T4 部署形态 ──┬──> T5 后端框架
+剩下的：
+T4 部署形态 ──┬──> T5 后端框架 ──> T6 存储细节
               └──> T7 前端栈
 T9 凭证形态 ──> 模块 3 的吊销能力（有冲突，已给倾向）
+T15 connector 语言 ──> 可独立于 T4/T5 先定
 ```
+
+**现在的阻塞点只剩 T4 + T5**（部署形态与后端栈）和 **T15**（connector 语言）。前两个要你给约束——团队熟什么、部署在哪；T15 可以独立先定。
 
 ## 已知约束
 

@@ -7,3 +7,7 @@
 | 编号 | 标题 | 状态 |
 |------|------|------|
 | [0001](0001-inbox-cursor-connector.md) | 通知通道：inbox + cursor 保正确，connector gateway 唤起 runtime | 已接受 |
+| [0002](0002-todo-tweet-separate-tables.md) | 内容模型：todo 与 tweet 分表，共用 thread 身份表与 post | 已接受 |
+| [0003](0003-agent-card-a2a.md) | Agent Card 采用 A2A v1.0，hub 代为发布 | 已接受 |
+| [0004](0004-outbox-single-worker.md) | 事件同步：outbox + 单 worker，事务内扇出，提交后推送 | 已接受 |
+| [0005](0005-single-hub-single-connection.md) | 一个 agent 连一个 hub，一个身份一条连接 | 已接受 |

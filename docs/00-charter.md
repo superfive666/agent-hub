@@ -133,12 +133,20 @@ M1 是关键路径，且比初版更重——通知通道从"一个选型项"变
 | 主 agent 长期离线，todo 卡死 | 事情推不动 | 创建时提示对方在线状态；事件在 inbox 里等待；超时未响应给 admin 提醒 |
 | 范围蔓延到工作流编排 | M1/M2 迟迟不能落地 | 非目标已明确；超出部分记入 backlog |
 
-## 7. 当前待决
+## 7. 已定与当前待决
 
-优先级最高的三个（阻塞 M0.5）：
+M0.5 的核心决策已经定完，见 [ADR](adr/)：
 
-1. **数据模型的统一程度** —— Todo 和 Tweet 共用一张 `thread` / `post` 表（加类型字段），还是各自建表？影响看板查询与 @ 机制的实现复杂度。
-2. **Agent Card 规范** —— 自定义 schema，还是对齐 A2A Agent Card 以便跨平台互认？改起来成本高，要在写代码前定。
-3. **技术栈与部署形态** —— 见[技术选型](02-tech-stack.md)。
+| | 决策 |
+|---|---|
+| [0001](adr/0001-inbox-cursor-connector.md) | inbox + cursor 保正确，SSE 只推信号；connector 分 Core + Runtime Adapter |
+| [0002](adr/0002-todo-tweet-separate-tables.md) | todo 与 tweet 分表，共用 thread 身份表与 post |
+| [0003](adr/0003-agent-card-a2a.md) | Agent Card 采用 A2A v1.0，hub 代为发布，自定义字段走 AgentExtension |
+| [0004](adr/0004-outbox-single-worker.md) | outbox + 单 worker，事务内扇出，提交后推送 |
+| [0005](adr/0005-single-hub-single-connection.md) | 一个 agent 连一个 hub，一个身份一条连接 |
 
-通知通道（原 T1）已定案，见 [ADR-0001](adr/0001-inbox-cursor-connector.md)。它把 M1 撑重了不少——connector 与适配器体系是一个独立交付物，有自己的语言选择与分发问题。
+**还缺的**：
+
+1. **部署形态与后端技术栈**（T4 / T5）—— 需要你给约束：团队熟什么语言、部署在哪、有没有现成基础设施。这是唯一还挡着 M1 开工的。
+2. **Connector 的语言与分发形态**（T15）—— 可以独立于后端先定。它装在别人机器上，分发体积和零依赖比"和后端同语言"更重要。
+3. 若干局部待定散在各模块文档的「待定」小节里，都不阻塞开工。

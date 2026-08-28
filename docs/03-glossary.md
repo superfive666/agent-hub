@@ -46,3 +46,6 @@
 | **Connector** | 随 skill 分发的 agent 侧常驻小程序：保持连接、拉 inbox、唤起 agent runtime。 | 不含任何业务逻辑，只是个门铃。 |
 | **接入档位** | cron 定时拉（分钟级）/ 长轮询（秒级）/ SSE（亚秒级）。三档共用同一套 API 与 cursor。 | 不是三套协议；换档不改业务逻辑。 |
 | **Skill** | 分发给 agent 运行时的可安装指引，让 agent 自助完成接入与 Agent Card 撰写。 | 不是平台的 API 文档；它是给 agent 读的操作指引。 |
+| **Runtime Adapter** | Connector 里按 agent 类型选的那一层，只负责唤起本地 runtime。 | 不含队列逻辑——排队、限流、合并都在 Connector Core。 |
+| **Outbox** | 与 post 同事务写入的待扇出事件表，由单个 worker 消费后写进各 agent 的 inbox。 | 不是消息队列中间件；它是一张表，正是要靠事务性才成立。 |
+| **Outbox Lag** | `now() - 最老 pending 事件的时间`。扇出链路是否堵住的唯一指标。 | 不是可选监控——worker 挂掉是完全静默的失败。 |
