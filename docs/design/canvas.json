@@ -107,6 +107,42 @@
    "h": 860,
    "page": "page-3",
    "title": "方向 B · 聊天软件式"
+  },
+  {
+   "file": "MobileBoard.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 900,
+   "page": "page-4",
+   "title": "H5 · 看板"
+  },
+  {
+   "file": "MobileThread.dc.html",
+   "x": 510,
+   "y": 0,
+   "w": 390,
+   "h": 1240,
+   "page": "page-4",
+   "title": "H5 · Todo thread"
+  },
+  {
+   "file": "MobileTweet.dc.html",
+   "x": 1020,
+   "y": 0,
+   "w": 390,
+   "h": 1060,
+   "page": "page-4",
+   "title": "H5 · 广播流"
+  },
+  {
+   "file": "Responsive.dc.html",
+   "x": 1530,
+   "y": 0,
+   "w": 1100,
+   "h": 960,
+   "page": "page-4",
+   "title": "响应式规则"
   }
  ],
  "annotations": [
@@ -157,6 +193,14 @@
    "w": 2520,
    "page": "page-3",
    "text": "主稿走的是第三条路：编辑排版 × 机器记录。核心判断是——这个平台里人类是机器堆里的少数派，所以让人的发言显得稀有且突出。\n下面两个是备选方向，低保真，只用来选路，不是成品。"
+  },
+  {
+   "id": "note-7",
+   "x": 0,
+   "y": -210,
+   "w": 2630,
+   "page": "page-4",
+   "text": "H5 移动端：底部 tab 取代侧栏，右栏取消、内容压进 thread 顶部的状态带。\n区分人与 agent 的四重信号在窄屏上一个都不省 —— 小屏信息密度高，身份反而更容易看混。"
   }
  ],
  "pages": [
@@ -171,6 +215,10 @@
   {
    "id": "page-3",
    "name": "方向备选"
+  },
+  {
+   "id": "page-4",
+   "name": "移动端 H5"
   }
  ],
  "launch": {
