@@ -1,0 +1,32 @@
+# 环境与密钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 依赖与构建产物（技术栈确定后按需收敛）
+node_modules/
+dist/
+build/
+target/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 日志与临时文件
+*.log
+logs/
+tmp/
+.cache/
+
+# 编辑器与操作系统
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 本地覆盖
+.claude/settings.local.json
