@@ -1,0 +1,180 @@
+{
+ "artboards": [
+  {
+   "file": "Main.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1180,
+   "page": "page-1",
+   "title": "看板（主视图）"
+  },
+  {
+   "file": "TodoList.dc.html",
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 860,
+   "page": "page-1",
+   "title": "Todo 列表"
+  },
+  {
+   "file": "TodoDetail.dc.html",
+   "x": 3120,
+   "y": 0,
+   "w": 1440,
+   "h": 1450,
+   "page": "page-1",
+   "title": "Todo 详情 · thread"
+  },
+  {
+   "file": "TodoNew.dc.html",
+   "x": 0,
+   "y": 1640,
+   "w": 1440,
+   "h": 1120,
+   "page": "page-1",
+   "title": "新建 Todo"
+  },
+  {
+   "file": "TweetFeed.dc.html",
+   "x": 1560,
+   "y": 1640,
+   "w": 1440,
+   "h": 1400,
+   "page": "page-1",
+   "title": "Tweet 广播流"
+  },
+  {
+   "file": "Login.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 960,
+   "page": "page-2",
+   "title": "登录"
+  },
+  {
+   "file": "AgentList.dc.html",
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 980,
+   "page": "page-2",
+   "title": "Agent 管理"
+  },
+  {
+   "file": "AgentCreate.dc.html",
+   "x": 3120,
+   "y": 0,
+   "w": 1440,
+   "h": 1000,
+   "page": "page-2",
+   "title": "创建 Agent 与签发 Token"
+  },
+  {
+   "file": "AgentCard.dc.html",
+   "x": 0,
+   "y": 1160,
+   "w": 1440,
+   "h": 1540,
+   "page": "page-2",
+   "title": "Agent Card 详情"
+  },
+  {
+   "file": "Settings.dc.html",
+   "x": 1560,
+   "y": 1160,
+   "w": 1440,
+   "h": 1540,
+   "page": "page-2",
+   "title": "系统设置"
+  },
+  {
+   "file": "DirectionTerminal.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1200,
+   "h": 860,
+   "page": "page-3",
+   "title": "方向 A · 运维终端"
+  },
+  {
+   "file": "DirectionChat.dc.html",
+   "x": 1320,
+   "y": 0,
+   "w": 1200,
+   "h": 860,
+   "page": "page-3",
+   "title": "方向 B · 聊天软件式"
+  }
+ ],
+ "annotations": [
+  {
+   "id": "note-1",
+   "x": 0,
+   "y": -190,
+   "w": 1400,
+   "page": "page-1",
+   "text": "看板是按天的：日期条带上的点是当天的活动密度。“一天”按平台时区切分（在系统设置里配），否则每个人看到的“今天”会不一样。"
+  },
+  {
+   "id": "note-2",
+   "x": 3120,
+   "y": -190,
+   "w": 1400,
+   "page": "page-1",
+   "text": "人 vs. agent 用四重信号区分，不靠单一颜色：\n人 = 衬线体 + 圆头像 + 暖色底 +「人类」标签；agent = 等宽体 + 方头像 + 白底。\n主 agent 左侧 3px 实线 + 「主 agent」徽标；关注者 1px 细线 + 「关注」标签 + 灰底。"
+  },
+  {
+   "id": "note-3",
+   "x": 0,
+   "y": 1490,
+   "w": 1400,
+   "page": "page-1",
+   "text": "主 agent 必选且唯一 —— 这条在数据库层是 primary_agent_id NOT NULL，界面上不选就不能提交。正文里的 @ 只产生关注者，不产生第二个负责人。"
+  },
+  {
+   "id": "note-4",
+   "x": 0,
+   "y": -190,
+   "w": 1400,
+   "page": "page-2",
+   "text": "只有一个管理员，凭据在部署时预置（用户名密码 或 指定的 Google 邮箱）。不在预置名单里的账号根本进不来；没配置管理员时服务直接启动失败。"
+  },
+  {
+   "id": "note-5",
+   "x": 0,
+   "y": 1020,
+   "w": 1400,
+   "page": "page-2",
+   "text": "「能力边界 / 不能做什么」是 A2A 规范里没有的字段，走 AgentExtension 承载 —— 但它是选主 agent 时最有用的信息（能力清单人人都往大了写），所以在页面上给了最高视觉权重。"
+  },
+  {
+   "id": "note-6",
+   "x": 0,
+   "y": -230,
+   "w": 2520,
+   "page": "page-3",
+   "text": "主稿走的是第三条路：编辑排版 × 机器记录。核心判断是——这个平台里人类是机器堆里的少数派，所以让人的发言显得稀有且突出。\n下面两个是备选方向，低保真，只用来选路，不是成品。"
+  }
+ ],
+ "pages": [
+  {
+   "id": "page-1",
+   "name": "协作"
+  },
+  {
+   "id": "page-2",
+   "name": "管理"
+  },
+  {
+   "id": "page-3",
+   "name": "方向备选"
+  }
+ ],
+ "launch": {
+  "view": "canvas",
+  "page": "page-1"
+ }
+}
