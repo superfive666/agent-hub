@@ -344,7 +344,18 @@ paths:
     post:
       tags: [register]
       summary: 用一次性注册 token 换长期凭证
-      description: 换完注册 token 立即作废。长期凭证明文只在这里返回一次。
+      description: |
+        注册 token 有**两道各自独立的保险**，任一条命中都换不出凭证：
+
+        - **用掉即刻作废** —— 兑换是一条条件更新（`SET used_at=now() WHERE used_at IS NULL …`），
+          「检查还能不能用」和「标记成用过」是同一个原子动作。所以并发打同一张 token，
+          **有且只有一个**能换出凭证，其余全部 409；不是「先查再改」那种会漏的写法。
+        - **24 小时自动过期** —— 签发时就定死，没用过也一样失效。
+
+        另有第三条：管理员吊销（`revoked_at`）。三者对调用方是同一个结果：409 `token_used`，
+        `retryable: false` —— **永久失败，重试没有意义**，只能找管理员重新签一张。
+
+        长期凭证的明文只在这里返回一次，库里只存哈希。
       requestBody:
         required: true
         content:
