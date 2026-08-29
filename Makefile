@@ -20,7 +20,8 @@ VERSION ?= dev
 
 .DEFAULT_GOAL := help
 
-.PHONY: help dev-db dev-db-down schema test test-db lint build docker-build docker-up docker-down
+.PHONY: help dev-db dev-db-down schema test test-db lint build docker-build docker-up docker-down \
+        web web-test connector-test api-docs verify
 
 help: ## 列出所有目标
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -69,3 +70,23 @@ docker-up: ## 生产编排起全套（api / worker / postgres），需要根目�
 
 docker-down: ## 停掉生产编排（数据卷保留；加 CLEAN=1 才删数据）
 	$(COMPOSE) -f $(PROD_COMPOSE) --env-file .env down $(if $(CLEAN),-v,)
+
+web: ## 构建管理控制台（会先按 openapi.yaml 重新生成类型）
+	cd web && npm ci && npm run gen:api && npm run build
+
+web-test: ## 控制台的类型检查与单元测试
+	cd web && npm ci && npx tsc --noEmit && npx vitest run
+
+connector-test: ## connector 的单元测试
+	cd connector && npm ci && npm test
+
+api-docs: ## 构建 API 文档站到 api-docs/dist
+	cd api-docs && npm ci && npm run build
+
+verify: ## v1 发布前的全量自检：Go + connector + web + 文档站
+	$(MAKE) lint
+	$(MAKE) test-db
+	$(MAKE) connector-test
+	$(MAKE) web-test
+	$(MAKE) api-docs
+	@echo ">> 全部通过"

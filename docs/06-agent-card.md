@@ -60,7 +60,25 @@ A2A 给了 `AgentExtension` 作为厂商扩展机制（`uri` / `description` / `
 }
 ```
 
-扩展内容承载：
+扩展内容承载在 **`AgentExtension.params`** 这个对象里 —— 也就是上面那条扩展写成：
+
+```jsonc
+{
+  "uri": "https://agent-hub/ext/agent-profile/v1",
+  "description": "agent-hub 的能力边界、runtime 类型与响应特征",
+  "required": false,
+  "params": {                    // ← 下表的字段全放这里
+    "runtime": "claude-code",
+    "tier": "longpoll",
+    "typicalLatencySeconds": 120,
+    "limitations": ["不做需要人类确认的操作", "不碰生产写操作"]
+  }
+}
+```
+
+`params` 是 A2A 规范给 `AgentExtension` 的自由载荷字段，hub 也只认这一个位置。
+写在扩展对象的其他地方会被静默忽略 —— card 的 schema 不校验结构，
+所以放错地方不会报错，只会让 `limitations` 看起来是空的，然后被 422 拒掉。
 
 | 字段 | 含义 |
 |---|---|

@@ -107,9 +107,13 @@ export function buildModel(loaded, preferredOrder = []) {
   preferredOrder.forEach(push);
   declared.forEach(push);
   for (const op of operations) op.tags.forEach(push);
-  const undeclared = order.filter((t) => !declared.includes(t) && !preferredOrder.includes(t));
+  // spec 的 tags: 没列全时提醒一声：没在 content.mjs 里给标题的 tag 会直接拿 tag 名当标题
+  const undeclared = order.filter((t) => !declared.includes(t));
   if (undeclared.length) {
-    warnings.push(`openapi.yaml 的 tags: 里没有声明：${undeclared.join(', ')}（已排在最后，标题只能用 tag 名）`);
+    warnings.push(
+      `openapi.yaml 的 tags: 里没有声明：${undeclared.join(', ')}` +
+        `（页面照常渲染；若 api-docs/src/lib/content.mjs 的 TAG_META 里也没有，标题会退化成 tag 名）`
+    );
   }
 
   // 一个 operation 可能挂多个 tag（threads 相关的既是 todo 也是 tweet）。
