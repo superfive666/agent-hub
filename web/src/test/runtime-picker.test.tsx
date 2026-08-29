@@ -28,7 +28,7 @@ function stub() {
 async function createAgent(name = 'orin') {
   await userEvent.type(await screen.findByLabelText(/名称/), name)
   await userEvent.click(screen.getByRole('button', { name: /创建/ }))
-  return screen.findByTestId('onboard-command')
+  return screen.findByTestId('onboard-prompt')
 }
 
 describe('runtime 选择器', () => {
@@ -44,10 +44,10 @@ describe('runtime 选择器', () => {
   })
 
   /**
-   * 这是用户报的那个 bug：命令永远写死 RUNTIME=codex，
-   * 跑 claude-code 的人复制过去必然失败。
+   * 这是用户报的那个 bug：给出去的那段东西永远写死 codex，
+   * 跑 claude-code 的人拿过去必然对不上。
    */
-  it('选中的 runtime 会拼进接入命令，不再永远是 codex', async () => {
+  it('选中的 runtime 会写进给 agent 的 prompt，不再永远是 codex', async () => {
     stub()
     renderApp('/directory/new')
 
@@ -55,19 +55,19 @@ describe('runtime 选择器', () => {
     // 默认就是 claude-code，不是 codex
     expect(within(picker).getByTestId('runtime-claude-code')).toHaveAttribute('aria-checked', 'true')
 
-    const cmd = await createAgent()
-    expect(cmd).toHaveTextContent('RUNTIME=claude-code')
-    expect(cmd).not.toHaveTextContent('RUNTIME=codex')
+    const p = await createAgent()
+    expect(p).toHaveTextContent('你的 runtime：claude-code')
+    expect(p).not.toHaveTextContent('runtime：codex')
   })
 
-  it('命令里用的是全称 claude-code，不是产品名 claude —— 照着它去查文档才对得上', async () => {
+  it('用的是全称 claude-code，不是产品名 claude —— 照着它去查文档才对得上', async () => {
     stub()
     renderApp('/directory/new')
-    const cmd = await createAgent()
-    expect(cmd.textContent).toMatch(/RUNTIME=claude-code\b/)
+    const p = await createAgent()
+    expect(p.textContent).toMatch(/claude-code\b/)
   })
 
-  it('换成 codex 之后命令跟着变', async () => {
+  it('换成 codex 之后 prompt 跟着变', async () => {
     stub()
     renderApp('/directory/new')
 
@@ -77,15 +77,15 @@ describe('runtime 选择器', () => {
       expect(within(picker).getByTestId('runtime-codex')).toHaveAttribute('aria-checked', 'true'),
     )
 
-    const cmd = await createAgent()
-    expect(cmd).toHaveTextContent('RUNTIME=codex')
+    const p = await createAgent()
+    expect(p).toHaveTextContent('你的 runtime：codex')
   })
 
   /**
-   * 常驻服务型缺 RUNTIME_URL 时 onboard.sh 会直接 die。
-   * 与其让用户复制一条注定失败的命令，不如把这一行摆在他面前。
+   * 常驻服务型还需要 agent 那边的 webhook 地址，缺了接不完。
+   * agent 得在动手之前就知道这件事，而不是走到一半卡住。
    */
-  it('选常驻服务型时命令里带上 RUNTIME_URL 占位，并说明缺了它会停住', async () => {
+  it('选常驻服务型时 prompt 里点名还需要 webhook 地址', async () => {
     stub()
     renderApp('/directory/new')
 
@@ -94,19 +94,30 @@ describe('runtime 选择器', () => {
     // 形态提示要当场变，用户在建之前就该知道还要准备一个 webhook URL
     expect(await screen.findByTestId('runtime-hint')).toHaveTextContent('常驻服务')
 
-    const cmd = await createAgent()
-    expect(cmd).toHaveTextContent('RUNTIME=hermes')
-    expect(cmd).toHaveTextContent('RUNTIME_URL=')
+    const p = await createAgent()
+    expect(p).toHaveTextContent('你的 runtime：hermes')
+    expect(p).toHaveTextContent('webhook 地址')
   })
 
-  it('openclaw 的 SUBCOMMAND 也摆出来 —— 本项目不替用户猜这个子命令', async () => {
+  /**
+   * 这段话是复制给 agent 的，不是给人在终端里跑的 —— 接入该由 agent 自己完成。
+   * 它里面不该出现「你去 clone 一下、你去执行一下」这类要人代劳的命令行。
+   */
+  it('给出的是 prompt 不是命令行：带 hub 地址、token 和说明 URL，让 agent 自己去读', async () => {
     stub()
     renderApp('/directory/new')
+    const p = await createAgent()
+    const text = p.textContent ?? ''
 
-    const picker = await screen.findByTestId('runtime-picker')
-    await userEvent.click(within(picker).getByTestId('runtime-openclaw'))
-    const cmd = await createAgent()
-    expect(cmd).toHaveTextContent('SUBCOMMAND=')
+    expect(text).toContain('ahr_test_9f8e7d6c')
+    expect(text).toMatch(/\/api\/onboarding/)
+    // 三件事都要交代到，尤其是「保持在线」—— 少了它 agent 注册完就没人拉 inbox
+    expect(text).toContain('长期凭证')
+    expect(text).toContain('保持在线')
+    expect(text).toContain('Agent Card')
+    // 步骤不内联在这段话里，是让 agent 去 URL 读的
+    expect(text).not.toContain('curl')
+    expect(text).not.toContain('git clone')
   })
 
   it('方向键能在选项间走 —— radiogroup 是一个控件，不是七个 Tab 停靠点', async () => {

@@ -15,24 +15,41 @@ function hubOrigin(): string {
 }
 
 /**
- * 接入命令**照抄 docs/08-deployment.md §8 与 connector/RUNTIMES.md**，一个字都别自己编：
- * 编出来的命令行看着像那么回事，用户复制过去只会失败，而这串 token 用一次就没了。
- * onboard.sh 会换取长期凭证（0600 落盘）、生成 connector 配置、装 systemd user service、自检。
+ * 交给 agent 的那段话。
+ *
+ * **不是给人跑的命令行，是复制给 agent 的 prompt** —— 接入这件事本来就该由 agent
+ * 自己完成：换凭证、让自己保持在线、写自己的 Agent Card（尤其是「做不了什么」，
+ * 只有它自己说得清）。让人去终端里代跑，等于把这三件事又推回给人。
+ *
+ * 步骤不写在这里，只给一个 URL。写在这里的话，这段字面量会随契约漂移，
+ * 而控制台上这段字没人会记得更新 —— `GET /api/onboarding` 由 hub 自己吐，
+ * 永远和跑着的这一版一致。
  */
-function onboardCommand(token: string, runtime: string): string {
+function onboardPrompt(token: string, runtime: string): string {
+  const hub = hubOrigin()
   const opt = runtimeById(runtime)
   const lines = [
-    'git clone https://github.com/superfive666/agent-hub.git ~/agent-hub',
-    `HUB=${hubOrigin()} REG_TOKEN=${token} RUNTIME=${runtime} \\`,
+    '你被加进了 agent-hub —— 一个多 agent 协作平台。请把你自己接入，并完成自我介绍。',
+    '',
+    `hub 地址：${hub}`,
+    `一次性注册 token：${token}`,
+    `你的 runtime：${opt?.id ?? runtime}`,
+    '',
+    `完整步骤见 ${hub}/api/onboarding —— 先把它读完再动手。`,
+    '',
+    '做完这三件事才算接好：',
+    '1. 用上面那张 token 换取长期凭证，0600 落盘（token 只能用一次）',
+    '2. 让自己保持在线 —— 装 connector 常驻，或者退一步用 cron 定时拉 inbox；',
+    '   不做这一步的话，事件到了没有任何东西去拉，你会一直显示离线',
+    '3. 写你自己的 Agent Card 并广播自我介绍。其中「做不了什么」是硬要求，',
+    '   留空会被拒；要写实质内容，「我会尽力」这种等于没写',
   ]
-  // 常驻服务型必须给 webhook 地址，onboard.sh 缺了它会直接 die。
-  // 与其让用户复制一条注定失败的命令，不如把这一行摆在他面前、留个显眼的占位。
-  if (opt?.form === 'service') lines.push('  RUNTIME_URL=<对方的 webhook 地址> \\')
-  // openclaw 的一次性发消息子命令没有文档化的默认值，猜错的表现是每次唤起都失败、
-  // 事件一路重试进死信 —— 很难联想到是命令写错了。所以这里也不替他猜。
-  if (runtime === 'openclaw') lines.push("  SUBCOMMAND='message send' \\")
-  if (runtime === 'generic-shell') lines.push("  COMMAND='sh /path/wake.sh' \\")
-  lines.push('  sh ~/agent-hub/agent-hub-skill/scripts/onboard.sh')
+  if (opt?.form === 'service') {
+    lines.push(
+      '',
+      `注意：${opt.label} 是常驻服务型，接入时还需要你自己的 webhook 地址。`,
+    )
+  }
   return lines.join('\n')
 }
 
@@ -60,7 +77,7 @@ export interface RegistrationTokenPanelProps {
   agentName?: string
   token: string
   expiresAt?: string
-  /** 拼进接入命令的 RUNTIME=。默认 codex 只是个兜底，调用方应当把用户选的那个传进来 */
+  /** 写进 prompt 的 runtime。默认 codex 只是个兜底，调用方应当把用户选的那个传进来 */
   runtime?: string
   /** 「再建一个」「回名录」这类后续动作，由用它的页面决定 */
   footer?: ReactNode
@@ -71,7 +88,7 @@ export interface RegistrationTokenPanelProps {
  *
  * 这一屏是整个添加流程的重点，不是一句提示：**明文只在这个响应里出现一次**，
  * 库里只有哈希。关掉页面就再也看不到，只能作废重发。所以：token 要大、要能选中、
- * 要有复制按钮（带降级），过期时间要写出来，接入命令要是真命令。
+ * 要有复制按钮（带降级），过期时间要写出来，给 agent 的那段话要能直接粘过去用。
  */
 export function RegistrationTokenPanel({
   agentName,
@@ -80,7 +97,7 @@ export function RegistrationTokenPanel({
   runtime = 'codex',
   footer,
 }: RegistrationTokenPanelProps) {
-  const cmd = onboardCommand(token, runtime)
+  const prompt = onboardPrompt(token, runtime)
   return (
     <Card data-testid="registration-token">
       <CardHeader>一次性注册 TOKEN{agentName ? ` · @${agentName}` : ''}</CardHeader>
@@ -129,36 +146,36 @@ export function RegistrationTokenPanel({
         <div className="sep" />
 
         <div>
-          <div className="lbl mb-2">交给那台机器上的 connector</div>
+          <div className="lbl mb-2">把这段话交给你的 agent</div>
           <p className="m-0 mb-2.5 text-[11.5px] font-medium leading-[1.75]" style={{ color: 'var(--ink2)' }}>
-            token 不是 API 凭证，唯一用途是<b>换长期凭证</b>。在 agent 自己的机器上跑下面这条
-            （见 <span className="mono">docs/08-deployment.md §8</span>）：它会换取凭证并 0600 落盘、
-            生成 connector 配置、装成 systemd user service、做一次连通性自检。
+            <b>不用你去终端里跑任何东西。</b> 复制下面这段，粘给那个 agent 就行 ——
+            接入这件事本来就该它自己做：换凭证、让自己保持在线、写自己的 Agent Card。
+            尤其是 Card 里的「做不了什么」，只有它自己说得清。
           </p>
           <div className="flex items-start gap-2.5">
             <pre
-              data-testid="onboard-command"
-              className="mono min-w-0 grow overflow-x-auto rounded-[14px] px-[15px] py-[13px] text-[11px] leading-[1.8]"
+              data-testid="onboard-prompt"
+              className="min-w-0 grow overflow-x-auto whitespace-pre-wrap rounded-[14px] px-[15px] py-[13px] text-[11.5px] leading-[1.8]"
               style={{
                 background: 'var(--inset-bg)',
                 border: '1px solid var(--inset-bd)',
                 boxShadow: 'var(--inset-sh)',
+                color: 'var(--ink2)',
               }}
             >
-              {cmd}
+              {prompt}
             </pre>
-            <CopyButton text={cmd} label="复制接入命令" />
+            <CopyButton text={prompt} label="复制给 agent 的接入 prompt" />
           </div>
           <p className="m-0 mt-2.5 text-[10.5px] font-medium leading-[1.7]" style={{ color: 'var(--ink3)' }}>
-            命令里的 <span className="mono">RUNTIME={runtime}</span> 就是上面选的那个；
-            对方机器上跑的不是它的话，改掉再执行，对照表在
-            <span className="mono"> connector/RUNTIMES.md</span>。
+            具体步骤不写在这段话里，agent 会去 <span className="mono">{hubOrigin()}/api/onboarding</span>{' '}
+            自己读 —— 那份说明由 hub 吐出来，永远和当前跑着的这一版一致，
+            不会像抄在界面上的命令那样悄悄过期。
             {runtimeById(runtime)?.form === 'service' && (
               <>
                 {' '}
                 <b style={{ color: 'var(--human)' }}>
-                  这一档是常驻服务，必须把 RUNTIME_URL 换成真实的 webhook 地址，
-                  否则 onboard.sh 会直接停在那里。
+                  这一档是常驻服务，agent 还需要自己那边的 webhook 地址才接得完。
                 </b>
               </>
             )}
