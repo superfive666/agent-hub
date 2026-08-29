@@ -2,22 +2,28 @@ import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@ta
 import {
   api,
   unwrap,
+  type AdminAgent,
   type AdminMe,
   type AgentSummary,
   type BoardActivity,
   type BoardStarted,
+  type CreatedAgent,
   type Health,
+  type IssuedToken,
   type Settings,
   type ThreadDetail,
+  type TodoStep,
   type TodoSummary,
 } from './client'
 import {
+  mockAdminAgents,
   mockBoardActivity,
   mockBoardStarted,
   mockDirectory,
   mockHealth,
   mockMe,
   mockSettings,
+  mockSteps,
   mockThread,
   mockTodos,
 } from '@/mocks/data'
@@ -32,7 +38,9 @@ export const qk = {
   me: ['me'] as const,
   thread: (id: string) => ['thread', id] as const,
   todos: () => ['todos'] as const,
+  steps: (id: string) => ['todo-steps', id] as const,
   directory: ['directory'] as const,
+  adminAgents: ['admin-agents'] as const,
   board: (date: string, groupBy: BoardGroupBy) => ['board', date, groupBy] as const,
   settings: ['settings'] as const,
   health: ['health'] as const,
@@ -100,6 +108,52 @@ export function useDirectory() {
       if (USE_MOCKS) return mockDirectory
       const data = unwrap(await api.GET('/api/admin/directory'))
       return data?.agents ?? []
+    },
+  })
+}
+
+/**
+ * 运维视角的 agent 名单：**和名录不是同一份数据**。
+ *
+ * `/api/admin/directory` 回答「该找谁」——它是 Agent Card 的摘要，**没写 Card 的
+ * agent 根本查不到**；`/api/admin/agents` 回答「还活着吗、手上压了多少事」，
+ * 刚建出来、还没接入的记录只在这一份里。
+ *
+ * 「我明明加了一个 agent，名录里却找不到」这个困惑就是这么来的 —— 名录页要把
+ * 两份数据都拉上，才有可能把话讲清楚。
+ */
+export function useAdminAgents() {
+  return useQuery<AdminAgent[]>({
+    queryKey: qk.adminAgents,
+    queryFn: async () => {
+      if (USE_MOCKS) return mockAdminAgents
+      const data = unwrap(await api.GET('/api/admin/agents'))
+      return data?.agents ?? []
+    },
+  })
+}
+
+/**
+ * 一条 todo 的处理步骤，按 seq 升序。
+ *
+ * **只对 todo 有意义** —— tweet 没有步骤，对着它发请求只会拿一个 404 回来，
+ * 所以调用方要把 `thread.kind === 'todo'` 传进 `enabled`。
+ *
+ * 契约写明返回就是升序的，这里仍然自己排一遍：顺序是这个界面的全部意义
+ * （画的是「第几步」），不值得为省一次 sort 去信任传输过程。
+ */
+export function useTodoSteps(threadId: string | undefined, enabled = true) {
+  return useQuery<TodoStep[]>({
+    queryKey: qk.steps(threadId ?? ''),
+    enabled: !!threadId && enabled,
+    queryFn: async () => {
+      if (USE_MOCKS) return mockSteps(threadId!)
+      const data = unwrap(
+        await api.GET('/api/admin/todos/{threadId}/steps', {
+          params: { path: { threadId: threadId! } },
+        }),
+      )
+      return [...(data?.steps ?? [])].sort((a, b) => a.seq - b.seq)
     },
   })
 }
@@ -181,11 +235,20 @@ export function useCreateTodo() {
   })
 }
 
-/** 管理员确认完成 / 打回 / 取消。状态由 thread 里的动作驱动，没有独立的状态面板。 */
+/**
+ * 管理员的四个动作。**它们分属两个阶段，别混**（契约与 ADR-0008 都强调过这点）：
+ *
+ * - `approve` = 开工**之前**的「确认需求，可以开工」，也就是用户确认闸门。幂等。
+ * - `confirm` = 交付**之后**的「确认完成」。
+ * - `reject`  = 交付之后的打回，**只在 `awaiting_review` 上成立**，别处 409。
+ * - `cancel`  = 任何阶段撤掉。
+ *
+ * approve 会顺手追加一条 `kind=confirmation` 的步骤，所以成功后连步骤一起失效重拉。
+ */
 export function useTodoAction(threadId: string | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (action: 'confirm' | 'reject' | 'cancel') => {
+    mutationFn: async (action: 'approve' | 'confirm' | 'reject' | 'cancel') => {
       if (USE_MOCKS) return
       unwrap(
         await api.POST('/api/admin/todos/{threadId}/state', {
@@ -195,9 +258,76 @@ export function useTodoAction(threadId: string | undefined) {
       )
     },
     onSuccess: () => {
-      if (threadId) qc.invalidateQueries({ queryKey: qk.thread(threadId) })
+      if (threadId) {
+        qc.invalidateQueries({ queryKey: qk.thread(threadId) })
+        qc.invalidateQueries({ queryKey: qk.steps(threadId) })
+      }
       qc.invalidateQueries({ queryKey: qk.todos() })
     },
+  })
+}
+
+export interface NewAgentInput {
+  /** trim 后非空、≤64、只允许 [A-Za-z0-9_-] —— 前端先拦一遍，服务端还会再拦一遍 */
+  name: string
+  purpose?: string
+}
+
+/**
+ * 建 agent 记录并**在同一次往返里**签出注册 token。
+ *
+ * 走 `issueToken: true` 而不是「先建记录、再单独签一次」：分两次调用会留下
+ * 「记录建好了但 token 没签出来」的中间态 —— 那一行既不能用，也不知道该不该删。
+ *
+ * 响应里的 `registrationToken` 是**明文，只出现这一次**（库里只有哈希），
+ * 所以调用方必须把它当场展示出来，不能只 invalidate 完就丢掉。
+ */
+export function useCreateAgent() {
+  const qc = useQueryClient()
+  return useMutation<CreatedAgent, Error, NewAgentInput>({
+    mutationFn: async (input) => {
+      if (USE_MOCKS) {
+        return {
+          agentId: 'ag-new',
+          registrationToken: 'ahr_mock_0000000000000000',
+          expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+        }
+      }
+      return unwrap(
+        await api.POST('/api/admin/agents', {
+          body: { name: input.name, ...(input.purpose ? { purpose: input.purpose } : {}), issueToken: true },
+        }),
+      )
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.adminAgents })
+      // 新建的 agent 还没写 Card，名录里暂时不会出现 —— 但它接入后就会，一起刷掉
+      qc.invalidateQueries({ queryKey: qk.directory })
+    },
+  })
+}
+
+/**
+ * 给已有的 agent 记录补签一张注册 token（上一张过期了、或者丢了）。
+ * 明文同样只在这个响应里出现一次。
+ */
+export function useIssueRegistrationToken() {
+  const qc = useQueryClient()
+  return useMutation<IssuedToken, Error, string>({
+    mutationFn: async (agentId) => {
+      if (USE_MOCKS) {
+        return {
+          registrationToken: 'ahr_mock_1111111111111111',
+          expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+        }
+      }
+      return unwrap(
+        await api.POST('/api/admin/agents/{agentId}/registration-token', {
+          params: { path: { agentId } },
+        }),
+      )
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.adminAgents }),
   })
 }
 

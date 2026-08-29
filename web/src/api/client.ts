@@ -13,6 +13,19 @@ export type ThreadDetail = components['schemas']['ThreadDetail']
 export type ThreadWatcher = components['schemas']['ThreadWatcher']
 export type TodoSummary = components['schemas']['TodoSummary']
 export type Settings = components['schemas']['Settings']
+/** 运维视角的 agent 行（还活着吗、手上压了多少事），和名录的 AgentSummary 不是一回事 */
+export type AdminAgent = components['schemas']['AdminAgent']
+/** 任务处理详情的一步。post 是「说了什么」，step 是「做到哪一步了」 */
+export type TodoStep = components['schemas']['TodoStep']
+
+/** 建 agent 的 201 响应：`issueToken=true` 时明文 token 就在这里，且只在这里出现一次 */
+export type CreatedAgent = NonNullable<
+  paths['/api/admin/agents']['post']['responses']['201']['content']['application/json']
+>
+/** 补签注册 token 的 201 响应 */
+export type IssuedToken = NonNullable<
+  paths['/api/admin/agents/{agentId}/registration-token']['post']['responses']['201']['content']['application/json']
+>
 
 type BoardResponse =
   paths['/api/admin/board']['get']['responses']['200']['content']['application/json']

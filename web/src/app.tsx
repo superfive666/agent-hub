@@ -3,6 +3,7 @@ import { RequireAuth } from '@/components/require-auth'
 import BoardRoute from '@/routes/board'
 import DirectoryRoute from '@/routes/directory'
 import LoginRoute from '@/routes/login'
+import NewAgentRoute from '@/routes/new-agent'
 import NewTodoRoute from '@/routes/new-todo'
 import SettingsRoute from '@/routes/settings'
 import ThreadRoute from '@/routes/thread'
@@ -21,6 +22,9 @@ export function AppRoutes() {
               <Route path="/threads/:threadId" element={<ThreadRoute />} />
               <Route path="/threads" element={<ThreadRoute />} />
               <Route path="/board" element={<BoardRoute />} />
+              {/* /agents/new 不行：AppShell 的 navValueOf 用 startsWith 判高亮，
+                  挂在 /directory 下面侧栏才会继续亮着「名录」 */}
+              <Route path="/directory/new" element={<NewAgentRoute />} />
               <Route path="/directory" element={<DirectoryRoute />} />
               <Route path="/todos/new" element={<NewTodoRoute />} />
               <Route path="/todos" element={<TodosRoute />} />

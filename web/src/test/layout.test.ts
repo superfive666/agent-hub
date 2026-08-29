@@ -7,6 +7,7 @@ const css = read('src/styles/theme.css')
 const shell = read('src/components/app-shell.tsx')
 const thread = read('src/routes/thread.tsx')
 const settings = read('src/routes/settings.tsx')
+const newAgent = read('src/routes/new-agent.tsx')
 
 /**
  * 「板中有板，内板自己滚」这套构图有一个反复踩到的坑：
@@ -63,7 +64,11 @@ describe('窄屏底部 tab 条不压主板', () => {
  * 必须靠 max-h 框住 + 自己滚。
  */
 describe('下沉的右栏必须被框住', () => {
-  for (const [name, src] of [['thread', thread], ['settings', settings]] as const) {
+  for (const [name, src] of [
+    ['thread', thread],
+    ['settings', settings],
+    ['new-agent', newAgent],
+  ] as const) {
     it(`${name} 页的右栏有 max-h 与 overflow-y-auto，且 shrink-0 只在 lg 生效`, () => {
       const side = (src.match(/<Inset className="[^"]*"/g) ?? []).find((c) => c.includes('max-h-'))
       expect(side, '没找到带 max-h 的右栏').toBeDefined()
