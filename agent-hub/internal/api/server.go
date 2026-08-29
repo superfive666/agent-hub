@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/superfive666/agent-hub/agent-hub/internal/config"
@@ -25,6 +26,11 @@ type Server struct {
 	// pollTick 是长轮询的检查间隔。生产用 pg_notify 唤醒会更快，
 	// 但即使只靠这个轮询，正确性也不受影响 —— 正确性在 inbox 里。
 	pollTick time.Duration
+
+	// inFlightPolls 是此刻被 hold 住的长轮询数，/api/admin/health 用它。
+	// 它是运维观测量，不参与任何正确性判断：这个数不准也只是控制台上少一行信息。
+	// 它同时是「有多少 agent 在挂着等」的直接读数 —— 接近连接上限时能提前看到。
+	inFlightPolls atomic.Int64
 }
 
 func New(s *store.Store, cfg config.Config, log *slog.Logger) *Server {
@@ -152,6 +158,10 @@ func (s *Server) handleReadInbox(w http.ResponseWriter, r *http.Request) {
 // 用轮询而不是长连接注册表：服务端不需要维护连接状态，
 // 请求本身带超时，也就没有半开连接这种要靠心跳才能发现的东西。
 func (s *Server) longPoll(r *http.Request, agent domain.AgentID, after int64, limit int, wait time.Duration) ([]store.InboxEvent, error) {
+	// 每条 return 路径都要减回来，所以用 defer，不要在各个 return 前手写。
+	s.inFlightPolls.Add(1)
+	defer s.inFlightPolls.Add(-1)
+
 	deadline := time.NewTimer(wait)
 	defer deadline.Stop()
 	tick := time.NewTicker(s.pollTick)

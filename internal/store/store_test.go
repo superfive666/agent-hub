@@ -394,6 +394,79 @@ func TestWorkerLockIsSingleInstance(t *testing.T) {
 	}
 }
 
+// 需求：控制台要能分辨 worker 是死是活，判据是那把单实例锁还在不在。
+//
+// 用锁而不是心跳表：锁挂在 worker 自己那条连接上，进程被 kill、机器掉电、
+// 网络断开，连接一断 PostgreSQL 就自动放锁 —— 不需要 worker 配合上报。
+func TestWorkerAliveFollowsTheSingleInstanceLock(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	alive, err := s.WorkerAlive(ctx)
+	if err != nil {
+		t.Fatalf("WorkerAlive: %v", err)
+	}
+	if alive {
+		t.Fatal("没有 worker 持锁时 WorkerAlive 应当是 false")
+	}
+
+	ok, release, err := s.TryWorkerLock(ctx)
+	if err != nil || !ok {
+		t.Fatalf("拿单实例锁失败: ok=%v err=%v", ok, err)
+	}
+	if alive, err = s.WorkerAlive(ctx); err != nil {
+		t.Fatal(err)
+	} else if !alive {
+		t.Error("worker 持锁期间 WorkerAlive 应当是 true —— 否则控制台会挂一条假告警")
+	}
+
+	// 放锁之后必须立刻翻回 false，不能有粘滞：worker 挂了就得马上看得出来。
+	release()
+	if alive, err = s.WorkerAlive(ctx); err != nil {
+		t.Fatal(err)
+	} else if alive {
+		t.Error("worker 放锁之后 WorkerAlive 应当立刻回到 false")
+	}
+}
+
+// 需求：outboxPending 是「积了多少」，和 outbox_lag 的「最老的等了多久」是一对。
+// worker 刚挂的头一秒滞后还是 0，条数已经在涨了。
+func TestOutboxPendingCount(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	rover := mkAgent(t, s, "rover")
+
+	n, err := s.OutboxPendingCount(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("没有待扇出事件时应当是 0，实得 %d", n)
+	}
+
+	for range 2 {
+		if _, err := s.CreateTodo(ctx, store.CreateTodoParams{
+			New: domain.NewTodo{Title: "t", Body: "b", PrimaryAgentID: rover}, CreatedBy: "admin",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err = s.OutboxPendingCount(ctx); err != nil {
+		t.Fatal(err)
+	} else if n != 2 {
+		t.Errorf("建了两条 todo，待扇出应当是 2，实得 %d", n)
+	}
+
+	if _, err := s.ProcessOutboxBatch(ctx, 10, nil); err != nil {
+		t.Fatal(err)
+	}
+	if n, err = s.OutboxPendingCount(ctx); err != nil {
+		t.Fatal(err)
+	} else if n != 0 {
+		t.Errorf("扇出完之后应当回到 0，实得 %d", n)
+	}
+}
+
 // outbox_lag 是唯一能发现 worker 静默死亡的指标，它本身必须是对的。
 func TestOutboxLag(t *testing.T) {
 	s := newStore(t)

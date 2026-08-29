@@ -68,6 +68,35 @@ func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
 // 单实例约束靠它保证：取不到就退出，不是等待。见 ADR-0004。
 const workerLockID int64 = 0x0A6E7401
 
+// WorkerAlive 判断当前是否有 worker 实例活着。
+//
+// 判据就是 TryWorkerLock 那把 advisory lock 还被人持有着 —— 这比心跳表可靠：
+// 锁挂在 worker 自己的那条连接上，进程被 kill、机器掉电、网络断开，
+// 连接一断 PostgreSQL 就自动放锁，不需要 worker 配合写「我要死了」。
+// 心跳表则要么依赖 worker 主动续期（假死时续期线程还活着，业务线程已经不跑了），
+// 要么要定超时阈值（多久算死？）—— 这里两个问题都不存在。
+//
+// 只看**本库**里的锁：advisory lock 是按 database 隔离的，
+// pg_locks 却是整个实例的视图，不过滤的话同实例另一个库里的 worker 会被算成自己的。
+func (s *Store) WorkerAlive(ctx context.Context) (bool, error) {
+	// classid/objid 是 oid（无符号 32 位），转成 bigint 再比，省得驱动去猜类型。
+	var alive bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM pg_locks
+			WHERE locktype = 'advisory'
+			  AND granted
+			  AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+			  AND classid::bigint = $1
+			  AND objid::bigint   = $2
+			  AND objsubid = 1
+		)`, workerLockID>>32, workerLockID&0xFFFFFFFF).Scan(&alive)
+	if err != nil {
+		return false, fmt.Errorf("查 worker 存活: %w", err)
+	}
+	return alive, nil
+}
+
 // TryWorkerLock 尝试拿下 outbox worker 的单实例锁。
 //
 // 拿不到说明已经有一个 worker 在跑 —— 直接退出，不要等待。

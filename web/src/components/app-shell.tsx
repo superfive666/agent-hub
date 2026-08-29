@@ -200,12 +200,18 @@ export function AppShell({
       </Pane>
 
       {/* ── 玻璃板 2：主区 ── */}
-      <Pane className="flex min-w-0 grow flex-col pb-16 sm:pb-0">{children}</Pane>
+      <Pane className="flex min-w-0 grow flex-col">{children}</Pane>
 
-      {/* <640px：底部 tab 取代侧栏 */}
+      {/* <640px：底部 tab 取代侧栏。
+          它是舞台这条 flex 的**正常子项**，不是 fixed —— 窄屏下舞台改成竖排
+          （theme.css 里那条 max-width:639px 的规则），tab 条就排在主板下面，
+          中间隔着舞台自己的 gap。
+          **不要改回 fixed。** fixed 的话主板不知道 tab 条占了多高，只能拿
+          padding-bottom 去猜，猜的值和真实高度（还要加安全区）对不上，
+          两个圆角矩形就会互相穿插 —— 主板的棱镜边从 tab 条中间横穿过去。
+          左右也一样：fixed 时 tab 条贴视口、主板贴舞台内边距，两条边永远对不齐。 */}
       <nav
-        className="pane fixed inset-x-3 bottom-3 z-10 flex items-center justify-around gap-2 rounded-pill px-3 py-2 sm:hidden"
-        style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+        className="pane z-10 flex shrink-0 items-center justify-around gap-2 rounded-pill px-3 py-2 sm:hidden"
         aria-label="主导航"
       >
         {NAV.map((n) => (
@@ -236,9 +242,12 @@ export function PageHeader({
 }) {
   return (
     // 允许换行：390px 下标题和右侧控件挤在一行时，标题块会被压到一个字宽
-    // （控件是 shrink-0，压缩全落在标题上）。basis-48 让空间不够时控件整体换到第二行。
+    // （控件是 shrink-0，压缩全落在标题上）。basis 让空间不够时控件整体换到第二行。
+    // 这个基准宽度是**手机上标题能不能读全**的开关：给小了，标题勉强挤在同一行里
+    // 被 truncate 砍成半句（「重写 connector 的重…」），控件却好端端地占着右边；
+    // 给到 240px，控件会整体掉到第二行，标题拿回整行宽度。
     <header className="relative z-[3] flex flex-wrap items-center gap-x-3.5 gap-y-3 px-5 pb-4 pt-5 sm:px-6">
-      <div className="min-w-0 grow basis-48">
+      <div className="min-w-0 grow basis-60">
         <h1 className="m-0 truncate text-[19px] font-extrabold leading-[1.25] tracking-[-0.03em]">
           {title}
         </h1>

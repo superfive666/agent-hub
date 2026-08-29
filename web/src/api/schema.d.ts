@@ -1514,6 +1514,10 @@ export interface paths {
          * 运行状态
          * @description `outboxLagSeconds` 是唯一能发现 worker 静默死亡的指标——worker 挂掉时
          *     帖子照发、inbox 照拉，没有任何报错。告警不可关闭。
+         *
+         *     **五个字段全是必填。** 控制台对缺失字段的兜底是「读不到就当坏了」，
+         *     所以少返回一个 `workerAlive` 不会显示成「未知」，会显示成「worker 无心跳」——
+         *     一条永远挂着的假告警。假告警和漏告警一样坏：几次「又是误报」之后就没人看了。
          */
         get: {
             parameters: {
@@ -1530,11 +1534,20 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            outboxLagSeconds?: number;
-                            outboxPending?: number;
-                            outboxDead?: number;
-                            workerAlive?: boolean;
-                            pendingLongPolls?: number;
+                            /** @description 最老一条待扇出事件已经等了多少秒；没有待扇出事件时为 0 */
+                            outboxLagSeconds: number;
+                            /** @description 还没扇出的事件条数。worker 刚挂时滞后还是 0，条数已经在涨了 */
+                            outboxPending: number;
+                            /** @description 死信总数，非零时控制台要显眼提示 */
+                            outboxDead: number;
+                            /**
+                             * @description 是否还有 worker 实例活着。判据是 worker 的单实例 advisory lock
+                             *     仍被持有——锁挂在 worker 自己的连接上，进程挂掉连接一断就自动释放，
+                             *     不需要 worker 配合上报，也就没有「心跳线程还活着但业务线程已经停了」这种假活。
+                             */
+                            workerAlive: boolean;
+                            /** @description 此刻被 hold 住的长轮询数。纯观测量，不参与任何正确性判断 */
+                            pendingLongPolls: number;
                         };
                     };
                 };
