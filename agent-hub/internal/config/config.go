@@ -28,7 +28,8 @@ type Config struct {
 	AdminPasswordHash string
 	AdminGoogleEmail  string
 
-	LongPollMax time.Duration
+	SessionSecret string
+	LongPollMax   time.Duration
 }
 
 // ErrNoAdmin 是那条硬约束的出口：**没有预置管理员时服务必须启动失败**。
@@ -49,7 +50,8 @@ func Load() (Config, error) {
 		AdminPasswordHash: os.Getenv("ADMIN_PASSWORD_HASH"),
 		AdminGoogleEmail:  os.Getenv("ADMIN_GOOGLE_EMAIL"),
 
-		LongPollMax: envDuration("LONGPOLL_MAX_WAIT", 30*time.Second),
+		SessionSecret: os.Getenv("SESSION_SECRET"),
+		LongPollMax:   envDuration("LONGPOLL_MAX_WAIT", 30*time.Second),
 	}
 	if err := c.Validate(); err != nil {
 		return Config{}, err
@@ -66,6 +68,11 @@ func (c Config) Validate() error {
 		// 时区决定看板按什么切分「一天」。配错了每个人看到的「今天」会不一样，
 		// 这是最难查的一类问题，所以在启动时就拦下来。
 		return fmt.Errorf("PLATFORM_TIMEZONE 无效: %w", err)
+	}
+
+	if len(c.SessionSecret) < 16 {
+		// 会话密钥太短等于没有：签出来的 cookie 可以被暴力伪造。
+		return errors.New("SESSION_SECRET 至少需要 16 个字符")
 	}
 
 	switch c.AuthMode {

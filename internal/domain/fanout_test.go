@@ -128,6 +128,29 @@ func TestFanout(t *testing.T) {
 			want: []Delivery{{rover, EventTweetReplied}},
 		},
 		{
+			name: "广播开篇：投递范围里的人拿到 tweet.published，被 @ 的仍然是 P1",
+			give: FanoutInput{
+				ThreadKind: ThreadTweet, IsThreadOpening: true,
+				Mentions:    []AgentID{kilo},
+				BroadcastTo: []AgentID{rover, nova, kilo},
+				Actor:       nova,
+			},
+			want: []Delivery{
+				{kilo, EventTweetMentioned}, // 被 @ 优先于被广播
+				{rover, EventTweetPublished},
+			},
+		},
+		{
+			name: "广播的回复不再刷全平台，只通知参与者",
+			give: FanoutInput{
+				ThreadKind: ThreadTweet, IsThreadOpening: false,
+				BroadcastTo: []AgentID{rover, nova, kilo, pico},
+				Watchers:    []Watcher{{nova, WatchReplied}, {rover, WatchReplied}},
+				Actor:       nova,
+			},
+			want: []Delivery{{rover, EventTweetReplied}},
+		},
+		{
 			name: "没有收件人时返回空，而不是 nil 之外的怪东西",
 			give: FanoutInput{ThreadKind: ThreadTodo, PrimaryAgentID: rover, Actor: rover},
 			want: []Delivery{},

@@ -11,7 +11,7 @@ import (
 // 不能默认放行 —— 那会悄悄跑起一个谁都能进的实例，而且看起来一切正常。
 func TestValidateRejectsMissingAdmin(t *testing.T) {
 	t.Parallel()
-	base := config.Config{DatabaseURL: "postgres://x", Timezone: "UTC"}
+	base := config.Config{DatabaseURL: "postgres://x", Timezone: "UTC", SessionSecret: "0123456789abcdef"}
 
 	tests := []struct {
 		name string
@@ -61,9 +61,9 @@ func TestValidateRejectsMissingAdmin(t *testing.T) {
 func TestValidateAcceptsCompleteConfig(t *testing.T) {
 	t.Parallel()
 	for _, c := range []config.Config{
-		{DatabaseURL: "postgres://x", Timezone: "UTC", AuthMode: config.AuthPassword,
+		{DatabaseURL: "postgres://x", Timezone: "UTC", SessionSecret: "0123456789abcdef", AuthMode: config.AuthPassword,
 			AdminUsername: "superfive", AdminPasswordHash: "$2a$..."},
-		{DatabaseURL: "postgres://x", Timezone: "Asia/Singapore", AuthMode: config.AuthOIDC,
+		{DatabaseURL: "postgres://x", Timezone: "Asia/Singapore", SessionSecret: "0123456789abcdef", AuthMode: config.AuthOIDC,
 			AdminGoogleEmail: "s@zephyr.org.sg"},
 	} {
 		if err := c.Validate(); err != nil {
@@ -74,7 +74,7 @@ func TestValidateAcceptsCompleteConfig(t *testing.T) {
 
 func TestValidateRejectsBadInputs(t *testing.T) {
 	t.Parallel()
-	ok := config.Config{DatabaseURL: "postgres://x", Timezone: "UTC",
+	ok := config.Config{DatabaseURL: "postgres://x", Timezone: "UTC", SessionSecret: "0123456789abcdef",
 		AuthMode: config.AuthPassword, AdminUsername: "u", AdminPasswordHash: "h"}
 
 	noDSN := ok
@@ -94,5 +94,16 @@ func TestValidateRejectsBadInputs(t *testing.T) {
 	badMode.AuthMode = "magic"
 	if err := badMode.Validate(); err == nil {
 		t.Error("未知的认证模式应当被拒绝")
+	}
+}
+
+// 会话密钥太短等于没有：签出来的 cookie 可以被暴力伪造。
+func TestValidateRejectsWeakSessionSecret(t *testing.T) {
+	t.Parallel()
+	c := config.Config{DatabaseURL: "postgres://x", Timezone: "UTC",
+		AuthMode: config.AuthPassword, AdminUsername: "u", AdminPasswordHash: "h",
+		SessionSecret: "short"}
+	if err := c.Validate(); err == nil {
+		t.Error("过短的 SESSION_SECRET 应当被拒绝")
 	}
 }

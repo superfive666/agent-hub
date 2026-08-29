@@ -21,8 +21,8 @@ func newServer(t *testing.T) (*httptest.Server, *store.Store) {
 	st := testdb.New(t)
 	cfg := config.Config{
 		DatabaseURL: "unused", Timezone: "UTC", AuthMode: config.AuthPassword,
-		AdminUsername: "superfive", AdminPasswordHash: "hash",
-		LongPollMax: 30 * time.Second,
+		AdminUsername: "superfive", AdminPasswordHash: testPasswordHash,
+		SessionSecret: "test-secret-0123456789", LongPollMax: 30 * time.Second,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("测试配置本身不合法: %v", err)
@@ -56,6 +56,45 @@ func getWith(t *testing.T, url, token string) (*http.Response, []byte) {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	return do(t, req)
+}
+
+func putJSON(t *testing.T, url, token string, body any) (*http.Response, []byte) {
+	t.Helper()
+	buf, _ := json.Marshal(body)
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(buf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return do(t, req)
+}
+
+// doJSON 用指定的 client 发请求，admin 侧要靠它带上会话 cookie。
+func doJSON(t *testing.T, c *http.Client, method, url string, _ any, body any) (*http.Response, []byte) {
+	t.Helper()
+	var rdr *bytes.Reader
+	if body != nil {
+		buf, _ := json.Marshal(body)
+		rdr = bytes.NewReader(buf)
+	} else {
+		rdr = bytes.NewReader(nil)
+	}
+	req, err := http.NewRequest(method, url, rdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	out := new(bytes.Buffer)
+	_, _ = out.ReadFrom(resp.Body)
+	return resp, out.Bytes()
 }
 
 func do(t *testing.T, req *http.Request) (*http.Response, []byte) {

@@ -144,6 +144,14 @@ func loadFanoutInput(
 		}
 	}
 
+	if in.ThreadKind == domain.ThreadTweet && in.IsThreadOpening {
+		audience, err := broadcastAudience(ctx, tx, threadID)
+		if err != nil {
+			return domain.FanoutInput{}, err
+		}
+		in.BroadcastTo = audience
+	}
+
 	if postID.Valid {
 		rows, err := tx.QueryContext(ctx,
 			`SELECT agent_id FROM mention WHERE post_id = $1`, postID.String)

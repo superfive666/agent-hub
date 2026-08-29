@@ -53,6 +53,29 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/agent/threads/{threadID}/posts", s.requireAgent(s.handleAppendPost))
 	mux.HandleFunc("POST /api/agent/me/dead-letters", s.requireAgent(s.handleDeadLetter))
 
+	mux.HandleFunc("GET /api/agent/threads/{threadID}", s.requireAgent(s.handleReadThread))
+	mux.HandleFunc("PUT /api/agent/me/card", s.requireAgent(s.handleUpsertCard))
+	mux.HandleFunc("GET /api/agent/directory", s.requireAgent(s.handleDirectory))
+	mux.HandleFunc("POST /api/agent/tweets", s.requireAgent(s.handleCreateTweet))
+	mux.HandleFunc("POST /api/agent/todos/{threadID}/state", s.requireAgent(s.handleAgentTodoState))
+
+	// —— admin 侧 ——
+	mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
+	mux.HandleFunc("POST /api/admin/logout", s.handleAdminLogout)
+	mux.HandleFunc("GET /api/admin/me", s.requireAdmin(s.handleAdminMe))
+	mux.HandleFunc("GET /api/admin/agents", s.requireAdmin(s.handleListAgents))
+	mux.HandleFunc("POST /api/admin/agents", s.requireAdmin(s.handleCreateAgent))
+	mux.HandleFunc("POST /api/admin/agents/{agentID}/registration-token", s.requireAdmin(s.handleIssueToken))
+	mux.HandleFunc("DELETE /api/admin/agents/{agentID}/credentials", s.requireAdmin(s.handleRevokeCredentials))
+	mux.HandleFunc("GET /api/admin/todos", s.requireAdmin(s.handleListTodos))
+	mux.HandleFunc("POST /api/admin/todos", s.requireAdmin(s.handleCreateTodo))
+	mux.HandleFunc("POST /api/admin/todos/{threadID}/state", s.requireAdmin(s.handleAdminTodoState))
+	mux.HandleFunc("POST /api/admin/threads/{threadID}/posts", s.requireAdmin(s.handleAdminPost))
+	mux.HandleFunc("GET /api/admin/board", s.requireAdmin(s.handleBoard))
+	mux.HandleFunc("GET /api/admin/health", s.requireAdmin(s.handleHealth))
+	mux.HandleFunc("GET /api/admin/settings", s.requireAdmin(s.handleGetSettings))
+	mux.HandleFunc("PUT /api/admin/settings", s.requireAdmin(s.handlePutSettings))
+
 	return mux
 }
 

@@ -18,6 +18,10 @@ type FanoutInput struct {
 	Watchers []Watcher
 	// Actor 是这条 post 的作者。admin 发的留空。
 	Actor AgentID
+	// BroadcastTo 是广播的投递范围：不带标签时是全体已注册 agent，
+	// 带标签时是订阅了该标签的 agent。调用方过滤好再传进来。
+	// 只在 tweet 开篇时使用 —— 回复不再广播，只通知这个 thread 的参与者。
+	BroadcastTo []AgentID
 }
 
 // Delivery 是要写进某个 agent inbox 的一条事件。
@@ -76,7 +80,14 @@ func Fanout(in FanoutInput) []Delivery {
 		add(id, mentionKind)
 	}
 
-	// ③ 关注者。被 @ 只产生关注关系，不产生回复义务，所以这里是最低的一档。
+	// ③ 广播的投递范围。只有开篇才广播；回复只通知参与者，否则每条回复都刷全平台。
+	if in.ThreadKind == ThreadTweet && in.IsThreadOpening {
+		for _, id := range in.BroadcastTo {
+			add(id, EventTweetPublished)
+		}
+	}
+
+	// ④ 关注者。被 @ 只产生关注关系，不产生回复义务，所以这里是最低的一档。
 	replyKind := EventThreadReplied
 	if in.ThreadKind == ThreadTweet {
 		replyKind = EventTweetReplied
