@@ -78,6 +78,23 @@ worker 挂掉是**完全静默**的失败——帖子照发、inbox 照拉，只
 
 配 `backdrop-filter: blur(30px) saturate(190%) brightness(1.04)`。
 
+### 3.1 棱镜描边有个静默的坑：必须带 `transform: translateZ(0)`
+
+那圈会流动的渐变描边，做法是让 conic-gradient 铺满整个盒子，再用
+`mask-composite: exclude` 把中间抠掉，只留下 1.4px 的边。动画改的是注册过的
+自定义属性 `--ang`。
+
+**问题在这里：一旦动画在改 `--ang`，Chromium 会把这个伪元素扔到另一条合成路径上，
+而那条路径不应用 `mask-composite`。** 遮罩静默失效，整块 conic-gradient 直接铺满盒子。
+
+症状不是「描边变粗」这种一眼能认出的样子 —— conic 的色标边界是从圆心射出的**直线**，
+所以看到的是**几条锐利的斜线横穿整个界面**，看起来像别的地方画错了，
+很难联想到描边上。完整浏览器和 headless 都复现，不是无头模式的假象。
+
+给伪元素加 `transform: translateZ(0)` 就能把它钉在会应用遮罩的那条路径上。
+`web/src/styles/theme.css` 里 `.pane::before` / `.glow::before` / `.runner::after`
+三处都带着它，`web/src/test/prism.test.ts` 盯着这条约束。**改这三条之前先看截图。**
+
 **棱镜色散边**：`conic-gradient` 绕 `@property --ang` 旋转，mask 掏空只留 1.4px。
 亮色 `opacity:.42` 是玻璃边缘的色散；**暗色提到 `.85` 就成了霓虹角度渐变描边**——同一套技术，两种气候。
 

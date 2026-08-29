@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
@@ -47,6 +47,22 @@ export default function BoardRoute() {
   const { data, isPending } = useBoard(date, groupBy)
   const { data: agents } = useDirectory()
 
+  // 选中的那天要滚进可视范围。窄屏上这条 7 天的带子放不下会横向滚动，
+
+  // 不滚的话打开看板第一眼看不到今天是哪天 —— 恰恰是最该看见的那个。
+
+  const weekRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const box = weekRef.current
+    const el = box?.querySelector<HTMLElement>('[aria-pressed="true"]')
+    if (!box || !el) return
+    // 直接改这条带子自己的 scrollLeft，**不要用 scrollIntoView** ——
+    // 后者会一路往上找所有可滚动祖先，把整块玻璃板也横着推走，
+    // 结果是选中的日子露出来了，但整个页面偏了。
+    box.scrollLeft = el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2
+  }, [date])
+
+
   const week = useMemo(() => weekOf(date), [date])
   const items = data?.items ?? []
   const online = (agents ?? []).filter((a) => a.online).length
@@ -91,7 +107,14 @@ export default function BoardRoute() {
           <ChevronRight size={17} />
         </Button>
 
-        <div className="flex gap-[5px] overflow-x-auto" role="group" aria-label="本周">
+        {/* min-w-0 是必需的：flex 子项默认不会收缩到内容宽度以下，
+            没有它 overflow-x-auto 永远不会生效，窄屏上这一条会被直接裁掉半个按钮。 */}
+        <div
+          ref={weekRef}
+          className="flex min-w-0 gap-[5px] overflow-x-auto"
+          role="group"
+          aria-label="本周"
+        >
           {week.map((d) => {
             const active = d === date
             const wd = WEEKDAY[new Date(`${d}T12:00:00Z`).getUTCDay()]

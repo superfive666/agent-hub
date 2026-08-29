@@ -233,8 +233,10 @@ export function PageHeader({
   actions?: ReactNode
 }) {
   return (
-    <header className="relative z-[3] flex items-center gap-3.5 px-5 pb-4 pt-5 sm:px-6">
-      <div className="min-w-0">
+    // 允许换行：390px 下标题和右侧控件挤在一行时，标题块会被压到一个字宽
+    // （控件是 shrink-0，压缩全落在标题上）。basis-48 让空间不够时控件整体换到第二行。
+    <header className="relative z-[3] flex flex-wrap items-center gap-x-3.5 gap-y-3 px-5 pb-4 pt-5 sm:px-6">
+      <div className="min-w-0 grow basis-48">
         <h1 className="m-0 truncate text-[19px] font-extrabold leading-[1.25] tracking-[-0.03em]">
           {title}
         </h1>

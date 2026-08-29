@@ -164,12 +164,20 @@
     -webkit-backdrop-filter:blur(var(--blur)) saturate(190%) brightness(1.04);
     border:1px solid var(--pane-bd);box-shadow:var(--pane-sh);overflow:hidden}
   /* 棱镜色散边（亮色低调，暗色就是霓虹角度渐变描边） */
+  /* ⚠️ 下面三处「遮罩出一圈渐变描边」的写法都必须带 transform:translateZ(0)。
+     不带的话：动画在改注册过的自定义属性 --ang，Chromium 会把这个伪元素扔到另一条
+     合成路径上，而那条路径不应用 mask-composite —— 于是遮罩静默失效，
+     整块 conic-gradient 直接铺满盒子。conic 的色标边界是从圆心射出的直线，
+     所以症状是**几条锐利的斜线横穿整个界面**，不是「描边变粗」这种一眼能认出的样子。
+     translateZ(0) 把它固定在会应用遮罩的那条路径上。
+     完整浏览器和 headless 都复现，不是无头模式的假象。改这三条之前先看截图。 */
   .pane::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.4px;
     background:conic-gradient(from var(--ang),var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i1));
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     -webkit-mask-composite:xor;mask-composite:exclude;
-    opacity:var(--prism-op);animation:spin 16s linear infinite;pointer-events:none;z-index:2}
+    opacity:var(--prism-op);animation:spin 16s linear infinite;pointer-events:none;z-index:2;
+    transform:translateZ(0)}
   /* 高光扫过：液态感的来源 */
   .pane::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
     background:linear-gradient(126deg,transparent 30%,rgba(255,255,255,.85) 46%,transparent 58%);
@@ -260,16 +268,19 @@
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     -webkit-mask-composite:xor;mask-composite:exclude;
-    animation:spin 7s linear infinite;opacity:.9;pointer-events:none}
+    animation:spin 7s linear infinite;opacity:.9;pointer-events:none;transform:translateZ(0)}
   .runner::after{content:'';position:absolute;inset:-1px;border-radius:inherit;padding:1.6px;
     background:conic-gradient(from var(--ang),transparent 0 64%,var(--i1) 76%,#fff 82%,var(--i3) 88%,transparent 96%);
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     -webkit-mask-composite:xor;mask-composite:exclude;
-    animation:spin 3.6s linear infinite;pointer-events:none}
+    animation:spin 3.6s linear infinite;pointer-events:none;transform:translateZ(0)}
 
   /* ═══ 气泡：也是厚玻璃胶囊 ═══ */
-  .msg{display:flex;gap:12px;align-items:flex-end;max-width:76%;animation:rise .66s var(--ease) both}
+  .msg{display:flex;gap:12px;align-items:flex-end;max-width:90%;animation:rise .66s var(--ease) both}
+  /* 76% 是给宽栏用的。手机上正文列本来就只有 280 来点，再取 76% 会让气泡只剩 140px，
+     中文每行挤不下六七个字。窄屏放宽到 90%，宽屏才收回 76%。 */
+  @media (min-width:640px){.msg{max-width:76%}}
   .msg-me{margin-left:auto;flex-direction:row-reverse}
   .bub{padding:15px 20px;border-radius:var(--r-bub);font:500 13.5px/1.7 var(--ui);
     background:var(--pane-bg);color:var(--ink);border:1px solid var(--pane-bd);
