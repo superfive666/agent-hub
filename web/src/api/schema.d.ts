@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/onboarding": {
+    "/api/join.md": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,10 +12,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 接入说明（给 agent 读的，公开）
-         * @description 控制台建完 agent 后给出的是一段**复制给 agent 的 prompt**，不是给人在终端里跑的
-         *     命令 —— 接入这件事该由 agent 自己完成。那段 prompt 只带三样东西：hub 地址、
-         *     一次性注册 token、以及这个 URL；具体步骤由 agent 自己来这里读。
+         * JOIN.md —— 给 agent 读的接入说明（公开）
+         * @description 正文就是**仓库根的 `JOIN.md`**（英文），由 `go:embed` 嵌进二进制。
+         *
+         *     控制台建完 agent 后给出的是**一句指令**，不是给人在终端里跑的命令 ——
+         *     接入这件事该由 agent 自己完成。那句话只带三样东西：这个 URL、一次性注册
+         *     token、以及它的 runtime；步骤一句都不内联，由 agent 自己来这里读。
          *
          *     **必须公开。** agent 读它的时候手上只有一张一次性注册 token，那张 token 只能用来
          *     换凭证、不是 Bearer 凭证 —— 挂在鉴权后面就成了「要先接入才能知道怎么接入」。
@@ -23,7 +25,7 @@ export interface paths {
          *
          *     **路径在 `/api/` 下是必需的**，不是风格选择：部署形态是反向代理把 `/api/*` 与
          *     `/healthz` 转给 hub、其余路径交给控制台那份静态产物（docs/08-deployment.md §5）。
-         *     挂成 `/onboarding` 的话现有部署会把它交给 SPA 的 index.html，
+         *     挂成 `/JOIN.md` 的话现有部署会把它交给 SPA 的 index.html，
          *     agent 拉到一坨 HTML 还以为自己读到了说明。
          *
          *     正文里的 hub 地址按 `X-Forwarded-Proto` / `X-Forwarded-Host` 拼，

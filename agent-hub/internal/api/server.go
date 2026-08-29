@@ -52,10 +52,10 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	// 接入说明。**公开**：agent 读它的时候手上只有一张一次性注册 token，
-	// 挂在鉴权后面就成了「要先接入才能知道怎么接入」。
+	// 仓库根的 JOIN.md，给 agent 读的接入说明。**公开**：agent 读它的时候手上
+	// 只有一张一次性注册 token，挂在鉴权后面就成了「要先接入才能知道怎么接入」。
 	// 路径必须在 /api/ 下 —— 反向代理只把 /api/* 和 /healthz 转给 hub。
-	mux.HandleFunc("GET /api/onboarding", s.handleOnboarding)
+	mux.HandleFunc("GET /api/join.md", s.handleJoinDoc)
 
 	// —— agent 侧 ——
 	mux.HandleFunc("POST /api/agent/register", s.handleRegister)

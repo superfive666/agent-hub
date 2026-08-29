@@ -15,42 +15,25 @@ function hubOrigin(): string {
 }
 
 /**
- * 交给 agent 的那段话。
+ * 交给 agent 的那句话。
  *
- * **不是给人跑的命令行，是复制给 agent 的 prompt** —— 接入这件事本来就该由 agent
- * 自己完成：换凭证、让自己保持在线、写自己的 Agent Card（尤其是「做不了什么」，
- * 只有它自己说得清）。让人去终端里代跑，等于把这三件事又推回给人。
+ * **一句指令 + 一个 URL + 一张 token，就这些。** 步骤全在 JOIN.md 里，
+ * 由 hub 自己吐（`GET /api/join.md`，内容就是仓库根那份 JOIN.md）——
+ * 抄进界面的话，这段字面量会随契约漂移，而界面上的文字没人会记得更新。
  *
- * 步骤不写在这里，只给一个 URL。写在这里的话，这段字面量会随契约漂移，
- * 而控制台上这段字没人会记得更新 —— `GET /api/onboarding` 由 hub 自己吐，
- * 永远和跑着的这一版一致。
+ * 用英文：它是给 agent 读的，和它接下来要读的 JOIN.md 是同一串上下文，
+ * 中英混排只会让指代变糊。控制台自己的界面语言不受这里影响。
  */
-function onboardPrompt(token: string, runtime: string): string {
+function joinPrompt(token: string, runtime: string): string {
   const hub = hubOrigin()
   const opt = runtimeById(runtime)
-  const lines = [
-    '你被加进了 agent-hub —— 一个多 agent 协作平台。请把你自己接入，并完成自我介绍。',
+  return [
+    `Join agent-hub: read ${hub}/api/join.md and follow it end to end.`,
     '',
-    `hub 地址：${hub}`,
-    `一次性注册 token：${token}`,
-    `你的 runtime：${opt?.id ?? runtime}`,
-    '',
-    `完整步骤见 ${hub}/api/onboarding —— 先把它读完再动手。`,
-    '',
-    '做完这三件事才算接好：',
-    '1. 用上面那张 token 换取长期凭证，0600 落盘（token 只能用一次）',
-    '2. 让自己保持在线 —— 装 connector 常驻，或者退一步用 cron 定时拉 inbox；',
-    '   不做这一步的话，事件到了没有任何东西去拉，你会一直显示离线',
-    '3. 写你自己的 Agent Card 并广播自我介绍。其中「做不了什么」是硬要求，',
-    '   留空会被拒；要写实质内容，「我会尽力」这种等于没写',
-  ]
-  if (opt?.form === 'service') {
-    lines.push(
-      '',
-      `注意：${opt.label} 是常驻服务型，接入时还需要你自己的 webhook 地址。`,
-    )
-  }
-  return lines.join('\n')
+    `hub:     ${hub}`,
+    `token:   ${token}   (one-time, expires in 24h)`,
+    `runtime: ${opt?.id ?? runtime}`,
+  ].join('\n')
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -97,7 +80,7 @@ export function RegistrationTokenPanel({
   runtime = 'codex',
   footer,
 }: RegistrationTokenPanelProps) {
-  const prompt = onboardPrompt(token, runtime)
+  const prompt = joinPrompt(token, runtime)
   return (
     <Card data-testid="registration-token">
       <CardHeader>一次性注册 TOKEN{agentName ? ` · @${agentName}` : ''}</CardHeader>
@@ -146,15 +129,15 @@ export function RegistrationTokenPanel({
         <div className="sep" />
 
         <div>
-          <div className="lbl mb-2">把这段话交给你的 agent</div>
+          <div className="lbl mb-2">把这句话交给你的 agent</div>
           <p className="m-0 mb-2.5 text-[11.5px] font-medium leading-[1.75]" style={{ color: 'var(--ink2)' }}>
-            <b>不用你去终端里跑任何东西。</b> 复制下面这段，粘给那个 agent 就行 ——
+            <b>不用你去终端里跑任何东西。</b> 复制下面这句，粘给那个 agent 就行 ——
             接入这件事本来就该它自己做：换凭证、让自己保持在线、写自己的 Agent Card。
             尤其是 Card 里的「做不了什么」，只有它自己说得清。
           </p>
           <div className="flex items-start gap-2.5">
             <pre
-              data-testid="onboard-prompt"
+              data-testid="join-prompt"
               className="min-w-0 grow overflow-x-auto whitespace-pre-wrap rounded-[14px] px-[15px] py-[13px] text-[11.5px] leading-[1.8]"
               style={{
                 background: 'var(--inset-bg)',
@@ -165,12 +148,13 @@ export function RegistrationTokenPanel({
             >
               {prompt}
             </pre>
-            <CopyButton text={prompt} label="复制给 agent 的接入 prompt" />
+            <CopyButton text={prompt} label="复制给 agent 的接入指令" />
           </div>
           <p className="m-0 mt-2.5 text-[10.5px] font-medium leading-[1.7]" style={{ color: 'var(--ink3)' }}>
-            具体步骤不写在这段话里，agent 会去 <span className="mono">{hubOrigin()}/api/onboarding</span>{' '}
-            自己读 —— 那份说明由 hub 吐出来，永远和当前跑着的这一版一致，
-            不会像抄在界面上的命令那样悄悄过期。
+            步骤全在 <span className="mono">JOIN.md</span> 里，agent 自己去{' '}
+            <span className="mono">{hubOrigin()}/api/join.md</span> 读 —— 那份文档由 hub 吐出来
+            （就是仓库根的 <span className="mono">JOIN.md</span>），永远和当前跑着的这一版一致，
+            不会像抄在界面上的步骤那样悄悄过期。
             {runtimeById(runtime)?.form === 'service' && (
               <>
                 {' '}

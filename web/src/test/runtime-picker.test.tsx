@@ -28,7 +28,7 @@ function stub() {
 async function createAgent(name = 'orin') {
   await userEvent.type(await screen.findByLabelText(/名称/), name)
   await userEvent.click(screen.getByRole('button', { name: /创建/ }))
-  return screen.findByTestId('onboard-prompt')
+  return screen.findByTestId('join-prompt')
 }
 
 describe('runtime 选择器', () => {
@@ -56,8 +56,8 @@ describe('runtime 选择器', () => {
     expect(within(picker).getByTestId('runtime-claude-code')).toHaveAttribute('aria-checked', 'true')
 
     const p = await createAgent()
-    expect(p).toHaveTextContent('你的 runtime：claude-code')
-    expect(p).not.toHaveTextContent('runtime：codex')
+    expect(p).toHaveTextContent('runtime: claude-code')
+    expect(p).not.toHaveTextContent('runtime: codex')
   })
 
   it('用的是全称 claude-code，不是产品名 claude —— 照着它去查文档才对得上', async () => {
@@ -78,14 +78,10 @@ describe('runtime 选择器', () => {
     )
 
     const p = await createAgent()
-    expect(p).toHaveTextContent('你的 runtime：codex')
+    expect(p).toHaveTextContent('runtime: codex')
   })
 
-  /**
-   * 常驻服务型还需要 agent 那边的 webhook 地址，缺了接不完。
-   * agent 得在动手之前就知道这件事，而不是走到一半卡住。
-   */
-  it('选常驻服务型时 prompt 里点名还需要 webhook 地址', async () => {
+  it('选常驻服务型时 runtime 也照实写进指令', async () => {
     stub()
     renderApp('/directory/new')
 
@@ -95,29 +91,28 @@ describe('runtime 选择器', () => {
     expect(await screen.findByTestId('runtime-hint')).toHaveTextContent('常驻服务')
 
     const p = await createAgent()
-    expect(p).toHaveTextContent('你的 runtime：hermes')
-    expect(p).toHaveTextContent('webhook 地址')
+    expect(p).toHaveTextContent('runtime: hermes')
   })
 
   /**
-   * 这段话是复制给 agent 的，不是给人在终端里跑的 —— 接入该由 agent 自己完成。
-   * 它里面不该出现「你去 clone 一下、你去执行一下」这类要人代劳的命令行。
+   * 给的是**一句指令**，不是一段说明书，更不是给人在终端里跑的命令行：
+   * 一条 read-and-follow、hub、token、runtime，就这些。步骤全在 JOIN.md 里，
+   * 抄进界面的话那段字面量会随契约漂移，而界面上的文字没人会记得更新。
    */
-  it('给出的是 prompt 不是命令行：带 hub 地址、token 和说明 URL，让 agent 自己去读', async () => {
+  it('是一句指令：只带 JOIN.md 的 URL、token 和 runtime，步骤一句都不内联', async () => {
     stub()
     renderApp('/directory/new')
     const p = await createAgent()
     const text = p.textContent ?? ''
 
+    expect(text).toMatch(/\/api\/join\.md/)
     expect(text).toContain('ahr_test_9f8e7d6c')
-    expect(text).toMatch(/\/api\/onboarding/)
-    // 三件事都要交代到，尤其是「保持在线」—— 少了它 agent 注册完就没人拉 inbox
-    expect(text).toContain('长期凭证')
-    expect(text).toContain('保持在线')
-    expect(text).toContain('Agent Card')
-    // 步骤不内联在这段话里，是让 agent 去 URL 读的
+    // 短：五行以内，不是一段说明书
+    expect(text.trim().split('\n').length).toBeLessThanOrEqual(5)
+    // 步骤一句都不许内联
     expect(text).not.toContain('curl')
     expect(text).not.toContain('git clone')
+    expect(text).not.toContain('limitations')
   })
 
   it('方向键能在选项间走 —— radiogroup 是一个控件，不是七个 Tab 停靠点', async () => {

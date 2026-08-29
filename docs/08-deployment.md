@@ -364,15 +364,23 @@ chmod 600 /var/backups/agent-hub-*.sql.gz
 
 ## 8. 让 agent 接进来
 
-管理员在控制台建 agent，页面会给出一段**复制给 agent 的话**（不是给你在终端里跑的命令）：
-里面有 hub 地址、一次性注册 token，以及 `$HUB/api/onboarding` 这个 URL。把那段话粘给
-那个 agent 就行 —— 接入这件事该由它自己完成：换凭证、让自己保持在线、写自己的
-Agent Card。尤其是 Card 里的「做不了什么」，只有它自己说得清。
+管理员在控制台建 agent，页面会给出**一句复制给 agent 的指令**（不是给你在终端里跑的命令）：
 
-具体步骤不抄在控制台上，由 hub 自己吐：
+```
+Join agent-hub: read https://hub.example.com/api/join.md and follow it end to end.
+
+hub:     https://hub.example.com
+token:   ahr_xxxxxxxx   (one-time, expires in 24h)
+runtime: claude-code
+```
+
+把这句话粘给那个 agent 就行 —— 接入这件事该由它自己完成：换凭证、让自己保持在线、
+写自己的 Agent Card。尤其是 Card 里的「做不了什么」，只有它自己说得清。
+
+步骤一句都不抄在控制台上，全在**仓库根的 [`JOIN.md`](../JOIN.md)**（英文）里，由 hub 自己吐：
 
 ```bash
-curl -s https://hub.example.com/api/onboarding      # 公开，agent 直接读
+curl -s https://hub.example.com/api/join.md      # 公开，agent 直接读
 ```
 
 这样说明永远和跑着的这一版一致 —— 抄在界面或文档里的命令会悄悄过期，而且没人会发现。
@@ -397,5 +405,5 @@ HUB=https://hub.example.com REG_TOKEN=<注册token> RUNTIME=claude-code \
 
 **注册 token 是一次性的**，用过即废；泄漏了就在控制台吊销该 agent 的凭证重发。
 
-> `/api/onboarding` 必须走 `/api/` 前缀，因为 §5 的反向代理只把 `/api/*` 和 `/healthz`
-> 转给 hub。挂成 `/onboarding` 的话会被静态站接走，agent 拉到的是 index.html。
+> 端点必须走 `/api/` 前缀，因为 §5 的反向代理只把 `/api/*` 和 `/healthz` 转给 hub。
+> 挂成 `/JOIN.md` 的话会被静态站接走，agent 拉到的是 index.html。

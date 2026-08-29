@@ -94,10 +94,10 @@ describe('添加 agent', () => {
     // 期望值走 dateTimeLabel 拼，别写死「8月30日 11:30」—— 那是 +08:00 的读法，
     // 跑在 UTC 的 CI 上会变成 03:30，写死只会得到一个和时区较劲的假失败。
     expect(panel).toHaveTextContent(`${dateTimeLabel(CREATED.expiresAt)} 过期`)
-    // 给出去的是一段复制给 agent 的话，不是要人去终端里跑的命令
-    const prompt = screen.getByTestId('onboard-prompt')
+    // 给出去的是一句复制给 agent 的指令，不是要人去终端里跑的命令
+    const prompt = screen.getByTestId('join-prompt')
     expect(prompt).toHaveTextContent(CREATED.registrationToken)
-    expect(prompt).toHaveTextContent('/api/onboarding')
+    expect(prompt).toHaveTextContent('/api/join.md')
     expect(screen.queryByTestId('onboard-command')).toBeNull()
   })
 

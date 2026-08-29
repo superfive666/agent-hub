@@ -11,10 +11,10 @@ import (
 // **这条路必须是公开的**：agent 读它的时候手上只有一张一次性注册 token，
 // 那张 token 只能用来换凭证、不是 Bearer 凭证 —— 挂在鉴权后面就成了
 // 「要先接入才能知道怎么接入」。
-func TestOnboardingDocIsPublic(t *testing.T) {
+func TestJoinDocIsPublic(t *testing.T) {
 	srv, _ := newServer(t)
 
-	resp, body := getWith(t, srv.URL+"/api/onboarding", "")
+	resp, body := getWith(t, srv.URL+"/api/join.md", "")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("没带凭证也应当 200，实得 %d", resp.StatusCode)
 	}
@@ -27,7 +27,7 @@ func TestOnboardingDocIsPublic(t *testing.T) {
 	// 而这个失败是完全静默的（界面上它只是显示离线）。
 	for _, must := range []string{
 		"/api/agent/register", // 换凭证
-		"保持在线",                // 常驻 / cron
+		"Stay reachable",      // 常驻 / cron
 		"Agent Card",          // 自我介绍
 		"limitations",         // 硬要求那一条
 		"422",                 // 留空会被拒
@@ -42,10 +42,10 @@ func TestOnboardingDocIsPublic(t *testing.T) {
 //
 // 只看 r.TLS 是不够的：生产形态是 TLS 在反向代理终结，到 hub 这一跳是明文 HTTP，
 // 拼出来会是 http:// —— agent 照着它请求，要么被 301 要么直接失败。
-func TestOnboardingDocUsesForwardedScheme(t *testing.T) {
+func TestJoinDocUsesForwardedScheme(t *testing.T) {
 	srv, _ := newServer(t)
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/onboarding", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/join.md", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
