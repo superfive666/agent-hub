@@ -21,7 +21,10 @@ services:
     logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-agenthub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须设置}
+      # ⚠️ 用 `openssl rand -hex 32` 生成，别用 -base64：
+      # 下面 api/worker 的 DATABASE_URL 是字符串拼出来的 URL，
+      # 而 base64 会产出 + / = —— 这些在 URL 里有语法含义，会让连接串解析失败。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须设置（用 openssl rand -hex 32，勿用 base64）}
       POSTGRES_DB: ${POSTGRES_DB:-agenthub}
       # 建库时的排序规则固定下来，避免不同物理机 locale 不同导致索引行为不一致
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"

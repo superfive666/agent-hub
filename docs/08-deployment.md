@@ -47,10 +47,16 @@ chmod 600 .env
 会话密钥（至少 16 字符，`Validate()` 会拦）：
 
 ```bash
-echo "SESSION_SECRET=$(openssl rand -base64 48 | tr -d '\n')" >> /dev/null   # 先看一眼
-openssl rand -base64 48        # 复制结果填进 .env 的 SESSION_SECRET
-openssl rand -base64 32        # 再生成一个填 POSTGRES_PASSWORD
+openssl rand -base64 48        # 填 SESSION_SECRET
+openssl rand -hex 32           # 填 POSTGRES_PASSWORD
 ```
+
+⚠️ **`POSTGRES_PASSWORD` 用 `-hex`，不要用 `-base64`。**
+compose 是用字符串拼接组 `DATABASE_URL` 的（`postgres://user:PASSWORD@host/db`），
+而 base64 会产出 `+` `/` `=` —— 这些在 URL 里有语法含义，密码里带上之后连接串**解析不了**，
+报的错还是 `invalid port`，跟密码八竿子打不着。hex 只有 `0-9a-f`，没有这个问题。
+
+`SESSION_SECRET` 不进 URL，用 base64 没关系。
 
 管理员口令的 bcrypt 哈希 —— **填哈希，不是明文**：
 
@@ -96,6 +102,61 @@ GOOGLE_OIDC_REDIRECT_URI=https://hub.example.com/api/admin/auth/google/callback
 结果是**谁都进不去** —— 和「谁都能进」一样是没有可用管理员，启动时会被拦下。
 两种模式互斥，配了 oidc 之后口令登录一律 401。
 </details>
+
+### DATABASE_URL 的格式
+
+驱动是 pgx（走 `database/sql`），两种写法都认：
+
+```ini
+# URL 形式 —— compose 默认用这种
+DATABASE_URL=postgres://agenthub:PASSWORD@127.0.0.1:5432/agenthub?sslmode=disable
+
+# 键值形式 —— 密码里有特殊字符时用这种，不用编码，省心
+DATABASE_URL=host=127.0.0.1 port=5432 user=agenthub password=a+b/c=d dbname=agenthub sslmode=disable
+```
+
+URL 形式里密码含 `+` `/` `=` `@` `:` `?` `#` 必须百分号编码（`+`→`%2B`，`/`→`%2F`，`=`→`%3D`），
+否则**连接串解析就失败**，而且报的错跟密码没关系（形如 `invalid port`），很容易查错方向。
+
+`sslmode` 常用取值：同机 `disable`；跨机至少 `require`；要校验证书用 `verify-full` 并配 `sslrootcert=`。
+
+### 用你自己已有的 postgres（不用 compose 里那个）
+
+**这时 §3 的自动建表不会发生** —— 那是 postgres 官方镜像的 initdb 机制，只对 compose 起的那个容器生效。
+你得自己建库、建角色、灌 DDL：
+
+```bash
+sudo -u postgres psql <<'SQL'
+CREATE ROLE agenthub LOGIN PASSWORD '换成你的密码';
+CREATE DATABASE agenthub OWNER agenthub;
+SQL
+
+# 按文件名顺序灌，ON_ERROR_STOP 保证中途出错立刻停，不留半个库
+cd /opt/agent-hub
+for f in docs/schema/*.sql; do
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -d agenthub -f "$f" || break
+done
+
+# 验一下：应当是 18
+sudo -u postgres psql -d agenthub -tAc \
+  "select count(*) from information_schema.tables where table_schema='public';"
+```
+
+要求 **PostgreSQL 13+**（用到 `gen_random_uuid()`，13 起进了内核，不用装 pgcrypto）。
+实测在 16 上跑通。
+
+⚠️ **`001_init.sql` 不能重复执行**，第二次会报 `relation "agent" already exists`。
+它是建库脚本不是迁移脚本 —— 灌之前先确认这是个空库。
+
+然后在 `.env` 里指向它，并且**把 compose 里的 postgres 停掉**，别让两个库同时在：
+
+```ini
+DATABASE_URL=postgres://agenthub:PASSWORD@172.17.0.1:5432/agenthub?sslmode=disable
+```
+
+容器里的 `127.0.0.1` 是容器自己，**不是宿主机**。从容器连宿主机上的 postgres 要用
+`172.17.0.1`（docker0 网关）或 `host.docker.internal`，并确认 postgres 的
+`listen_addresses` 和 `pg_hba.conf` 放行了这个来源。
 
 **`PLATFORM_TIMEZONE` 决定看板按什么切分「一天」。** 上线后再改会重新划分历史日期的归属，
 所以现在就定好。
