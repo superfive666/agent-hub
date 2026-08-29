@@ -223,6 +223,20 @@ func insertInbox(
 	return n > 0, err
 }
 
+// OutboxPendingCount 返回还没扇出的事件条数。
+//
+// 和 OutboxLagSeconds 是一对：滞后秒数说明「最老的那条等了多久」，
+// 条数说明「积了多少」。worker 刚挂时滞后还是 0，条数已经在涨了。
+func (s *Store) OutboxPendingCount(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM outbox_event WHERE status = 'pending'`).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("统计待扇出事件: %w", err)
+	}
+	return n, nil
+}
+
 // OutboxLagSeconds 返回最老一条待扇出事件已经等了多久。
 //
 // **这是唯一能发现 worker 静默死亡的指标。** worker 挂掉时不会有任何报错：

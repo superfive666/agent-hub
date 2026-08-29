@@ -326,20 +326,46 @@ func (s *Server) board(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleHealth 是控制台唯一的运行状态探针，契约见 openapi.yaml 的 /api/admin/health。
+//
+// **五个字段必须全部返回，一个都不能省。** 前端对缺失字段的兜底是「读不到就当坏了」
+// （`data.workerAlive ?? false`），这个语义本身是对的 —— 探针读不到就该报警，
+// 不能因为字段缺失而显示「一切正常」。代价是：这里少返回一个字段，
+// 控制台就会**永远**挂着一条假告警，而底下的 worker 其实活得好好的。
+// 假告警和漏告警一样坏：第三次「又是误报」之后，就没人再看这条横幅了。
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	lag, err := s.store.OutboxLagSeconds(r.Context())
+	ctx := r.Context()
+	lag, err := s.store.OutboxLagSeconds(ctx)
 	if err != nil {
+		s.log.Error("查 outbox 滞后失败", "err", err)
 		writeErr(w, ErrInternal)
 		return
 	}
-	dead, err := s.store.DeadLetterCount(r.Context())
+	pending, err := s.store.OutboxPendingCount(ctx)
 	if err != nil {
+		s.log.Error("统计待扇出事件失败", "err", err)
+		writeErr(w, ErrInternal)
+		return
+	}
+	dead, err := s.store.DeadLetterCount(ctx)
+	if err != nil {
+		s.log.Error("统计死信失败", "err", err)
+		writeErr(w, ErrInternal)
+		return
+	}
+	// worker 的存活判据是它那把 advisory lock 还在不在，见 store.WorkerAlive。
+	alive, err := s.store.WorkerAlive(ctx)
+	if err != nil {
+		s.log.Error("查 worker 存活失败", "err", err)
 		writeErr(w, ErrInternal)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"outboxLagSeconds": lag,
+		"outboxPending":    pending,
 		"outboxDead":       dead,
+		"workerAlive":      alive,
+		"pendingLongPolls": s.inFlightPolls.Load(),
 	})
 }
 

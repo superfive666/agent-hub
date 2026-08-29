@@ -164,6 +164,18 @@
   @keyframes weather{0%{transform:translate3d(0,0,0) scale(1) rotate(0deg)}
     100%{transform:translate3d(3%,-2.5%,0) scale(1.1) rotate(4deg)}}
 
+  /* <640px（§4：底部 tab 取代侧栏）：舞台改成竖排。
+     这一条不是"手机上顺便收窄一点"，它是底部 tab 条能不重叠的**前提** ——
+     竖排之后 tab 条是舞台的正常 flex 子项，和主板之间隔着舞台自己的 gap，
+     左右也共用舞台的内边距，两块玻璃板对得齐。
+     舞台内边距一并收窄：38px 是给宽屏留的，390px 上它要吃掉两成宽度。
+     底部内边距吃 safe-area-inset-bottom（§4）—— 手势条会画在布局之上，
+     现在最底下的元素是 tab 条，所以安全区由舞台来让。 */
+  @media (max-width:639px){
+    .app{flex-direction:column;padding:16px;gap:12px;
+      padding-bottom:max(16px,env(safe-area-inset-bottom))}
+  }
+
   /* ═══ 厚玻璃板：边缘有厚度，不是一张半透明纸 ═══ */
   .pane{position:relative;min-height:0;border-radius:var(--r-pane);background:var(--pane-bg);
     backdrop-filter:blur(var(--blur)) saturate(190%) brightness(1.04);

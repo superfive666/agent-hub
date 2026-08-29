@@ -115,8 +115,13 @@ export default function ThreadRoute() {
           )}
         </Inset>
 
+        {/* 右详情栏。640–1023 时它「下沉」到消息流下面（§4）。
+            竖排时**不能带 shrink-0**：它的自然高度是三张卡片加起来（近 1000px），
+            不许收缩就会把外面这条 flex 撑破 —— 溢出的部分正好压在下面的输入区上，
+            看起来像输入框透进了「进度」卡片。min-h-0 + max-h 把它框住，
+            内容多了在自己板子里滚。≥1024 并排时才轮到固定宽度、不收缩。 */}
         {thread && (
-          <Inset className="hidden shrink-0 flex-col gap-[13px] overflow-y-auto p-[18px] sm:flex lg:w-[292px]">
+          <Inset className="hidden min-h-0 max-h-[42%] flex-col gap-[13px] overflow-y-auto p-[18px] sm:flex lg:max-h-none lg:w-[292px] lg:shrink-0">
             {/* 流光只给主 agent 卡片（§1.3） */}
             <Card className="glow runner">
               <CardHeader>主 AGENT · 必须响应</CardHeader>

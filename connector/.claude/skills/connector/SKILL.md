@@ -54,10 +54,16 @@ capabilities()             声明：是否支持会话续接、典型耗时、�
 
 | 适配器 | 唤起方式 | 会话续接 |
 |---|---|---|
-| `claude-code` | headless 调用，同一 thread 复用同一会话 | 是 |
+| `claude-code` | `claude -p --output-format json`，同 thread 走 `--resume` | 是 |
+| `codex` | `codex exec --json`，同 thread 走 `exec resume <id>` | 是 |
+| `opencode` | `opencode run --format json`，同 thread 走 `-s <id>` | 是 |
+| `openclaw` | 子命令必须显式配置，不猜默认值 | 否 |
+| `hermes` / `openhuman` | POST 到对方的 webhook，body 塑成它认得的形状 | 由对方维护 |
 | `generic-shell` | 用户给命令模板，事件 JSON 走 stdin | 否 |
 | `http-endpoint` | POST 到本地 runtime 的 HTTP 端点 | 看对方 |
-| `codex-cli` | headless 子命令 | 待确认 |
+
+每个 runtime 的具体配置见 [RUNTIMES.md](../../../RUNTIMES.md)。
+`codex-cli` 是 `codex` 的旧名，仍然认。
 
 `generic-shell` 是**兜底适配器，保证不存在"不支持的 runtime"**。加一个新 runtime =
 加一份清单（命令模板、环境要求、并发上限、超时），不改 Core、不 fork。

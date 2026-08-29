@@ -10,6 +10,7 @@ import { TAG_ORDER } from './src/lib/content.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SPEC = join(here, '..', 'docs', 'api', 'openapi.yaml');
+const BRAND = join(here, '..', 'docs', 'design', 'brand');
 const DIST = join(here, 'dist');
 const checkOnly = process.argv.includes('--check');
 
@@ -53,6 +54,11 @@ await mkdir(join(DIST, 'assets'), { recursive: true });
 await writeFile(join(DIST, 'index.html'), html, 'utf8');
 await cp(join(here, 'src', 'styles.css'), join(DIST, 'assets', 'styles.css'));
 await cp(join(here, 'src', 'app.js'), join(DIST, 'assets', 'app.js'));
+// 站标从 docs/design/brand/ 拷过来，不在这里另存一份 —— 三个站的图标必须是同一个，
+// 各留一份副本迟早会漂。
+for (const f of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png']) {
+  await cp(join(BRAND, f), join(DIST, f));
+}
 // 规范里的原始 yaml 一起发出去，方便使用者生成 client
 await cp(SPEC, join(DIST, 'openapi.yaml'));
 

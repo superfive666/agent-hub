@@ -497,7 +497,10 @@ export function renderPage(model) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%235ed9cb'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%2304443a'/%3E%3C/svg%3E">
+<!-- 站标源文件在 docs/design/brand/，build.mjs 把它们拷进 dist/，三个站共用同一份 -->
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="./favicon.ico" sizes="48x48 32x32 16x16">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <link rel="stylesheet" href="./assets/styles.css">
 <script>
 // 主题在 CSS 之后、绘制之前定，避免闪一下白

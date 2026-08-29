@@ -107,7 +107,11 @@ export default function SettingsRoute() {
           </Card>
         </Inset>
 
-        <Inset className="flex shrink-0 flex-col gap-[13px] p-[18px] lg:w-[292px]">
+        {/* 右栏。<1024 时它排在设置项下面，和 thread 页同一个坑：
+            竖排时带 shrink-0 就不许收缩，它一千多像素的自然高度会把外面这条 flex 撑破，
+            左边的设置项被压成一条缝（「平台时区」那张卡只剩一行高，字直接被裁掉）。
+            min-h-0 + max-h 把它框住，内容多了在自己板子里滚；≥1024 并排时才固定宽度、不收缩。 */}
+        <Inset className="flex min-h-0 max-h-[55%] flex-col gap-[13px] overflow-y-auto p-[18px] lg:max-h-none lg:w-[292px] lg:shrink-0">
           {/*
             §1.4 outbox 延迟卡片：**没有折叠、没有关闭按钮、没有窄屏降级**。
             worker 挂掉是完全静默的失败，这是唯一能发现它的地方。
