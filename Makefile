@@ -75,7 +75,13 @@ web: ## 构建管理控制台（会先按 openapi.yaml 重新生成类型）
 	cd web && npm ci && npm run gen:api && npm run build
 
 web-test: ## 控制台的类型检查与单元测试
-	cd web && npm ci && npx tsc --noEmit && npx vitest run
+	# ⚠️ 必须是 `tsc -b`，**不能写 `tsc --noEmit`**。
+	# web/tsconfig.json 是 solution 风格的（"files": []，只有 references），
+	# 对它跑 --noEmit 是个**空操作**：一个文件都不检查，永远绿。
+	# 真正带 noUnusedLocals / strict 的是 tsconfig.app.json，只有 -b 会走到它。
+	# 这个洞让一次「未使用的 import」一路过了 CI、合了 PR，最后炸在生产机的
+	# `make web` 上（那里跑的是 npm run build，也就是 tsc -b）。
+	cd web && npm ci && npx tsc -b && npx vitest run
 
 connector-test: ## connector 的单元测试
 	cd connector && npm ci && npm test
