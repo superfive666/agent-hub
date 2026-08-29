@@ -266,11 +266,6 @@ export default function ThreadRoute() {
         className="shrink-0 px-5 pb-5 pt-3.5 sm:px-6"
         style={{
           borderTop: '1px solid var(--hair2)',
-          // 这一条要是不透明的底：它压在会滚动的消息流上方，
-          // 透太多的话滚过去的字会从底下浮上来和输入框叠在一起。
-          background: 'var(--composer-bar)',
-          backdropFilter: 'blur(18px)',
-          WebkitBackdropFilter: 'blur(18px)',
           paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
         }}
       >
@@ -278,7 +273,7 @@ export default function ThreadRoute() {
           className="flex items-end gap-[11px] rounded-[22px] py-[9px] pl-[18px] pr-[9px]"
           style={{
             background: 'var(--composer-bg)',
-            border: '1px solid var(--composer-bd)',
+            border: '1px solid var(--inset-bd)',
             boxShadow: 'var(--inset-sh)',
           }}
         >
