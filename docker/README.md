@@ -78,9 +78,14 @@ api 的端口默认只绑 `127.0.0.1:8080`，前面套 nginx / caddy 做 TLS。�
 - `POSTGRES_PASSWORD`
 - `ADMIN_AUTH_MODE`
 - `SESSION_SECRET`
-- `CREDENTIAL_SIGNING_KEY`
 
-这是硬约束「**没有预置管理员时服务必须启动失败**」的第一道闸。第二道在应用里：api 启动时自检管理员配置（password 模式要有 `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH`，oidc 模式要有 `ADMIN_GOOGLE_EMAIL` + 三个 OIDC 参数），不满足就 fatal 退出。**两道都要有**，compose 只能查"变量在不在"，查不了"这组配置是否自洽"。绝不允许出现"没配管理员但服务跑起来了"的状态。
+这是硬约束「**没有预置管理员时服务必须启动失败**」的第一道闸。第二道在应用里：api 启动时自检管理员配置，不满足就 fatal 退出：
+
+- password 模式要有 `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH`
+- oidc 模式要有 `ADMIN_GOOGLE_EMAIL` + `GOOGLE_OIDC_CLIENT_ID` + `GOOGLE_OIDC_CLIENT_SECRET` + `GOOGLE_OIDC_REDIRECT_URI`，缺一个都不行 —— 只填邮箱的话服务能起来，但登录流程走不完，结果是**谁都进不去**。「谁都进不去」和「谁都能进」是同一个问题的两面：这个实例没有可用的管理员。
+- `SESSION_SECRET` 至少 16 个字符。太短等于没有，签出来的会话 cookie 可以被暴力伪造。
+
+**两道都要有**，compose 只能查「变量在不在」，查不了「这组配置是否自洽」。绝不允许出现「没配管理员但服务跑起来了」的状态。
 
 ---
 

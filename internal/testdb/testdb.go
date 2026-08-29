@@ -40,10 +40,19 @@ func New(t *testing.T) *store.Store {
 		s.Close()
 		t.Fatalf("取独占连接: %v", err)
 	}
+	// 给取锁加超时，把「无限挂住」换成「一条能看懂的失败」。
+	// 最常见的踩法是**同一个用例里调了两次 New** —— 第一把锁要到用例结束才放，
+	// 第二次就永远等下去，go test 只会在十分钟后超时，什么线索都不给。
+	if _, err := conn.ExecContext(ctx, `SET lock_timeout = '60s'`); err != nil {
+		conn.Close()
+		s.Close()
+		t.Fatalf("设置锁超时: %v", err)
+	}
 	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, serialLockID); err != nil {
 		conn.Close()
 		s.Close()
-		t.Fatalf("获取测试库独占锁: %v", err)
+		t.Fatalf("获取测试库独占锁失败（一个用例只能调一次 testdb.New；"+
+			"要两个 server 就共用同一个 *store.Store）: %v", err)
 	}
 	t.Cleanup(func() {
 		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock($1)`, serialLockID)

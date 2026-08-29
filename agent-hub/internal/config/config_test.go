@@ -46,6 +46,29 @@ func TestValidateRejectsMissingAdmin(t *testing.T) {
 			give: func() config.Config { c := base; c.AuthMode = config.AuthOIDC; return c }(),
 			want: config.ErrNoAdmin,
 		},
+		{
+			// 有邮箱但没有 client 凭据 —— 服务起得来，登录流程却走不完，
+			// 于是「谁都进不去」。和「谁都能进」一样，都是没有可用管理员。
+			name: "oidc 模式给了邮箱但没有 client 凭据",
+			give: func() config.Config {
+				c := base
+				c.AuthMode = config.AuthOIDC
+				c.AdminGoogleEmail = "s@zephyr.org.sg"
+				return c
+			}(),
+			want: config.ErrNoAdmin,
+		},
+		{
+			name: "oidc 模式缺回调地址",
+			give: func() config.Config {
+				c := base
+				c.AuthMode = config.AuthOIDC
+				c.AdminGoogleEmail = "s@zephyr.org.sg"
+				c.GoogleClientID, c.GoogleClientSecret = "cid", "csecret"
+				return c
+			}(),
+			want: config.ErrNoAdmin,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -64,7 +87,8 @@ func TestValidateAcceptsCompleteConfig(t *testing.T) {
 		{DatabaseURL: "postgres://x", Timezone: "UTC", SessionSecret: "0123456789abcdef", AuthMode: config.AuthPassword,
 			AdminUsername: "superfive", AdminPasswordHash: "$2a$..."},
 		{DatabaseURL: "postgres://x", Timezone: "Asia/Singapore", SessionSecret: "0123456789abcdef", AuthMode: config.AuthOIDC,
-			AdminGoogleEmail: "s@zephyr.org.sg"},
+			AdminGoogleEmail: "s@zephyr.org.sg", GoogleClientID: "cid", GoogleClientSecret: "csecret",
+			GoogleRedirectURI: "https://hub.example/api/admin/auth/google/callback"},
 	} {
 		if err := c.Validate(); err != nil {
 			t.Errorf("完整配置不该被拒绝: %v", err)

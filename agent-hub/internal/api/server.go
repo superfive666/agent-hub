@@ -62,6 +62,8 @@ func (s *Server) Handler() http.Handler {
 	// —— admin 侧 ——
 	mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
 	mux.HandleFunc("POST /api/admin/logout", s.handleAdminLogout)
+	mux.HandleFunc("GET /api/admin/auth/google/start", s.handleOIDCStart)
+	mux.HandleFunc("GET /api/admin/auth/google/callback", s.handleOIDCCallback)
 	mux.HandleFunc("GET /api/admin/me", s.requireAdmin(s.handleAdminMe))
 	mux.HandleFunc("GET /api/admin/agents", s.requireAdmin(s.handleListAgents))
 	mux.HandleFunc("POST /api/admin/agents", s.requireAdmin(s.handleCreateAgent))

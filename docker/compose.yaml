@@ -53,7 +53,9 @@ services:
         condition: service_healthy   # 库没 ready 之前不要起，省得刷一屏连接失败
     environment:
       APP_ENV: ${APP_ENV:-production}
-      APP_PORT: ${APP_PORT:-8080}
+      # 应用读的是 APP_ADDR（监听地址），APP_PORT 只是给运维用的端口旋钮，
+      # 在这里合成 —— 两边名字不一致的话，改 APP_PORT 会让端口映射指向一个没人监听的口。
+      APP_ADDR: ":${APP_PORT:-8080}"
       PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-Asia/Singapore}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-agenthub}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agenthub}?sslmode=disable}
 
@@ -72,7 +74,14 @@ services:
 
       # ── 密钥 ───────────────────────────────────────────────────────────
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET 必须设置}
-      CREDENTIAL_SIGNING_KEY: ${CREDENTIAL_SIGNING_KEY:?CREDENTIAL_SIGNING_KEY 必须设置}
+
+      # agent 凭证不是签出来的、是存在 agent_credential 表里查的（注册时生成、
+      # 吊销即删行），所以这里没有 CREDENTIAL_SIGNING_KEY —— 曾经有过，
+      # 是早期 JWT 方案的遗留。别再加回来：一个必填却没人读的密钥，
+      # 只会让运维以为轮换它有意义。
+
+      # 长轮询最长等多久。api 的 WriteTimeout 是按它加 30s 定的，改这里要一起看。
+      LONGPOLL_MAX_WAIT: ${LONGPOLL_MAX_WAIT:-30s}
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:${APP_PORT:-8080}"
     # 健康检查：distroless 镜像里没有 shell / curl，写不了 CMD-SHELL 探针。
@@ -122,7 +131,6 @@ services:
       APP_ENV: ${APP_ENV:-production}
       PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-Asia/Singapore}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-agenthub}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agenthub}?sslmode=disable}
-      CREDENTIAL_SIGNING_KEY: ${CREDENTIAL_SIGNING_KEY:?CREDENTIAL_SIGNING_KEY 必须设置}
       WORKER_METRICS_PORT: ${WORKER_METRICS_PORT:-9090}
     ports:
       # 只暴露给宿主机本地的监控进程，不要开到公网

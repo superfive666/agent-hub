@@ -20,6 +20,18 @@ import (
 
 const sessionCookie = "hub_session"
 
+// adminSubject 是会话里那个唯一管理员的标识。
+//
+// 两种模式下身份的载体不同：口令模式是用户名，OIDC 模式是那个预置的 Google 邮箱。
+// 会话签名和校验都必须用同一个值，否则 OIDC 登完立刻就会被自己的 requireAdmin 拒掉
+// （AdminUsername 在 OIDC 模式下是空的）。
+func (s *Server) adminSubject() string {
+	if s.cfg.AuthMode == config.AuthOIDC {
+		return s.cfg.AdminGoogleEmail
+	}
+	return s.cfg.AdminUsername
+}
+
 // requireAdmin 校验会话 cookie。
 //
 // 这个平台只有一个管理员，凭据在部署时预置。**不在预置名单里的账号根本进不来** ——
@@ -64,7 +76,7 @@ func (s *Server) validSession(v string) bool {
 		return false
 	}
 	fields := strings.SplitN(string(payload), "|", 2)
-	if len(fields) != 2 || fields[0] != s.cfg.AdminUsername {
+	if len(fields) != 2 || subtle.ConstantTimeCompare([]byte(fields[0]), []byte(s.adminSubject())) != 1 {
 		return false
 	}
 	exp, err := strconv.ParseInt(fields[1], 10, 64)
@@ -92,11 +104,11 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 
 	exp := time.Now().Add(12 * time.Hour)
 	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookie, Value: s.signSession(s.cfg.AdminUsername, exp),
+		Name: sessionCookie, Value: s.signSession(s.adminSubject(), exp),
 		Path: "/", Expires: exp, HttpOnly: true, SameSite: http.SameSiteLaxMode,
 		Secure: r.TLS != nil,
 	})
-	s.store.Audit(r.Context(), s.cfg.AdminUsername, "login", "", nil)
+	s.store.Audit(r.Context(), s.adminSubject(), "login", "", map[string]any{"mode": "password"})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -107,7 +119,7 @@ func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAdminMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
-		"username": s.cfg.AdminUsername, "authMode": string(s.cfg.AuthMode), "timezone": s.cfg.Timezone,
+		"username": s.adminSubject(), "authMode": string(s.cfg.AuthMode), "timezone": s.cfg.Timezone,
 	})
 }
 

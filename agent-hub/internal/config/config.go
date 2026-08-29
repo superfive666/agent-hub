@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+// Google 的 OIDC 端点。写死默认值，配置里一般不用出现。
+const (
+	DefaultGoogleAuthURL     = "https://accounts.google.com/o/oauth2/v2/auth"
+	DefaultGoogleTokenURL    = "https://oauth2.googleapis.com/token"
+	DefaultGoogleUserinfoURL = "https://openidconnect.googleapis.com/v1/userinfo"
+)
+
 // AuthMode 是管理员的认证方式，二选一，部署时定死。
 type AuthMode string
 
@@ -27,6 +34,17 @@ type Config struct {
 	AdminUsername     string
 	AdminPasswordHash string
 	AdminGoogleEmail  string
+
+	// Google OIDC。只在 AuthMode == AuthOIDC 时有意义。
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURI  string
+
+	// 三个 Google 端点做成可配置，是为了让测试能指向一个假的授权服务器。
+	// 生产不要动这三个 —— 指到别处等于把管理员会话交给别人签发。
+	GoogleAuthURL     string
+	GoogleTokenURL    string
+	GoogleUserinfoURL string
 
 	SessionSecret string
 	LongPollMax   time.Duration
@@ -49,6 +67,14 @@ func Load() (Config, error) {
 		AdminUsername:     os.Getenv("ADMIN_USERNAME"),
 		AdminPasswordHash: os.Getenv("ADMIN_PASSWORD_HASH"),
 		AdminGoogleEmail:  os.Getenv("ADMIN_GOOGLE_EMAIL"),
+
+		GoogleClientID:     os.Getenv("GOOGLE_OIDC_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_OIDC_CLIENT_SECRET"),
+		GoogleRedirectURI:  os.Getenv("GOOGLE_OIDC_REDIRECT_URI"),
+
+		GoogleAuthURL:     envStr("GOOGLE_OIDC_AUTH_URL", DefaultGoogleAuthURL),
+		GoogleTokenURL:    envStr("GOOGLE_OIDC_TOKEN_URL", DefaultGoogleTokenURL),
+		GoogleUserinfoURL: envStr("GOOGLE_OIDC_USERINFO_URL", DefaultGoogleUserinfoURL),
 
 		SessionSecret: os.Getenv("SESSION_SECRET"),
 		LongPollMax:   envDuration("LONGPOLL_MAX_WAIT", 30*time.Second),
@@ -83,6 +109,12 @@ func (c Config) Validate() error {
 	case AuthOIDC:
 		if c.AdminGoogleEmail == "" {
 			return fmt.Errorf("%w: oidc 模式需要 ADMIN_GOOGLE_EMAIL", ErrNoAdmin)
+		}
+		// 光有邮箱不够：没有 client 凭据和回调地址，登录流程根本走不完，
+		// 服务会「起得来但没人进得去」。那是最糟的一种状态 —— 看起来正常，
+		// 实际上没有任何人能管理这个实例。所以在启动时就拦下来。
+		if c.GoogleClientID == "" || c.GoogleClientSecret == "" || c.GoogleRedirectURI == "" {
+			return fmt.Errorf("%w: oidc 模式还需要 GOOGLE_OIDC_CLIENT_ID / GOOGLE_OIDC_CLIENT_SECRET / GOOGLE_OIDC_REDIRECT_URI", ErrNoAdmin)
 		}
 	default:
 		return fmt.Errorf("ADMIN_AUTH_MODE 只能是 password 或 oidc，得到 %q", c.AuthMode)

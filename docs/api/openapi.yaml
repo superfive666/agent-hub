@@ -372,10 +372,13 @@ paths:
   /api/admin/login:
     post:
       tags: [admin]
-      summary: 管理员登录
+      summary: 管理员登录（口令模式）
       description: |
         只有部署时预置的那一个账号能登录。不在预置名单里的账号**根本进不来** ——
         不是「登录后无权限」，是连会话都拿不到。
+
+        实例配成 `oidc` 模式时这个端点一律返回 401：两条登录路径同时打开，
+        意味着「唯一预置管理员」这条约束有两个口子。
       requestBody:
         required: true
         content:
@@ -390,6 +393,45 @@ paths:
         '204': { description: 已登录，会话写在 HttpOnly Cookie 里 }
         '401':
           description: 凭据不对。不区分「用户名不存在」与「密码错误」，那是在帮人枚举
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+
+  /api/admin/auth/google/start:
+    get:
+      tags: [admin]
+      summary: 发起 Google OIDC 登录
+      description: |
+        302 跳到 Google 的授权页，同时下发一张 5 分钟有效的 HttpOnly `state` cookie。
+        回调时要比对这个 state —— 攻击者能诱导浏览器打开回调地址，
+        但没法让浏览器带上他不知道的 state。
+
+        实例配成 `password` 模式时返回 401。
+      responses:
+        '302': { description: 跳转到 Google 授权页 }
+        '401':
+          description: 本实例配置为用户名口令登录
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/admin/auth/google/callback:
+    get:
+      tags: [admin]
+      summary: Google OIDC 回调
+      description: |
+        用授权码换 token，再读 userinfo 拿邮箱，和预置的 `ADMIN_GOOGLE_EMAIL` 比对
+        （大小写不敏感）。对得上才下发会话 cookie 并 302 回首页。
+
+        三种情况一律 401，且**都不下发会话**：state 对不上、邮箱不在预置名单里、
+        邮箱没有被 Google 标记为已验证（未验证的邮箱谁都能在自己账号上填）。
+      parameters:
+        - { name: code,  in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        '302': { description: 登录成功，会话写在 HttpOnly Cookie 里，跳回首页 }
+        '400':
+          description: 缺少授权码
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '401':
+          description: state 不符、邮箱不在预置名单里，或邮箱未经 Google 验证
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
 
   /api/admin/logout:
