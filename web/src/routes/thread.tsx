@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import type { Post } from '@/api/client'
-import { Check, ListTree, Send, ShieldCheck } from 'lucide-react'
+import { Check, Send, ShieldCheck } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody, CardHeader } from '@/components/ui/card'
@@ -473,7 +473,10 @@ function EmptyGuide({ noAgents }: { noAgents: boolean }) {
 function ConfirmGateCard({ act }: { act: ReturnType<typeof useTodoAction> }) {
   return (
     <Card data-testid="confirm-gate">
-      <CardHeader>需求确认 · 等你放行</CardHeader>
+      {/* 标题走 GATE_LABEL，和进度条上那个节点是同一个常量 ——
+          两处叫法不一致的话，用户看到的是「进度条卡在某一步」和
+          「一张不知道对应哪一步的卡片」，而不是同一件事的两个视图。 */}
+      <CardHeader>{GATE_LABEL} · 等你放行</CardHeader>
       <CardBody className="gap-3">
         <p
           className="m-0 text-[11.5px] font-medium leading-[1.75]"

@@ -21,7 +21,7 @@ VERSION ?= dev
 .DEFAULT_GOAL := help
 
 .PHONY: help dev-db dev-db-down schema test test-db lint build docker-build docker-up docker-down \
-        web web-test connector-test api-docs verify
+        backend web web-test connector-test api-docs verify
 
 help: ## 列出所有目标
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -68,14 +68,29 @@ docker-build: ## 构建 api / worker 镜像（构建上下文是仓库根）
 docker-up: ## 生产编排起全套（api / worker / postgres），需要根目录有 .env
 	$(COMPOSE) -f $(PROD_COMPOSE) --env-file .env up -d --build
 
+# `--no-deps` 是这条命令的重点，不是可选项。
+# compose.yaml 里 api / worker 都 `depends_on: postgres (service_healthy)`，
+# 所以不带它的话，即使你只写了 `up api worker`，compose 也会把编排里那个
+# postgres 一并拉起来 —— 用外部库的部署会因此多出一个空库跟真库并存，
+# 而且 api/worker 要先等这个空库健康检查通过才肯启动。
+# 用编排自带 postgres 的部署请用 `make docker-up`，那条会连库一起管。
+backend: ## 只重建 api / worker 两个容器（用外部 postgres 的部署走这个，不要用 docker-up）
+	$(COMPOSE) -f $(PROD_COMPOSE) --env-file .env up -d --build --no-deps api worker
+
 docker-down: ## 停掉生产编排（数据卷保留；加 CLEAN=1 才删数据）
 	$(COMPOSE) -f $(PROD_COMPOSE) --env-file .env down $(if $(CLEAN),-v,)
 
 web: ## 构建管理控制台（会先按 openapi.yaml 重新生成类型）
 	cd web && npm ci && npm run gen:api && npm run build
 
+# ⚠️ 必须是 `tsc -b`，**不能写 `tsc --noEmit`**。
+# web/tsconfig.json 是 solution 风格的（"files": []，只有 references），
+# 对它跑 --noEmit 是个**空操作**：一个文件都不检查，永远绿。
+# 真正带 noUnusedLocals / strict 的是 tsconfig.app.json，只有 -b 会走到它。
+# 这个洞让一次「未使用的 import」一路过了自查、合了 PR，最后炸在生产机的
+# `make web` 上（那里跑的是 npm run build，也就是 tsc -b）。
 web-test: ## 控制台的类型检查与单元测试
-	cd web && npm ci && npx tsc --noEmit && npx vitest run
+	cd web && npm ci && npx tsc -b && npx vitest run
 
 connector-test: ## connector 的单元测试
 	cd connector && npm ci && npm test

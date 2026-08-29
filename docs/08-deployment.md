@@ -320,9 +320,23 @@ docker compose -f docker/compose.yaml --env-file .env exec -T postgres \
 
 ```bash
 cd /opt/agent-hub && git pull
-make docker-up                      # 重新构建并滚动起来
-cd web && npm ci && npm run build   # 控制台
+make backend        # 只重建 api / worker（用外部 postgres 的部署走这条）
+make web            # 控制台：重新生成类型 + 构建，产物仍在 web/dist
 ```
+
+用**编排自带的那个 postgres** 的话，后端那步改用 `make docker-up`——它会连库一起管。
+`make backend` 带的 `--no-deps` 正是为了不去碰库：api / worker 都 `depends_on` postgres，
+不加这个参数的话，就算你只点名 api worker，compose 也会把编排里那个 postgres 拉起来，
+于是一个空库跟你真正的库并存，服务还要先等它健康检查通过才肯启动。
+
+⚠️ **控制台不在 compose 里**，是一份静态产物由反向代理托管。只重建容器不重建它，
+前端的改动一个都不会生效——而且界面还是旧的，新增的按钮你根本看不到。
+反向代理指向的是同一个 `web/dist`，所以不用 reload，但浏览器要强刷一次。
+
+⚠️ **不要用 `sudo` 跑 `make web`**。那会留下 root 属主的 `node_modules/` 和 `web/dist/`，
+下次不带 sudo 就 EACCES，只能一直 sudo 下去；npm 以 root 身份还会执行第三方包的
+install 钩子。仓库属主不对就先 `sudo chown -R "$USER":"$USER" /opt/agent-hub`
+——根因通常是某次 `sudo git pull`。
 
 ### 备份
 
