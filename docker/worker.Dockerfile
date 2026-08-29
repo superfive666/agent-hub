@@ -7,7 +7,7 @@
 # 表达，进程自身还会取 pg_advisory_lock 兜底，防止部署时新旧实例重叠那几秒。
 
 # ---------- 构建阶段 ----------
-FROM golang:1.24-alpine AS build
+FROM golang:1.26-alpine AS build
 
 WORKDIR /src
 

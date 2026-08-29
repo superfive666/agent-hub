@@ -5,7 +5,7 @@
 # 因为 internal/ 是两个 Go 服务共用的库（ADR-0007），构建时必须能看到根 go.mod 和 internal/。
 
 # ---------- 构建阶段 ----------
-FROM golang:1.24-alpine AS build
+FROM golang:1.26-alpine AS build
 
 WORKDIR /src
 
