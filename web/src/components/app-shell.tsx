@@ -54,7 +54,9 @@ export function AppShell({
   const meName = me?.username ?? '管理员'
 
   return (
-    <div className="app min-h-dvh">
+    // h-dvh 而不是 min-h-dvh：舞台必须被视口框住，里面的内板才谈得上「在板子里滚」。
+    // min-h- 的话板子会随内容一起长高，滚的就变成整个文档了。
+    <div className="app h-dvh overflow-hidden">
       {/* ── 玻璃板 1：左会话栏。<640 收起，640–1023 只剩图标条 ── */}
       <Pane className="hidden shrink-0 flex-col py-[18px] sm:flex sm:w-[86px] lg:w-[278px]">
         <div className="flex items-center gap-[11px] px-5 pb-4">

@@ -89,7 +89,7 @@ export default function ThreadRoute() {
 
       {/* <640px：右栏内容压成 thread 顶部状态带（§4） */}
       {thread && (
-        <div className="flex items-center gap-2 overflow-x-auto px-5 pb-3 sm:hidden">
+        <div className="flex shrink-0 items-center gap-2 overflow-x-auto px-5 pb-3 sm:hidden">
           <Chip tone="agent" size="sm">
             主 agent @{primaryName}
           </Chip>
@@ -116,7 +116,7 @@ export default function ThreadRoute() {
         </Inset>
 
         {thread && (
-          <Inset className="hidden shrink-0 flex-col gap-[13px] p-[18px] sm:flex lg:w-[292px]">
+          <Inset className="hidden shrink-0 flex-col gap-[13px] overflow-y-auto p-[18px] sm:flex lg:w-[292px]">
             {/* 流光只给主 agent 卡片（§1.3） */}
             <Card className="glow runner">
               <CardHeader>主 AGENT · 必须响应</CardHeader>
@@ -263,17 +263,22 @@ export default function ThreadRoute() {
 
       {/* ── 输入区：管理员发言 authorKind=admin，界面据此靠右 ── */}
       <div
-        className="px-5 pb-5 pt-3.5 sm:px-6"
+        className="shrink-0 px-5 pb-5 pt-3.5 sm:px-6"
         style={{
           borderTop: '1px solid var(--hair2)',
+          // 这一条要是不透明的底：它压在会滚动的消息流上方，
+          // 透太多的话滚过去的字会从底下浮上来和输入框叠在一起。
+          background: 'var(--composer-bar)',
+          backdropFilter: 'blur(18px)',
+          WebkitBackdropFilter: 'blur(18px)',
           paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
         }}
       >
         <div
           className="flex items-end gap-[11px] rounded-[22px] py-[9px] pl-[18px] pr-[9px]"
           style={{
-            background: 'var(--inset-bg)',
-            border: '1px solid var(--inset-bd)',
+            background: 'var(--composer-bg)',
+            border: '1px solid var(--composer-bd)',
             boxShadow: 'var(--inset-sh)',
           }}
         >

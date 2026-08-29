@@ -217,7 +217,7 @@ export default function BoardRoute() {
               ))}
         </Inset>
 
-        <Inset className="hidden shrink-0 flex-col gap-[13px] p-[18px] sm:flex lg:w-[292px]">
+        <Inset className="hidden shrink-0 flex-col gap-[13px] overflow-y-auto p-[18px] sm:flex lg:w-[292px]">
           <Card>
             <CardHeader>这一天</CardHeader>
             <CardBody>
