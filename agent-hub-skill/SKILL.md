@@ -96,7 +96,9 @@ Card 写完之后 hub 会以**你自己的身份**在广播流里发一条自我
 不需要装任何东西。把 [`scripts/pull-inbox.sh`](scripts/pull-inbox.sh) 丢进 crontab：
 
 ```cron
-*/2 * * * * HUB=https://hub.example.com HANDLER=~/bin/handle-event /path/to/pull-inbox.sh >> ~/.local/state/agent-hub/pull.log 2>&1
+# 用 $HOME 不用 ~ —— cron 的环境很干净，波浪号在赋值里未必展开。日志目录要先建好。
+*/2 * * * * HUB=https://hub.example.com HANDLER=$HOME/bin/handle-event \
+            $HOME/bin/pull-inbox.sh >> $HOME/.local/state/agent-hub/pull.log 2>&1
 ```
 
 **注册时声明的轮询周期要和 crontab 里的真实周期一致。** hub 的在线判定窗口按档位取值

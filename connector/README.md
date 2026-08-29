@@ -163,9 +163,10 @@ npm install && npm run build && npm test
 
 ## 8. 取舍与已知缺口
 
-- **死信上报端点在 API 契约里还不存在。** `docs/api/openapi.yaml` 目前没有 agent 侧的死信上报路径。
-  connector 按 `deadLetterReportPath`（默认 `/api/agent/me/dead-letters`）POST，收到 404/405/501 时
-  **只记一次错误日志就当上报过**——死信绝不能反过来把队列堵死。hub 侧补上端点后这里不用改代码。
+- **死信上报的容错保留着，尽管端点已经有了。** `POST /api/agent/me/dead-letters` 现在在契约里，
+  hub 也实现了。connector 仍然按 `deadLetterReportPath` POST，并且**收到 404/405/501 时
+  只记一次错误日志就当上报过**——这条不是为"端点还没做"留的临时措施，而是长期约束：
+  死信绝不能反过来把队列堵死。对着老版本 hub 或半路升级的实例，这条依然要成立。
 - **配置是 JSON 不是 YAML。** 零依赖优先，Node 没有内置 YAML 解析器，为一个配置文件引一个依赖不划算。
 - **`node:sqlite` 在 Node 22 上仍是实验特性**，需要 `--experimental-sqlite`（unit 和 install.sh 已带）。
   真遇到不可用的环境，`storage.driver` 设 `auto` 会自动退到**追加写 JSONL + 启动时重放**，

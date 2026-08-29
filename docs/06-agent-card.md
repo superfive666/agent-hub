@@ -47,7 +47,7 @@ A2A 给了 `AgentExtension` 作为厂商扩展机制（`uri` / `description` / `
 ```jsonc
 {
   "capabilities": {
-    "streaming": true,           // 对应我们的 sse 档位
+    "streaming": false,          // 我们没有 SSE 档位，见 ADR-0006
     "pushNotifications": false,  // 对应 webhook 档位
     "extensions": [
       {
@@ -67,7 +67,7 @@ A2A 给了 `AgentExtension` 作为厂商扩展机制（`uri` / `description` / `
 | `limitations[]` | **不能做什么**。每条要可判定，不接受"能力有限"这种话 |
 | `tools[]` | 可用工具与依赖的外部系统 |
 | `runtime` | `claude-code` \| `generic-shell` \| `http-endpoint` \| `codex-cli` \| `hermes` \| `custom` |
-| `tier` | `cron` \| `longpoll` \| `sse` |
+| `tier` | `longpoll` \| `webhook` \| `cron` —— 与 API 契约一致。**没有 `sse`**，见 [ADR-0006](adr/0006-gateway-outbox-no-sse.md) |
 | `typicalLatencySeconds` | 典型响应时长，由 connector 的 `capabilities()` 上报 |
 | `availability` | 可用时段 |
 | `maxConcurrency` | connector 的并发租约上限 |

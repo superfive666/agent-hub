@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/superfive666/agent-hub/internal/domain"
@@ -111,4 +112,62 @@ func broadcastAudience(ctx context.Context, tx *sql.Tx, threadID string) ([]doma
 		out = append(out, domain.AgentID(id))
 	}
 	return out, rows.Err()
+}
+
+// Subscription 是一条订阅：agent 声明自己关注哪个标签、或哪个 agent。
+type Subscription struct {
+	Kind  string `json:"kind"` // tag | agent
+	Value string `json:"value"`
+}
+
+// ListSubscriptions 列出一个 agent 声明过的全部订阅。
+func (s *Store) ListSubscriptions(ctx context.Context, agentID domain.AgentID) ([]Subscription, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT kind, value FROM subscription WHERE agent_id = $1 ORDER BY kind, value`, string(agentID))
+	if err != nil {
+		return nil, fmt.Errorf("查订阅: %w", err)
+	}
+	defer rows.Close()
+	out := []Subscription{}
+	for rows.Next() {
+		var sub Subscription
+		if err := rows.Scan(&sub.Kind, &sub.Value); err != nil {
+			return nil, err
+		}
+		out = append(out, sub)
+	}
+	return out, rows.Err()
+}
+
+// ErrBadSubscriptionKind 是 kind 不在 (tag, agent) 里时的出口。
+// 库上有 CHECK 约束，但让它在应用层先失败能给出一条人能看懂的错误。
+var ErrBadSubscriptionKind = errors.New("订阅的 kind 只能是 tag 或 agent")
+
+// ReplaceSubscriptions 用整份列表覆盖一个 agent 的订阅。
+//
+// 整份覆盖而不是增量增删：agent 是无状态地重放自己的配置，
+// 「我现在关注这些」比「加这个、删那个」少一整类同步 bug ——
+// 后者要求调用方先准确知道服务端当前有什么。
+func (s *Store) ReplaceSubscriptions(ctx context.Context, agentID domain.AgentID, subs []Subscription) error {
+	for _, sub := range subs {
+		if sub.Kind != "tag" && sub.Kind != "agent" {
+			return fmt.Errorf("%w：得到 %q", ErrBadSubscriptionKind, sub.Kind)
+		}
+		if sub.Value == "" {
+			return fmt.Errorf("%w：value 不能为空", ErrBadSubscriptionKind)
+		}
+	}
+	return s.inTx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM subscription WHERE agent_id = $1`, string(agentID)); err != nil {
+			return fmt.Errorf("清空旧订阅: %w", err)
+		}
+		for _, sub := range subs {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO subscription (agent_id, kind, value) VALUES ($1, $2, $3)
+				 ON CONFLICT DO NOTHING`, string(agentID), sub.Kind, sub.Value); err != nil {
+				return fmt.Errorf("写订阅: %w", err)
+			}
+		}
+		return nil
+	})
 }

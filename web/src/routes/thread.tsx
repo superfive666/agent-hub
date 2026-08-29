@@ -11,15 +11,12 @@ import { AppShell, PageHeader } from '@/components/app-shell'
 import { MessageRow } from '@/components/message-row'
 import { OutboxBanner } from '@/components/outbox-banner'
 import {
-  USE_MOCKS,
-  qk,
   useCreatePost,
   useDirectory,
   useThread,
   useTodoAction,
   useTodos,
 } from '@/api/queries'
-import { useInboxStream } from '@/hooks/useInboxStream'
 import {
   dateTimeLabel,
   dayLabel,
@@ -39,19 +36,6 @@ export default function ThreadRoute() {
   const [draft, setDraft] = useState('')
   const post = useCreatePost(threadId)
   const act = useTodoAction(threadId)
-
-  /**
-   * 长轮询接上：收到事件就让这条 thread 和列表失效，由 TanStack Query 重新拉。
-   * 通知只负责快 —— 就算这一路全丢了，下次拉取仍然是对的（ADR-0001）。
-   */
-  useInboxStream({
-    // mock 模式下没有后端可长轮询，别让它空转重试
-    enabled: !!threadId && !USE_MOCKS,
-    invalidateKeys: useMemo(
-      () => (threadId ? [qk.thread(threadId), qk.todos(), qk.health] : [qk.todos()]),
-      [threadId],
-    ) as unknown as readonly unknown[][],
-  })
 
   const primaryId = thread?.primaryAgentId
   const primaryWatcher = thread?.watchers?.find((w) => w.reason === 'primary')

@@ -10,8 +10,8 @@ function stub() {
     'GET /api/admin/me': () => json(ADMIN),
     'GET /api/admin/todos': () => json({ todos: mockTodos }),
     'GET /api/admin/health': () => json(HEALTHY),
-    'GET /api/agent/directory': () => json({ agents: mockDirectory }),
-    'GET /api/agent/threads/th-0142': () => json(thread),
+    'GET /api/admin/directory': () => json({ agents: mockDirectory }),
+    'GET /api/admin/threads/th-0142': () => json(thread),
   })
 }
 
@@ -29,7 +29,7 @@ describe('对话页（真数据）', () => {
     expect(container.querySelectorAll('.inset').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('把 GET /api/agent/threads/{id} 的每条 post 渲染成一行，人和 agent 分列两侧', async () => {
+  it('把 GET /api/admin/threads/{id} 的每条 post 渲染成一行，人和 agent 分列两侧', async () => {
     const calls = stub()
     renderApp('/threads/th-0142')
     const rows = await screen.findAllByTestId('message-row')
@@ -41,7 +41,7 @@ describe('对话页（真数据）', () => {
     expect(rows.every((r) => (r.dataset.human === 'true') === r.classList.contains('msg-me'))).toBe(
       true,
     )
-    expect(calls.some((c) => c.path === '/api/agent/threads/th-0142')).toBe(true)
+    expect(calls.some((c) => c.path === '/api/admin/threads/th-0142')).toBe(true)
   })
 
   it('流光只出现在主 agent 卡片与当前会话上（§1.3）', async () => {
@@ -56,14 +56,12 @@ describe('对话页（真数据）', () => {
     expect(container.querySelectorAll('.pane.glow, .pane.runner').length).toBe(0)
   })
 
-  it('长轮询接上了：页面挂起一个带 ?after= 的 inbox 请求', async () => {
+  // 控制台不是一个 agent，不该去打 agent 侧的 inbox 长轮询：
+  // 那条路要 Bearer 凭证，带会话 cookie 过去只会一直 401 并空转重试。
+  it('控制台不碰 agent 侧的 inbox 长轮询', async () => {
     const calls = stub()
     renderApp('/threads/th-0142')
     await screen.findByRole('heading', { name: thread.title })
-    await waitFor(() =>
-      expect(calls.some((c) => c.path === '/api/agent/me/inbox' && c.search.includes('after='))).toBe(
-        true,
-      ),
-    )
+    expect(calls.some((c) => c.path.startsWith('/api/agent/'))).toBe(false)
   })
 })

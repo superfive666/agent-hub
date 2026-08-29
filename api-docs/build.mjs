@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadSpec, buildModel } from './src/lib/spec.mjs';
 import { renderPage } from './src/lib/render.mjs';
+import { TAG_ORDER } from './src/lib/content.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SPEC = join(here, '..', 'docs', 'api', 'openapi.yaml');
@@ -14,7 +15,7 @@ const checkOnly = process.argv.includes('--check');
 
 const t0 = performance.now();
 const loaded = loadSpec(SPEC);
-const model = buildModel(loaded);
+const model = buildModel(loaded, TAG_ORDER);
 
 for (const w of model.warnings) console.warn(`  ! ${w}`);
 

@@ -27,13 +27,6 @@ export function noContent(status = 204): Response {
   return new Response(null, { status })
 }
 
-/** 长轮询：挂着不返回，被 abort 时按 fetch 的语义抛出。 */
-function hang(signal?: AbortSignal | null): Promise<Response> {
-  return new Promise((_, reject) => {
-    signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
-  })
-}
-
 /**
  * 用 `'GET /api/admin/me'` 这样的 key 打桩。没打桩的路径一律 404，
  * 免得测试悄悄依赖真网络。inbox 长轮询默认挂着，不打扰断言。
@@ -41,18 +34,16 @@ function hang(signal?: AbortSignal | null): Promise<Response> {
 export function installFetch(routes: Record<string, Handler>): Call[] {
   const calls: Call[] = []
   const impl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    // openapi-fetch 传的是 Request 对象，useInboxStream 传的是字符串 —— 两种都要认
+    // openapi-fetch 传的是 Request 对象，裸 fetch 传的是字符串 —— 两种都要认
     const isRequest = typeof Request !== 'undefined' && input instanceof Request
     const href = isRequest ? input.url : String(input)
     const url = new URL(href, 'http://localhost')
     const method = (isRequest ? input.method : (init?.method ?? 'GET')).toUpperCase()
     const body = isRequest ? await input.clone().text() : (init?.body as string | undefined)
-    const signal = isRequest ? input.signal : init?.signal
     const credentials = isRequest ? input.credentials : init?.credentials
     calls.push({ method, path: url.pathname, search: url.search, body, credentials })
     const handler = routes[`${method} ${url.pathname}`] ?? routes[url.pathname]
     if (handler) return handler({ url, init: { ...init, method, body, credentials } })
-    if (url.pathname === '/api/agent/me/inbox') return hang(signal)
     return new Response(`no stub for ${method} ${url.pathname}`, { status: 404 })
   })
   vi.stubGlobal('fetch', impl)

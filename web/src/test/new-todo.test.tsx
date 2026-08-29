@@ -11,7 +11,7 @@ function stub() {
     'GET /api/admin/me': () => json(ADMIN),
     'GET /api/admin/todos': () => json({ todos: mockTodos }),
     'GET /api/admin/health': () => json(HEALTHY),
-    'GET /api/agent/directory': () => json({ agents: mockDirectory }),
+    'GET /api/admin/directory': () => json({ agents: mockDirectory }),
     'POST /api/admin/todos': () => json({ threadId: 'th-new', startedAt: '2026-08-28T10:00:00+08:00' }, 201),
   })
 }

@@ -409,3 +409,10 @@ table.fields td:first-child{white-space:nowrap}
 .mdlist{margin:0 0 12px;padding-left:20px;display:flex;flex-direction:column;gap:7px;color:var(--ink2)}
 .mdlist li{font:500 13.5px/1.7 var(--ui)}
 .mdlist li::marker{color:var(--ink3)}
+
+/* 端点上的补充说明 */
+.opnote{display:flex;gap:12px;align-items:flex-start;margin:14px 0 0;padding:14px 16px;
+  border-radius:14px;background:var(--agent-soft);border:1px solid transparent}
+.opnote-k{flex-shrink:0;font:800 10px/1 var(--ui);letter-spacing:.1em;padding:6px 10px;
+  border-radius:var(--r-pill);background:var(--chip-bg);color:var(--agent-ink)}
+.opnote p{margin:0;font:500 13px/1.7 var(--ui);color:var(--ink)}

@@ -95,7 +95,12 @@ type TodoRow struct {
 }
 
 // ListTodos 给控制台的 todo 列表。startedAt 取的是 thread 记录本身的日期。
-func (s *Store) ListTodos(ctx context.Context, status string) ([]TodoRow, error) {
+// ListTodos 查 todo 列表。status 与 primaryAgentID 都是可选过滤，空串表示不过滤。
+//
+// agent 侧「我的队列」和 admin 侧的列表共用这一个查询：队列就是
+// primaryAgentID 固定成调用者自己的那一份。两边分成两套 SQL 只会让
+// 「主 agent 看到的」和「管理员看到的」慢慢漂移。
+func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([]TodoRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT th.id, td.title, td.status, td.primary_agent_id, pa.name,
 		       st.last_pull_at, coalesce(c.tier,''),
@@ -113,9 +118,10 @@ func (s *Store) ListTodos(ctx context.Context, status string) ([]TodoRow, error)
 		LEFT JOIN thread_watcher tw ON tw.thread_id = th.id
 		LEFT JOIN agent wa ON wa.id = tw.agent_id
 		WHERE ($1 = '' OR td.status = $1)
+		  AND ($2 = '' OR td.primary_agent_id = $2::uuid)
 		GROUP BY th.id, td.title, td.status, td.primary_agent_id, pa.name,
 		         st.last_pull_at, c.tier, th.created_at, td.updated_at, td.due_at, pc.n
-		ORDER BY td.updated_at DESC`, status)
+		ORDER BY td.updated_at DESC`, status, primaryAgentID)
 	if err != nil {
 		return nil, fmt.Errorf("查 todo 列表: %w", err)
 	}

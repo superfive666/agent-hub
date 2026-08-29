@@ -9,7 +9,7 @@ function stub(health: Record<string, unknown> = HEALTHY) {
   return installFetch({
     'GET /api/admin/me': () => json(ADMIN),
     'GET /api/admin/todos': () => json({ todos: mockTodos }),
-    'GET /api/agent/directory': () => json({ agents: mockDirectory }),
+    'GET /api/admin/directory': () => json({ agents: mockDirectory }),
     'GET /api/admin/settings': () => json(mockSettings),
     'GET /api/admin/health': () => json(health),
   })
@@ -45,7 +45,7 @@ describe('§1.4 outbox 告警不可折叠、不可降级', () => {
     installFetch({
       'GET /api/admin/me': () => json(ADMIN),
       'GET /api/admin/todos': () => json({ todos: mockTodos }),
-      'GET /api/agent/directory': () => json({ agents: mockDirectory }),
+      'GET /api/admin/directory': () => json({ agents: mockDirectory }),
       'GET /api/admin/settings': () => json(mockSettings),
       'GET /api/admin/health': () => new Response('boom', { status: 500 }),
     })

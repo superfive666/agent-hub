@@ -1,6 +1,6 @@
 import { resolveRef } from './spec.mjs';
 import { buildCurl, exampleFor, paramExample, responseExample } from './example.mjs';
-import { TAG_META, OVERVIEW, SURFACES, QUICKSTART, ERRORS, NOTES } from './content.mjs';
+import { TAG_META, OVERVIEW, SURFACES, QUICKSTART, ERRORS, NOTES, OP_NOTES } from './content.mjs';
 
 /* ─────────── 基础工具 ─────────── */
 
@@ -243,6 +243,9 @@ export function renderOperation(spec, op, server) {
 </header>`);
 
   if (op.description) parts.push(`<div class="prose">${md2(op.description)}</div>`);
+
+  const note = OP_NOTES[`${op.method} ${op.path}`];
+  if (note) parts.push(`<aside class="opnote"><span class="opnote-k">留意</span><p>${trusted(note)}</p></aside>`);
 
   if (op.params.length) parts.push(`<h4 class="sub">参数</h4>${paramTable(spec, op.params)}`);
 

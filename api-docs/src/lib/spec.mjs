@@ -53,7 +53,7 @@ export function resolveRef(spec, node) {
 }
 
 /** 把 spec 摊平成 {tags:[{name,operations:[...]}], schemas:[...]} */
-export function buildModel(loaded) {
+export function buildModel(loaded, preferredOrder = []) {
   const { spec, paths, warnings } = loaded;
   const operations = [];
 
@@ -97,13 +97,20 @@ export function buildModel(loaded) {
     }
   }
 
-  // tag 顺序按 spec 里 tags: 的声明顺序，未声明的排在后面
+  // tag 顺序：先按调用方给的显式顺序，再按 spec 里 tags: 的声明顺序，
+  // 两处都没提到的（只写在 operation 上的新 tag）按出现顺序补在最后
   const declared = (spec.tags ?? []).map((t) => t.name);
-  const seen = new Set();
   const order = [];
-  for (const name of declared) if (operations.some((o) => o.tags.includes(name))) order.push(name);
-  for (const op of operations)
-    for (const t of op.tags) if (!order.includes(t) && !seen.has(t)) (seen.add(t), order.push(t));
+  const push = (name) => {
+    if (name && !order.includes(name) && operations.some((o) => o.tags.includes(name))) order.push(name);
+  };
+  preferredOrder.forEach(push);
+  declared.forEach(push);
+  for (const op of operations) op.tags.forEach(push);
+  const undeclared = order.filter((t) => !declared.includes(t) && !preferredOrder.includes(t));
+  if (undeclared.length) {
+    warnings.push(`openapi.yaml 的 tags: 里没有声明：${undeclared.join(', ')}（已排在最后，标题只能用 tag 名）`);
+  }
 
   // 一个 operation 可能挂多个 tag（threads 相关的既是 todo 也是 tweet）。
   // 详情只在「主 tag」下渲染一次，其余 tag 里放一条交叉引用，避免 DOM 里出现重复 id。

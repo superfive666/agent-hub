@@ -517,9 +517,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 管理员登录
+         * 管理员登录（口令模式）
          * @description 只有部署时预置的那一个账号能登录。不在预置名单里的账号**根本进不来** ——
          *     不是「登录后无权限」，是连会话都拿不到。
+         *
+         *     实例配成 `oidc` 模式时这个端点一律返回 401：两条登录路径同时打开，
+         *     意味着「唯一预置管理员」这条约束有两个口子。
          */
         post: {
             parameters: {
@@ -555,6 +558,118 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/auth/google/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 发起 Google OIDC 登录
+         * @description 302 跳到 Google 的授权页，同时下发一张 5 分钟有效的 HttpOnly `state` cookie。
+         *     回调时要比对这个 state —— 攻击者能诱导浏览器打开回调地址，
+         *     但没法让浏览器带上他不知道的 state。
+         *
+         *     实例配成 `password` 模式时返回 401。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 跳转到 Google 授权页 */
+                302: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 本实例配置为用户名口令登录 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/auth/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Google OIDC 回调
+         * @description 用授权码换 token，再读 userinfo 拿邮箱，和预置的 `ADMIN_GOOGLE_EMAIL` 比对
+         *     （大小写不敏感）。对得上才下发会话 cookie 并 302 回首页。
+         *
+         *     三种情况一律 401，且**都不下发会话**：state 对不上、邮箱不在预置名单里、
+         *     邮箱没有被 Google 标记为已验证（未验证的邮箱谁都能在自己账号上填）。
+         */
+        get: {
+            parameters: {
+                query: {
+                    code: string;
+                    state: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 登录成功，会话写在 HttpOnly Cookie 里，跳回首页 */
+                302: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 缺少授权码 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description state 不符、邮箱不在预置名单里，或邮箱未经 Google 验证 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -928,6 +1043,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** agent 列表与在线状态 */
         get: {
             parameters: {
                 query?: never;
@@ -942,12 +1058,20 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            agents?: components["schemas"]["AdminAgent"][];
+                        };
+                    };
                 };
             };
         };
         put?: never;
-        /** 创建 agent 记录 */
+        /**
+         * 创建 agent 记录
+         * @description 只建记录，不发凭证。凭证要另外签一张一次性注册 token，由 agent 自己来换 ——
+         *     这样长期凭证的明文从来不经过控制台。
+         */
         post: {
             parameters: {
                 query?: never;
@@ -955,10 +1079,32 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        /** @description 这个 agent 是干什么的 */
+                        purpose?: string;
+                        /** @description 留空则记为当前管理员 */
+                        owner?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description ok */
                 201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            agentId?: string;
+                        };
+                    };
+                };
+                /** @description 缺少 name */
+                400: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1002,6 +1148,269 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 名录（控制台）
+         * @description 和 `/api/agent/directory` 同一份内容，挂在会话鉴权后面。
+         *     与 `/api/admin/agents` 回答的不是同一个问题：这里是「谁在这儿、能做什么、
+         *     边界在哪」（Card 摘要），那里是「还活着吗、手上压了多少事」（运维视角）。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            agents?: components["schemas"]["AgentSummary"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读 thread 全貌（控制台）
+         * @description 和 `/api/agent/threads/{threadId}` 返回同一份内容，只是挂在会话鉴权后面。
+         *     控制台带的是 cookie，打 agent 侧那条路由只会拿到 401。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    threadId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ThreadDetail"];
+                    };
+                };
+                /** @description 不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/me/todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我的队列
+         * @description 主责于我的 todo。**被 @ 的关注者拉不到** —— 他们在 inbox 里收到 mention 事件，
+         *     但队列里没有这条。队列的含义是「该我做的事」，不是「和我有关的事」。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 留空返回全部状态 */
+                    status?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            todos?: components["schemas"]["TodoSummary"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 看板（agent 侧）
+         * @description 和 `/api/admin/board` 同一份聚合、同一个时区口径。需求要求看板「双端可见」：
+         *     agent 也需要「看看今天大家在干嘛」的能力。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 留空为今天，按平台时区切分 */
+                    date?: string;
+                    groupBy?: "activity" | "started";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            groupBy?: string;
+                            /** Format: date */
+                            date?: string;
+                            items?: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/me/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 我订阅了什么 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            subscriptions?: components["schemas"]["Subscription"][];
+                        };
+                    };
+                };
+            };
+        };
+        /**
+         * 覆盖我的订阅
+         * @description **整份覆盖，不是增量增删**：agent 无状态地重放自己的配置，
+         *     「我现在关注这些」比「加这个、删那个」少一整类同步 bug ——
+         *     后者要求调用方先准确知道服务端当前有什么。
+         *
+         *     没有这个端点的话 `subscription` 表永远是空的，于是**带标签的广播一个人都收不到**。
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        subscriptions: components["schemas"]["Subscription"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description 覆盖后的全量订阅 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            subscriptions?: components["schemas"]["Subscription"][];
+                        };
+                    };
+                };
+                /** @description kind 不是 tag/agent，或 value 为空 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1282,6 +1691,36 @@ export interface components {
                 inboxWritesPerMinute?: number;
                 apiRequestsPerMinute?: number;
             };
+        };
+        /** @description agent 声明自己关注哪个标签、或哪个 agent。 */
+        Subscription: {
+            /** @enum {string} */
+            kind: "tag" | "agent";
+            /** @description kind=tag 时是标签名，kind=agent 时是 agent 的 id */
+            value: string;
+        };
+        /**
+         * @description 控制台看到的 agent 行。和名录的 `AgentSummary` 不是一回事：
+         *     名录回答「该找谁」，这里回答「这个 agent 现在还活着吗、手上压了多少事」。
+         */
+        AdminAgent: {
+            /** Format: uuid */
+            agentId?: string;
+            name?: string;
+            purpose?: string;
+            /** @enum {string} */
+            status?: "active" | "disabled";
+            runtime?: string;
+            /** @enum {string} */
+            tier?: "longpoll" | "webhook" | "cron";
+            /** @description 判定窗口按 tier 取值，否则 cron 档会永远显示离线 */
+            online?: boolean;
+            /** Format: date-time */
+            lastPullAt?: string;
+            /** @description 手上未完成的 todo 数 */
+            openTodos?: number;
+            /** @description 还没写 Card 的 agent 在名录里是查不到的 */
+            hasCard?: boolean;
         };
         /** @description 名录条目。Card 的摘要，让 agent 判断该找谁。 */
         AgentSummary: {

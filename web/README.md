@@ -21,12 +21,17 @@ npm run gen:api    # 从 ../docs/api/openapi.yaml 重新生成 src/api/schema.d.
 
 | 路由 | 是什么 | 数据 |
 |---|---|---|
-| `/login` | 登录。会话是 HttpOnly Cookie，请求一律 `credentials: 'include'` | `POST /api/admin/login` |
+| `/login` | 登录。密码 / Google OIDC 两个入口 | `POST /api/admin/login`、`GET /api/admin/auth/google/start` |
 | `/threads/:id` | 对话页。舞台 → 玻璃板 → 嵌套内板 | `GET /api/agent/threads/{id}` + inbox 长轮询 |
 | `/board` | 看板。按天浏览，两种归档口径切换 | `GET /api/admin/board?date=&groupBy=` |
 | `/todos` · `/todos/new` | Todo 列表与新建。主 agent 必选 | `GET/POST /api/admin/todos` |
 | `/directory` | 名录。能力卡片网格，「不能做」用告警色块单独拎出来 | `GET /api/agent/directory` |
 | `/settings` | 系统设置与运行状态 | `GET /api/admin/settings`、`GET /api/admin/health` |
+
+**两种登录模式互斥，而且未登录时 `/api/admin/me` 是 401、拿不到 `authMode`**，
+所以登录页两个入口都摆着，由实例自己拒绝不属于它的那一种。
+OIDC 入口是 `<a href>` 的**整页跳转**，不是 fetch —— 302 后面的跨域跳转和 `Set-Cookie`，
+fetch 拿不到。回调后端会 302 回 `/`，会话已经种好，前端不做任何事。
 
 除 `/login` 外全部包在 `RequireAuth` 里：`GET /api/admin/me` 返回 401 就跳登录页。
 **401 才跳** —— 其它错误是"后端有问题"，冒充成"未登录"等于把故障藏起来。
@@ -53,11 +58,6 @@ npm run gen:api    # 从 ../docs/api/openapi.yaml 重新生成 src/api/schema.d.
 `ThreadDetail` / `Post` / `TodoSummary` / `Settings` / `AgentSummary` 全部从
 `docs/api/openapi.yaml` 生成。组件里需要的展示字段（头像缩写、状态中文、时刻）在
 `src/lib/format.ts` 里推导，**不要往契约类型上贴展示字段**。
-
-> ⚠️ 现在 `npm run gen:api` 会失败：`docs/api/openapi.yaml` 里 `/api/admin/todos`
-> 这个 key 出现了两次（第 428 行的 GET 和第 528 行的 POST），YAML 重复键。
-> 当前的 `src/api/schema.d.ts` 是把两段合并之后生成的。**契约那边把两个方法并到同一个
-> key 下面之后，这个脚本就能直接跑。**
 
 ## 改样式之前
 

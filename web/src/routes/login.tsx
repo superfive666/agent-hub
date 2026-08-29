@@ -4,9 +4,10 @@ import { ArrowRight, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Pane } from '@/components/ui/pane'
 import { Chip } from '@/components/ui/chip'
+import { Seg } from '@/components/ui/seg'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useLogin, useMe } from '@/api/queries'
-import { HttpError } from '@/api/client'
+import { HttpError, OIDC_START_PATH, apiUrl } from '@/api/client'
 
 function errorMessage(err: unknown): string {
   if (err instanceof HttpError) {
@@ -28,6 +29,12 @@ export default function LoginRoute() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [reveal, setReveal] = useState(false)
+  /**
+   * 未登录时 `/api/admin/me` 是 401，拿不到 authMode —— 所以两种入口都摆出来，
+   * 由实例自己拒绝不属于它的那一种（口令实例的 OIDC 入口 401，
+   * OIDC 实例的 POST /api/admin/login 也 401）。
+   */
+  const [mode, setMode] = useState<'password' | 'oidc'>('password')
   const login = useLogin()
   const navigate = useNavigate()
   const location = useLocation()
@@ -123,6 +130,36 @@ export default function LoginRoute() {
               <ThemeToggle className="ml-auto" />
             </div>
 
+            <Seg
+              aria-label="登录方式"
+              value={mode}
+              onValueChange={(v) => setMode(v as 'password' | 'oidc')}
+              options={[
+                { value: 'password', label: '密码' },
+                { value: 'oidc', label: 'Google 账号' },
+              ]}
+            />
+
+            {mode === 'oidc' ? (
+              <div className="flex flex-col gap-[18px]">
+                <p
+                  className="m-0 text-[11.5px] font-medium leading-[1.8]"
+                  style={{ color: 'var(--ink2)' }}
+                >
+                  会跳到 Google 授权页，回来时会话已经种好，前端不做任何事。
+                  <br />
+                  一个实例只开一种模式 —— 如果这台是口令模式，这条路会被拒。
+                </p>
+                {/* 整页跳转，不是 fetch：302 后面的跨域跳转和 cookie，fetch 都拿不到 */}
+                <Button variant="pri" asChild className="justify-between px-6 py-[15px] text-[13.5px]">
+                  <a data-testid="oidc-start" href={apiUrl(OIDC_START_PATH)} rel="nofollow">
+                    <span>用 Google 登录</span>
+                    <ArrowRight size={17} aria-hidden />
+                  </a>
+                </Button>
+              </div>
+            ) : (
+              <>
             <div className="flex flex-col gap-[9px]">
               <label className="lbl pl-1.5" htmlFor="username">
                 用户名
@@ -187,6 +224,8 @@ export default function LoginRoute() {
               <span>{login.isPending ? '正在进入…' : '进入控制台'}</span>
               <ArrowRight size={17} aria-hidden />
             </Button>
+              </>
+            )}
 
             <div className="flex items-center gap-3">
               <span className="sep grow" />
@@ -196,7 +235,7 @@ export default function LoginRoute() {
 
             <div className="flex items-center gap-2">
               <Chip tone="human" size="sm">
-                密码登录
+                {mode === 'oidc' ? 'Google OIDC' : '密码登录'}
               </Chip>
               <Chip size="sm">会话写在 HttpOnly Cookie</Chip>
             </div>

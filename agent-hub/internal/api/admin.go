@@ -140,7 +140,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Owner == "" {
-		body.Owner = s.cfg.AdminUsername
+		body.Owner = s.adminSubject()
 	}
 	id, err := s.store.CreateAgent(r.Context(), body.Name, body.Purpose, body.Owner)
 	if err != nil {
@@ -148,7 +148,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrInternal)
 		return
 	}
-	s.store.Audit(r.Context(), s.cfg.AdminUsername, "create_agent", string(id),
+	s.store.Audit(r.Context(), s.adminSubject(), "create_agent", string(id),
 		map[string]any{"name": body.Name})
 	writeJSON(w, http.StatusCreated, map[string]string{"agentId": string(id)})
 }
@@ -161,7 +161,7 @@ func (s *Server) handleIssueToken(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrInternal)
 		return
 	}
-	s.store.Audit(r.Context(), s.cfg.AdminUsername, "issue_registration_token", string(agent), nil)
+	s.store.Audit(r.Context(), s.adminSubject(), "issue_registration_token", string(agent), nil)
 	// 明文只在这里返回一次，库里只有哈希。关掉页面就再也看不到，只能作废重发。
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"registrationToken": plain, "expiresAt": exp,
@@ -175,12 +175,13 @@ func (s *Server) handleRevokeCredentials(w http.ResponseWriter, r *http.Request)
 		writeErr(w, ErrInternal)
 		return
 	}
-	s.store.Audit(r.Context(), s.cfg.AdminUsername, "revoke_credentials", string(agent), nil)
+	s.store.Audit(r.Context(), s.adminSubject(), "revoke_credentials", string(agent), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleListTodos(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.store.ListTodos(r.Context(), r.URL.Query().Get("status"))
+	q := r.URL.Query()
+	rows, err := s.store.ListTodos(r.Context(), q.Get("status"), q.Get("primaryAgentId"))
 	if err != nil {
 		s.log.Error("查 todo 列表失败", "err", err)
 		writeErr(w, ErrInternal)
@@ -218,7 +219,7 @@ func (s *Server) handleCreateTodo(w http.ResponseWriter, r *http.Request) {
 			Title: body.Title, Body: body.Body,
 			PrimaryAgentID: domain.AgentID(body.PrimaryAgentID), Mentions: mentions,
 		},
-		CreatedBy: s.cfg.AdminUsername, DueAt: due, Tags: body.Tags,
+		CreatedBy: s.adminSubject(), DueAt: due, Tags: body.Tags,
 	})
 	if err != nil {
 		// 主 agent 必选是业务规则，不是服务器错误 —— 要让调用方看懂。
@@ -231,7 +232,7 @@ func (s *Server) handleCreateTodo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrInternal)
 		return
 	}
-	s.store.Audit(r.Context(), s.cfg.AdminUsername, "create_todo", res.ThreadID,
+	s.store.Audit(r.Context(), s.adminSubject(), "create_todo", res.ThreadID,
 		map[string]any{"primaryAgentId": body.PrimaryAgentID})
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"threadId": res.ThreadID, "startedAt": res.StartedAt,
@@ -261,7 +262,7 @@ func (s *Server) handleAdminTodoState(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrNotFound)
 		return
 	}
-	s.store.Audit(r.Context(), s.cfg.AdminUsername, "todo_"+body.Action, threadID, nil)
+	s.store.Audit(r.Context(), s.adminSubject(), "todo_"+body.Action, threadID, nil)
 	writeJSON(w, http.StatusOK, map[string]string{"status": string(next)})
 }
 
@@ -292,7 +293,13 @@ func (s *Server) handleAdminPost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]string{"postId": postID})
 }
 
-func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) { s.board(w, r) }
+
+// board 是看板的实现，admin 侧和 agent 侧共用。
+//
+// 需求模块 4 要求「双端可见」：同一个日期、同一个时区口径、同一份聚合。
+// 两边各写一份的话，「管理员看到的今天」和「agent 看到的今天」迟早会不一样。
+func (s *Server) board(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	loc, err := time.LoadLocation(s.cfg.Timezone)
 	if err != nil {
@@ -355,6 +362,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, Error{Code: "bad_request", Message: err.Error()})
 		return
 	}
-	s.store.Audit(r.Context(), s.cfg.AdminUsername, "update_settings", "", nil)
+	s.store.Audit(r.Context(), s.adminSubject(), "update_settings", "", nil)
 	writeJSON(w, http.StatusOK, in)
 }

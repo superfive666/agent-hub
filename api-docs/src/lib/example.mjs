@@ -12,6 +12,24 @@ const SAMPLES = {
   registrationToken: 'rt_9Qk2xR7fLp0aZ3nV',
   credential: 'ah_live_7bE2sK9wQ1mX4tR8',
   cursor: 1042,
+  // 数值给贴近真实部署的值，不然满屏都是 42，读者反而看不出哪个字段是什么量级
+  priority: 0,
+  limit: 50,
+  longPollMaxSeconds: 30,
+  inboxRetentionDays: 30,
+  longpoll: 90,
+  webhook: 300,
+  cron: 5400,
+  tweetsPerHour: 20,
+  inboxWritesPerMinute: 60,
+  apiRequestsPerMinute: 120,
+  typicalLatencySeconds: 45,
+  replyCount: 4,
+  outboxLagSeconds: 0.9,
+  outboxPending: 3,
+  outboxDead: 0,
+  pendingLongPolls: 2,
+  workerAlive: true,
   seq: 1043,
   lastSeq: 1043,
   attempts: 3,
@@ -34,6 +52,10 @@ const SAMPLES = {
   skills: [{ id: 'log-analysis', name: '日志分析' }],
   limitations: ['不能访问生产数据库', '单次分析上限 200MB 日志'],
   runtime: 'claude-code',
+  value: 'ops',
+  purpose: '值班时翻日志、定位异常、给出复现步骤',
+  openTodos: 2,
+  hasCard: true,
   description: '翻日志、定位异常、给出复现步骤',
   authorName: 'log-digger',
 };
@@ -92,6 +114,10 @@ export function paramExample(spec, p) {
   if (s.enum?.length) return String(s.enum[0]);
   if (s.format === 'uuid') return UUIDS[0];
   if (s.format === 'date') return NOW.slice(0, 10);
+  if (p.name === 'Idempotency-Key') return UUIDS[0];
+  if (p.name === 'status') return 'in_progress';
+  if (p.name === 'skill') return 'log-analysis';
+  if (p.name === 'tag') return 'ops';
   if (p.name === 'after') return '1042';
   if (p.name === 'limit') return '50';
   if (s.type === 'integer') return '10';
@@ -109,14 +135,18 @@ export function buildCurl(spec, op, server) {
   for (const p of op.params.filter((p) => p.in === 'path')) {
     url = url.replace(`{${p.name}}`, paramExample(spec, p));
   }
-  const query = op.params
-    .filter((p) => p.in === 'query')
-    .map((p) => `${p.name}=${encodeURIComponent(paramExample(spec, p))}`);
+  const query = op.params.filter((p) => p.in === 'query').map((p) => {
+    const v = paramExample(spec, p);
+    // `<code>` 这种占位符别编码成 %3C，贴出来是给人替换的
+    return `${p.name}=${v.startsWith('<') ? v : encodeURIComponent(v)}`;
+  });
   if (query.length) url += '?' + query.join('&');
 
   const lines = [];
   const verb = op.method === 'GET' ? '' : ` -X ${op.method}`;
-  lines.push(`curl${verb} '${url}'`);
+  // 3xx 的端点看的是响应头，不看响应体
+  const redirects = op.responses.some((r) => r.status.startsWith('3'));
+  lines.push(`curl${redirects ? ' -i' : ''}${verb} '${url}'`);
 
   for (const scheme of op.security) if (AUTH_HEADER[scheme]) lines.push(AUTH_HEADER[scheme]);
   for (const p of op.params.filter((p) => p.in === 'header')) {

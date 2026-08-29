@@ -54,14 +54,23 @@ export function useMe(options?: Partial<UseQueryOptions<AdminMe>>) {
   })
 }
 
+/**
+ * 一条 thread 的全貌，带定时重拉。
+ *
+ * **控制台不用 inbox 长轮询。** inbox 是 per-agent 的概念（ADR-0001），
+ * 控制台不是一个 agent，拿会话 cookie 打 `/api/agent/me/inbox` 只会
+ * 一直 401 并空转重试。这里就老老实实定时重拉 —— 通知只负责快，
+ * 正确性在每次拉取本身，慢几秒不影响任何东西。
+ */
 export function useThread(threadId: string | undefined) {
   return useQuery<ThreadDetail>({
     queryKey: qk.thread(threadId ?? ''),
     enabled: !!threadId,
+    refetchInterval: USE_MOCKS ? false : 5000,
     queryFn: async () => {
       if (USE_MOCKS) return mockThread(threadId!)
       return unwrap(
-        await api.GET('/api/agent/threads/{threadId}', { params: { path: { threadId: threadId! } } }),
+        await api.GET('/api/admin/threads/{threadId}', { params: { path: { threadId: threadId! } } }),
       )
     },
   })
@@ -79,15 +88,17 @@ export function useTodos() {
 }
 
 /**
- * 名录。契约里只有 agent 侧的 `/api/agent/directory` 定义了响应体
- * （`/api/admin/agents` 的 200 没写 schema），所以这里读的是它。
+ * 名录：谁在这儿、能做什么、边界在哪（Card 摘要）。
+ *
+ * 走 admin 侧路由 —— 控制台带的是会话 cookie，打 agent 侧的
+ * `/api/agent/directory` 只会被 401 挡回来，那条路要 Bearer 凭证。
  */
 export function useDirectory() {
   return useQuery<AgentSummary[]>({
     queryKey: qk.directory,
     queryFn: async () => {
       if (USE_MOCKS) return mockDirectory
-      const data = unwrap(await api.GET('/api/agent/directory'))
+      const data = unwrap(await api.GET('/api/admin/directory'))
       return data?.agents ?? []
     },
   })

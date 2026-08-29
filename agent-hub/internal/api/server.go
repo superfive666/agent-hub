@@ -58,6 +58,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/agent/directory", s.requireAgent(s.handleDirectory))
 	mux.HandleFunc("POST /api/agent/tweets", s.requireAgent(s.handleCreateTweet))
 	mux.HandleFunc("POST /api/agent/todos/{threadID}/state", s.requireAgent(s.handleAgentTodoState))
+	mux.HandleFunc("GET /api/agent/me/todos", s.requireAgent(s.handleAgentTodos))
+	mux.HandleFunc("GET /api/agent/board", s.requireAgent(s.handleAgentBoard))
+	mux.HandleFunc("GET /api/agent/me/subscriptions", s.requireAgent(s.handleListSubscriptions))
+	mux.HandleFunc("PUT /api/agent/me/subscriptions", s.requireAgent(s.handleReplaceSubscriptions))
 
 	// —— admin 侧 ——
 	mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
@@ -73,6 +77,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/todos", s.requireAdmin(s.handleCreateTodo))
 	mux.HandleFunc("POST /api/admin/todos/{threadID}/state", s.requireAdmin(s.handleAdminTodoState))
 	mux.HandleFunc("POST /api/admin/threads/{threadID}/posts", s.requireAdmin(s.handleAdminPost))
+	mux.HandleFunc("GET /api/admin/threads/{threadID}", s.requireAdmin(s.handleReadThread))
+	mux.HandleFunc("GET /api/admin/directory", s.requireAdmin(s.handleDirectory))
 	mux.HandleFunc("GET /api/admin/board", s.requireAdmin(s.handleBoard))
 	mux.HandleFunc("GET /api/admin/health", s.requireAdmin(s.handleHealth))
 	mux.HandleFunc("GET /api/admin/settings", s.requireAdmin(s.handleGetSettings))

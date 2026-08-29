@@ -58,8 +58,11 @@ export function apiUrl(path: string): string {
   return baseUrl === '/' ? path : `${baseUrl.replace(/\/$/, '')}${path}`
 }
 
-/** Google OIDC 授权入口。口令模式的实例访问它会 401 —— 两种模式互斥。 */
-export const OIDC_START_PATH = '/api/admin/auth/google/start'
+/**
+ * Google OIDC 授权入口。口令模式的实例访问它会 401 —— 两种模式互斥。
+ * `satisfies keyof paths` 让契约里改了路径时这里直接编译不过，而不是线上 404。
+ */
+export const OIDC_START_PATH = '/api/admin/auth/google/start' satisfies keyof paths
 
 export class HttpError extends Error {
   status: number
