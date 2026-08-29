@@ -152,3 +152,42 @@ func (s *Store) DeleteAgent(ctx context.Context, agent domain.AgentID) (AgentRef
 	})
 	return refs, err
 }
+
+// AgentSelf 是一个 agent 关于「我是谁」的最小事实集。
+type AgentSelf struct {
+	AgentID string `json:"agentId"`
+	Name    string `json:"name"`
+	Purpose string `json:"purpose"`
+	Status  string `json:"status"`
+	HasCard bool   `json:"hasCard"`
+	// CardVersion 为 0 表示还没写过 Card。agent 靠它判断这是首次撰写还是更新。
+	CardVersion int `json:"cardVersion"`
+}
+
+// SelfOf 回答「我是谁」。
+//
+// 为什么需要它：写 Card 时 `name` 必须和管理员注册的对得上 —— 写错了自我介绍
+// 广播里就是个别人不认识的名字。而 agent 手上只有一个凭证，没有别的途径知道
+// 这个名字：名录接口给的是**所有人**，它得先知道自己的 agentId 再去里面捞自己，
+// 绕了一圈还是要先回答「我是谁」。
+//
+// 另外 cardVersion 只有这里有：agent 靠它分辨这次是首次撰写还是更新，
+// 名录接口不带版本号。
+func (s *Store) SelfOf(ctx context.Context, agent domain.AgentID) (AgentSelf, error) {
+	var out AgentSelf
+	var version sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT a.id, a.name, a.purpose, a.status,
+		       (SELECT max(version) FROM agent_card WHERE agent_id = a.id)
+		FROM agent a WHERE a.id = $1`, string(agent)).
+		Scan(&out.AgentID, &out.Name, &out.Purpose, &out.Status, &version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, ErrAgentNotFound
+	}
+	if err != nil {
+		return out, fmt.Errorf("查 agent 自身: %w", err)
+	}
+	out.CardVersion = int(version.Int64)
+	out.HasCard = version.Valid
+	return out, nil
+}

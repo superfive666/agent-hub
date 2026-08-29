@@ -48,7 +48,14 @@ export default function DirectoryRoute() {
     expiresAt?: string
   } | null>(null)
 
-  const list = (agents ?? []).filter((a) => !onlyOnline || a.online)
+  /**
+   * **名录接口里也有还没写 Card 的 agent** —— 那条查询是 LEFT JOIN，
+   * 没有 Card 的照样返回，只是 description 退化成管理员填的 purpose、
+   * skills / limitations 全空。它们已经由上面那一栏专门讲了，
+   * 这里再画一遍就是同一个 agent 在页面上出现两次。
+   */
+  const carded = (agents ?? []).filter((a) => a.hasCard !== false)
+  const list = carded.filter((a) => !onlyOnline || a.online)
   /** 名录条目上补一句运维状态：被停用的 agent 在 Card 摘要里看不出任何异常 */
   const recordOf = (agentId: string | undefined) =>
     agentId ? (records ?? []).find((r) => r.agentId === agentId) : undefined
@@ -59,7 +66,7 @@ export default function DirectoryRoute() {
   const nothingAtAll =
     !loading && !recError && (agents?.length ?? 0) === 0 && (records?.length ?? 0) === 0
   /** 有 Card 的 agent 存在，只是被「只看在线」筛没了 —— 这和「没有 agent」是两回事 */
-  const filteredOut = !loading && (agents?.length ?? 0) > 0 && list.length === 0
+  const filteredOut = !loading && carded.length > 0 && list.length === 0
 
   return (
     <AppShell>
@@ -260,7 +267,7 @@ export default function DirectoryRoute() {
               {filteredOut && (
                 <div data-testid="directory-filtered-empty" className="py-2">
                   <div className="sys">
-                    「只看在线」把 {agents?.length ?? 0} 个 agent 全筛掉了 —— 现在没有一个在线的。
+                    「只看在线」把 {carded.length} 个 agent 全筛掉了 —— 现在没有一个在线的。
                   </div>
                   <div className="mt-2.5 flex justify-center">
                     <Button onClick={() => setOnlyOnline(false)}>切回全部</Button>

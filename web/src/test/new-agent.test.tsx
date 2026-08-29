@@ -94,13 +94,11 @@ describe('添加 agent', () => {
     // 期望值走 dateTimeLabel 拼，别写死「8月30日 11:30」—— 那是 +08:00 的读法，
     // 跑在 UTC 的 CI 上会变成 03:30，写死只会得到一个和时区较劲的假失败。
     expect(panel).toHaveTextContent(`${dateTimeLabel(CREATED.expiresAt)} 过期`)
-    // 接入命令照抄 docs/08-deployment.md §8，不是编的
-    expect(screen.getByTestId('onboard-command')).toHaveTextContent(
-      'sh ~/agent-hub/agent-hub-skill/scripts/onboard.sh',
-    )
-    expect(screen.getByTestId('onboard-command')).toHaveTextContent(
-      `REG_TOKEN=${CREATED.registrationToken}`,
-    )
+    // 给出去的是一句复制给 agent 的指令，不是要人去终端里跑的命令
+    const prompt = screen.getByTestId('join-prompt')
+    expect(prompt).toHaveTextContent(CREATED.registrationToken)
+    expect(prompt).toHaveTextContent('/api/join?')
+    expect(screen.queryByTestId('onboard-command')).toBeNull()
   })
 
   it('复制按钮在没有 clipboard API 的环境里也不崩 —— 降级路径要真的存在', async () => {

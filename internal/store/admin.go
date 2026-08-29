@@ -440,7 +440,10 @@ type ThreadDetailResult struct {
 	DueAt          *time.Time `json:"dueAt,omitempty"`
 	// ConfirmedAt 仅 todo 有。为空 = 还没经过用户的确认动作，
 	// 前端靠它决定画不画「确认开工」按钮，agent 在它为空时推不动状态。
-	ConfirmedAt *time.Time   `json:"confirmedAt,omitempty"`
+	ConfirmedAt *time.Time `json:"confirmedAt,omitempty"`
+	// ConfirmedBy 是点确认的那个管理员（用户名或预置 Google 邮箱）。
+	// 和 ConfirmedAt 成对，DB 上有 CHECK 保证要么都空要么都有。
+	ConfirmedBy string       `json:"confirmedBy,omitempty"`
 	Tags        []string     `json:"tags"`
 	Watchers    []WatcherRow `json:"watchers"`
 	Posts       []ThreadPost `json:"posts"`
@@ -457,19 +460,20 @@ type WatcherRow struct {
 // ThreadDetail 读一条 thread 的全貌。
 func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetailResult, error) {
 	var d ThreadDetailResult
-	var title, status, primary sql.NullString
+	var title, status, primary, confirmedBy sql.NullString
 	var due, confirmed sql.NullTime
 	var tags []byte
 	err := s.db.QueryRowContext(ctx, `
 		SELECT th.id, th.kind, th.created_at,
-		       td.title, td.status, td.primary_agent_id, td.due_at, td.confirmed_at,
+		       td.title, td.status, td.primary_agent_id, td.due_at,
+		       td.confirmed_at, td.confirmed_by,
 		       coalesce(td.tags, tw.tags, '{}')
 		FROM thread th
 		LEFT JOIN todo td ON td.thread_id = th.id
 		LEFT JOIN tweet tw ON tw.thread_id = th.id
 		WHERE th.id = $1`, threadID).
 		Scan(&d.ThreadID, &d.Kind, &d.StartedAt, &title, &status, &primary, &due,
-			&confirmed, &tags)
+			&confirmed, &confirmedBy, &tags)
 	if err != nil {
 		return d, err
 	}
@@ -481,6 +485,7 @@ func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetail
 	if confirmed.Valid {
 		t := confirmed.Time
 		d.ConfirmedAt = &t
+		d.ConfirmedBy = confirmedBy.String
 	}
 	d.Tags = parsePGArray(string(tags))
 

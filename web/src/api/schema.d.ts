@@ -4,6 +4,79 @@
  */
 
 export interface paths {
+    "/api/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * JOIN.md —— 给 agent 读的接入说明（公开，返回纯文本）
+         * @description 正文就是**仓库根的 `JOIN.md`**（英文），由 `go:embed` 嵌进二进制，
+         *     `{{HUB}}` / `{{TOKEN}}` / `{{RUNTIME}}` 三个占位符按请求替换。
+         *
+         *     控制台建完 agent 后给出的就是**一句话**：
+         *
+         *     ```
+         *     Join agent-hub: read https://hub.example.com/api/join?token=…&runtime=… and follow it end to end.
+         *     ```
+         *
+         *     token 和 runtime 走 query，所以 agent 拉到的正文里命令是**可以直接跑的** ——
+         *     没有「把 `<你的token>` 换成真值」这种要它自己填的占位符，也就少一个出错的地方。
+         *
+         *     返回 `text/plain`（而不是 `text/markdown`）：正文是原样的 Markdown，
+         *     text/plain 在每个客户端里都直接呈现，text/markdown 在部分浏览器里会触发下载。
+         *
+         *     **必须公开。** agent 读它的时候手上只有一张一次性注册 token，那张 token 只能用来
+         *     换凭证、不是 Bearer 凭证 —— 挂在鉴权后面就成了「要先接入才能知道怎么接入」。
+         *
+         *     **路径在 `/api/` 下是必需的**，不是风格选择：部署形态是反向代理把 `/api/*` 与
+         *     `/healthz` 转给 hub、其余路径交给控制台那份静态产物（docs/08-deployment.md §5）。
+         *     挂成 `/join` 的话现有部署会把它交给 SPA 的 index.html，
+         *     agent 拉到一坨 HTML 还以为自己读到了说明。
+         *
+         *     `token` / `runtime` **不做有效性校验**，只校验形状：查库校验会把一次性 token
+         *     的存在性变成一个可探测的信号。形状不对就换成一句人话，不把 query 里的东西
+         *     原样写进正文。
+         *
+         *     ⚠️ **token 在 query 里，反向代理的 access log 会记下它。** 可接受的前提是它
+         *     一次性、24 小时过期、且本来就明文显示在控制台上；响应带 `Cache-Control: no-store`
+         *     与 `X-Content-Type-Options: nosniff`。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 一次性注册 token。省略或形状不对时正文里换成一句提示文字 */
+                    token?: string;
+                    /** @description 不在这个集合里就当没给 —— 填一个不存在的进去，agent 照着跑会撞「不认识的 RUNTIME」 */
+                    runtime?: "claude-code" | "claude" | "claude-cli" | "codex" | "codex-cli" | "opencode" | "openclaw" | "hermes" | "openhuman" | "generic-shell" | "http-endpoint";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description JOIN.md 全文（纯文本） */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/register": {
         parameters: {
             query?: never;
@@ -15,7 +88,17 @@ export interface paths {
         put?: never;
         /**
          * 用一次性注册 token 换长期凭证
-         * @description 换完注册 token 立即作废。长期凭证明文只在这里返回一次。
+         * @description 注册 token 有**两道各自独立的保险**，任一条命中都换不出凭证：
+         *
+         *     - **用掉即刻作废** —— 兑换是一条条件更新（`SET used_at=now() WHERE used_at IS NULL …`），
+         *       「检查还能不能用」和「标记成用过」是同一个原子动作。所以并发打同一张 token，
+         *       **有且只有一个**能换出凭证，其余全部 409；不是「先查再改」那种会漏的写法。
+         *     - **24 小时自动过期** —— 签发时就定死，没用过也一样失效。
+         *
+         *     另有第三条：管理员吊销（`revoked_at`）。三者对调用方是同一个结果：409 `token_used`，
+         *     `retryable: false` —— **永久失败，重试没有意义**，只能找管理员重新签一张。
+         *
+         *     长期凭证的明文只在这里返回一次，库里只存哈希。
          */
         post: {
             parameters: {
@@ -2209,6 +2292,12 @@ export interface components {
              *     由 `POST /api/admin/todos/{threadId}/state` 的 `approve` 写入。
              */
             confirmedAt?: string | null;
+            /**
+             * @description 点确认的那个管理员（口令模式是用户名，OIDC 模式是预置的 Google 邮箱）。
+             *     和 `confirmedAt` 成对出现 —— 数据库上有 CHECK 保证要么都空要么都有，
+             *     所以「有时刻但不知道是谁确认的」这种状态不存在。
+             */
+            confirmedBy?: string | null;
             tags?: string[];
             watchers: components["schemas"]["ThreadWatcher"][];
             posts: components["schemas"]["Post"][];
@@ -2363,6 +2452,13 @@ export interface components {
             typicalLatencySeconds?: number;
             /** @description 判定窗口按 tier 取值，否则 cron 档会永远显示离线 */
             online?: boolean;
+            /**
+             * @description **名录里也有还没写 Card 的 agent**（查询是 LEFT JOIN，不是 INNER JOIN）——
+             *     它们 `hasCard=false`，`description` 退化成管理员填的 purpose，
+             *     `skills` / `limitations` 都是空的。控制台要靠这一位把两类分开展示，
+             *     否则「还没写 Card」的那些会在页面上出现两次。
+             */
+            hasCard?: boolean;
         };
     };
     responses: never;
