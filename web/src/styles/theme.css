@@ -86,6 +86,14 @@
   --blur:30px;
 }
 
+/* 断点：设计语言 §4 只定义了 640 与 1024 两个。
+   把 Tailwind 自带的 md/xl/2xl 清掉，省得又漂回 768/1280 那一套。 */
+@theme {
+  --breakpoint-*: initial;
+  --breakpoint-sm: 640px;
+  --breakpoint-lg: 1024px;
+}
+
 /* Tailwind v4 主题桥：语义变量 → utility 命名空间。
    inline 保证 utility 里落的是 var() 引用本身，主题切换才跟得上。 */
 @theme inline {
@@ -217,6 +225,7 @@
   .btn-gh{background:transparent;box-shadow:none;border-color:transparent;color:var(--ink2);
     backdrop-filter:none;-webkit-backdrop-filter:none}
   .btn-gh:hover{background:var(--chip-bg);color:var(--ink)}
+  .btn-gh[data-active="true"]{background:var(--chip-bg);color:var(--agent-ink)}
   .btn-ico{width:46px;height:46px;padding:0;justify-content:center;border-radius:var(--r-pill)}
   .btn-ico-sm{width:32px;height:32px}
 
@@ -295,8 +304,37 @@
   .stream > *:nth-child(9){animation-delay:.58s} .stream > *:nth-child(n+10){animation-delay:.65s}
   .card,.convo{animation:rise .72s var(--ease) both}
 
+  /* ═══ 登录页的 3D 球体：唯一用到虹彩四色做"球"的地方（§3 允许） ═══ */
+  .orb-wrap{position:relative;width:290px;height:290px;perspective:900px;max-width:100%}
+  .orb{position:absolute;inset:18px;border-radius:50%;transform-style:preserve-3d;
+    background:
+      radial-gradient(circle at 32% 26%,rgba(255,255,255,.95),rgba(255,255,255,0) 36%),
+      radial-gradient(circle at 72% 78%,color-mix(in srgb,var(--i3) 68%,transparent),transparent 54%),
+      conic-gradient(from 210deg,var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i1));
+    box-shadow:inset -22px -28px 66px rgba(10,40,60,.5),inset 16px 18px 46px rgba(255,255,255,.5),
+      0 0 100px -10px rgba(120,220,255,.55),0 34px 74px -30px rgba(20,55,85,.5);
+    animation:orbspin 24s linear infinite,breathe 6.5s var(--ease) infinite}
+  .orb::after{content:'';position:absolute;inset:-38px;border-radius:50%;
+    background:radial-gradient(circle,rgba(120,230,220,.5),transparent 62%);filter:blur(28px);z-index:-1}
+  .ring{position:absolute;inset:0;border-radius:50%;border:1.5px solid transparent;
+    border-top-color:var(--i1);border-right-color:var(--i3);
+    transform:rotateX(74deg);animation:ringspin 10s linear infinite}
+  .ring-b{transform:rotateX(74deg) rotateZ(60deg);border-top-color:var(--i2);
+    border-right-color:var(--i4);animation-duration:14s;animation-direction:reverse}
+  @keyframes orbspin{to{filter:hue-rotate(360deg)}}
+  @keyframes ringspin{to{transform:rotateX(74deg) rotateZ(360deg)}}
+
+  /* 表单输入：胶囊化，和按钮同一套形状记号 */
+  input.in,textarea.in{width:100%;outline:none;font-family:var(--ui)}
+  input.in:focus-visible,textarea.in:focus-visible{outline:2px solid var(--agent);outline-offset:2px}
+
+  /* 设置页的一行：左说明右取值 */
+  .row{display:flex;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--hair2)}
+  .row:last-child{border-bottom:none}
+
   .convo{display:flex;gap:12px;padding:12px 14px;border-radius:var(--r-card);
     align-items:flex-start;transition:.32s var(--ease);position:relative;width:100%;text-align:left}
+  .convo{color:var(--ink);text-decoration:none}
   .convo:hover{background:var(--chip-bg);transform:translateX(3px)}
   .convo[data-active="true"]{background:var(--inset-bg);border:1px solid var(--inset-bd);
     box-shadow:var(--inset-sh)}

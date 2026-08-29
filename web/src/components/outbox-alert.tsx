@@ -36,7 +36,10 @@ export function OutboxAlert({
     >
       <AlertTriangle size={16} aria-hidden />
       <span className="text-[12px] font-bold">
-        outbox 投递滞后 <span className="mono">{lagSeconds.toFixed(0)}s</span>
+        outbox 投递滞后{' '}
+        <span className="mono">
+          {Number.isFinite(lagSeconds) ? `${lagSeconds.toFixed(0)}s` : '读不到'}
+        </span>
         {workerAlive ? '' : ' · worker 无心跳'}
       </span>
       {pending !== undefined && (

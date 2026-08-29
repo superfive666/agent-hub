@@ -1,0 +1,17 @@
+{
+  "name": "@agent-hub/api-docs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "agent-hub 面向使用者的 API 文档站：读 docs/api/openapi.yaml 生成静态 HTML",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node build.mjs",
+    "preview": "node build.mjs && node serve.mjs",
+    "serve": "node serve.mjs",
+    "check": "node build.mjs --check"
+  },
+  "dependencies": {
+    "yaml": "^2.5.1"
+  }
+}

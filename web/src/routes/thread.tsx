@@ -1,230 +1,138 @@
-import { useState } from 'react'
-import {
-  Check,
-  LayoutGrid,
-  Megaphone,
-  MessagesSquare,
-  MoreHorizontal,
-  Search,
-  Send,
-  Settings,
-  Users,
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useParams } from 'react-router'
+import type { Post } from '@/api/client'
+import { Check, Send } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody, CardHeader } from '@/components/ui/card'
 import { Chip } from '@/components/ui/chip'
 import { Inset } from '@/components/ui/inset'
-import { Pane } from '@/components/ui/pane'
-import { Seg } from '@/components/ui/seg'
+import { AppShell, PageHeader } from '@/components/app-shell'
 import { MessageRow } from '@/components/message-row'
-import { OutboxAlert } from '@/components/outbox-alert'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { cn } from '@/lib/cn'
-import { health, isSystem, me, progress, thread, threads } from '@/mocks/thread'
-
-function ConversationRow({
-  active,
-  item,
-}: {
-  active: boolean
-  item: (typeof threads)[number]
-}) {
-  return (
-    <button
-      type="button"
-      // 流光只挂当前会话（§1.3）。别的行不许带。
-      className={cn('convo', active && 'glow')}
-      data-active={active}
-      aria-current={active ? 'true' : undefined}
-    >
-      <Avatar
-        kind={item.primaryAgent.participation === 'primary' ? 'primary' : 'agent'}
-        size="sm"
-        initials={item.primaryAgent.initials}
-        online={item.primaryAgent.online}
-        label={`@${item.primaryAgent.name}`}
-      />
-      <span className="min-w-0 grow">
-        <span className="block truncate text-[12.5px] font-bold leading-[1.35]">{item.title}</span>
-        <span
-          className="mt-1 block truncate text-[11px] font-medium leading-[1.4]"
-          style={{ color: 'var(--ink3)' }}
-        >
-          {item.preview}
-        </span>
-      </span>
-      <span className="flex shrink-0 flex-col items-end gap-1.5">
-        <span className="text-[10px] font-medium" style={{ color: 'var(--ink3)' }}>
-          {item.at}
-        </span>
-        {item.unread && (
-          <span
-            className="rounded-pill text-center text-[10px] font-bold leading-[18px]"
-            style={{ width: 18, height: 18, background: 'var(--agent)', color: '#fff' }}
-          >
-            {item.unread}
-          </span>
-        )}
-      </span>
-    </button>
-  )
-}
+import { OutboxBanner } from '@/components/outbox-banner'
+import {
+  USE_MOCKS,
+  qk,
+  useCreatePost,
+  useDirectory,
+  useThread,
+  useTodoAction,
+  useTodos,
+} from '@/api/queries'
+import { useInboxStream } from '@/hooks/useInboxStream'
+import {
+  dateTimeLabel,
+  dayLabel,
+  initialsOf,
+  latencyLabel,
+  progressOf,
+  statusLabel,
+  tierLabel,
+} from '@/lib/format'
 
 export default function ThreadRoute() {
-  const [tab, setTab] = useState('thread')
-  const primary = thread.primaryAgent
+  const params = useParams<{ threadId?: string }>()
+  const { data: todos } = useTodos()
+  const threadId = params.threadId ?? todos?.[0]?.threadId
+  const { data: thread, isPending, isError, error } = useThread(threadId)
+  const { data: agents } = useDirectory()
+  const [draft, setDraft] = useState('')
+  const post = useCreatePost(threadId)
+  const act = useTodoAction(threadId)
+
+  /**
+   * 长轮询接上：收到事件就让这条 thread 和列表失效，由 TanStack Query 重新拉。
+   * 通知只负责快 —— 就算这一路全丢了，下次拉取仍然是对的（ADR-0001）。
+   */
+  useInboxStream({
+    // mock 模式下没有后端可长轮询，别让它空转重试
+    enabled: !!threadId && !USE_MOCKS,
+    invalidateKeys: useMemo(
+      () => (threadId ? [qk.thread(threadId), qk.todos(), qk.health] : [qk.todos()]),
+      [threadId],
+    ) as unknown as readonly unknown[][],
+  })
+
+  const primaryId = thread?.primaryAgentId
+  const primaryWatcher = thread?.watchers?.find((w) => w.reason === 'primary')
+  const primaryCard = agents?.find((a) => a.agentId === primaryId)
+  const primaryName = primaryWatcher?.name ?? primaryCard?.name ?? '—'
+  const watchers = (thread?.watchers ?? []).filter((w) => w.reason !== 'primary')
+  const progress = progressOf(thread?.status)
+
+  // 按天插分隔条：thread 会跨多天，没有分隔就分不清"今天"发生了什么
+  const stream = useMemo(() => {
+    const out: { key: string; day?: string; post?: Post }[] = []
+    let lastDay = ''
+    for (const p of thread?.posts ?? []) {
+      const d = dayLabel(p.createdAt)
+      if (d !== lastDay) {
+        out.push({ key: `day-${d}`, day: d })
+        lastDay = d
+      }
+      out.push({ key: p.id, post: p })
+    }
+    return out
+  }, [thread])
+
+  const send = () => {
+    const body = draft.trim()
+    if (!body) return
+    post.mutate({ body }, { onSuccess: () => setDraft('') })
+  }
 
   return (
-    <div className="app min-h-dvh">
-      {/* ── 玻璃板 1：左会话栏 ── */}
-      <Pane className="hidden shrink-0 flex-col py-[18px] md:flex md:w-[86px] lg:w-[278px]">
-        <div className="flex items-center gap-[11px] px-5 pb-4">
-          <span
-            className="flex size-[38px] shrink-0 items-center justify-center rounded-pill text-[13px] font-extrabold"
-            style={{
-              background: 'var(--pri-grad)',
-              color: 'var(--pri-ink)',
-              boxShadow: 'var(--pri-sh)',
-              animation: 'breathe 5s var(--ease) infinite',
-            }}
-          >
-            ah
-          </span>
-          <b className="hidden text-[15.5px] font-extrabold tracking-[-0.03em] lg:block">
-            agent‑hub
-          </b>
-          <ThemeToggle className="ml-auto hidden lg:inline-flex" />
-        </div>
+    <AppShell activeThreadId={threadId}>
+      <OutboxBanner />
+      <PageHeader
+        title={thread?.title ?? (isPending ? '加载中…' : '对话')}
+        subtitle={
+          thread ? (
+            <>
+              <span className="mono">{thread.threadId}</span> · 开始于{' '}
+              {dateTimeLabel(thread.startedAt)} · {thread.watchers.length} 个 agent 在这个 thread 里
+            </>
+          ) : undefined
+        }
+        actions={thread?.status ? <Chip tone="human">{statusLabel(thread.status)}</Chip> : null}
+      />
 
-        <div className="hidden px-4 pb-3.5 lg:block">
-          <Seg
-            aria-label="视图"
-            value={tab}
-            onValueChange={setTab}
-            options={[
-              { value: 'thread', label: '对话' },
-              { value: 'board', label: '看板' },
-              { value: 'directory', label: '名录' },
-            ]}
-          />
+      {isError && (
+        <div role="alert" className="px-5 pb-3 text-[12px] font-semibold sm:px-6" style={{ color: 'var(--alert)' }}>
+          读不到这条 thread：{(error as Error).message}
         </div>
-        <div className="flex flex-col items-center gap-2 pb-3 lg:hidden">
-          <Button variant="gh" size="icoSm" aria-label="对话">
-            <MessagesSquare size={17} />
-          </Button>
-          <Button variant="gh" size="icoSm" aria-label="看板">
-            <LayoutGrid size={17} />
-          </Button>
-          <Button variant="gh" size="icoSm" aria-label="名录">
-            <Users size={17} />
-          </Button>
-        </div>
+      )}
 
-        <div className="hidden px-3.5 pb-2 lg:block">
-          <div
-            className="flex items-center gap-2 rounded-pill px-3 py-[9px] text-[12px] font-medium"
-            style={{
-              background: 'var(--inset-bg)',
-              border: '1px solid var(--inset-bd)',
-              color: 'var(--ink3)',
-            }}
-          >
-            <Search size={14} aria-hidden />
-            搜索 thread 或 agent
-          </div>
-        </div>
-
-        <div className="hidden min-h-0 grow flex-col overflow-y-auto px-2.5 lg:flex">
-          <span className="lbl px-3 pb-1.5 pt-2">进行中 · 5</span>
-          <div className="flex flex-col gap-0.5">
-            {threads
-              .filter((t) => t.group === 'active')
-              .map((t) => (
-                <ConversationRow key={t.threadId} item={t} active={t.threadId === thread.threadId} />
-              ))}
-          </div>
-          <span className="lbl px-3 pb-1.5 pt-4">最近</span>
-          <div className="flex flex-col gap-0.5">
-            {threads
-              .filter((t) => t.group === 'recent')
-              .map((t) => (
-                <ConversationRow key={t.threadId} item={t} active={false} />
-              ))}
-          </div>
-        </div>
-
-        <div className="mt-auto flex flex-col gap-2.5 px-4 pt-3">
-          <div className="sep hidden lg:block" />
-          <div className="flex items-center gap-2.5">
-            <Avatar kind="human" size="sm" initials={me.initials} label={me.name} />
-            <div className="hidden min-w-0 lg:block">
-              <div className="text-[12px] font-bold leading-none">{me.name}</div>
-              <div className="mt-1 text-[10px] font-medium" style={{ color: 'var(--human)' }}>
-                唯一管理员
-              </div>
-            </div>
-            <Button variant="gh" size="icoSm" className="ml-auto hidden lg:inline-flex" aria-label="设置">
-              <Settings size={14} />
-            </Button>
-          </div>
-        </div>
-      </Pane>
-
-      {/* ── 玻璃板 2：主区 ── */}
-      <Pane className="flex min-w-0 grow flex-col">
-        <header className="relative z-[3] flex items-center gap-3.5 px-5 pb-4 pt-5 sm:px-6">
-          <div className="min-w-0">
-            <h1 className="m-0 truncate text-[19px] font-extrabold leading-[1.25] tracking-[-0.03em]">
-              {thread.title}
-            </h1>
-            <div className="mt-1.5 text-[11.5px] font-medium" style={{ color: 'var(--ink3)' }}>
-              <span className="mono">{thread.ref}</span> · 开始于 {thread.startedAtLabel} ·{' '}
-              {thread.participantCount} 人在这个 thread 里
-            </div>
-          </div>
-          <div className="ml-auto flex shrink-0 items-center gap-2.5">
-            <Chip tone="human">{thread.statusLabel}</Chip>
-            <ThemeToggle className="lg:hidden" />
-            <Button variant="gh" size="icoSm" aria-label="更多">
-              <MoreHorizontal size={16} />
-            </Button>
-          </div>
-        </header>
-
-        {/* §1.4 outbox 告警：任何宽度、任何主题都不折叠、不降级 */}
-        <div className="px-5 pb-3 sm:px-6">
-          <OutboxAlert
-            lagSeconds={health.outboxLagSeconds}
-            workerAlive={health.workerAlive}
-            pending={health.outboxPending}
-          />
-        </div>
-
-        {/* <640px：右栏内容压成 thread 顶部状态带 */}
+      {/* <640px：右栏内容压成 thread 顶部状态带（§4） */}
+      {thread && (
         <div className="flex items-center gap-2 overflow-x-auto px-5 pb-3 sm:hidden">
           <Chip tone="agent" size="sm">
-            主 agent @{primary.name}
+            主 agent @{primaryName}
           </Chip>
-          <Chip size="sm">关注者 {thread.watchers.length}</Chip>
-          <Chip size="sm">截止 {thread.dueAtLabel}</Chip>
+          <Chip size="sm">关注者 {watchers.length}</Chip>
+          {thread.dueAt && <Chip size="sm">截止 {dateTimeLabel(thread.dueAt)}</Chip>}
         </div>
+      )}
 
-        {/* ── 嵌套内板：消息流 + 右详情 ── */}
-        <div className="flex min-h-0 min-w-0 grow flex-col gap-3.5 px-3.5 pb-3.5 xl:flex-row">
-          <Inset className="stream flex min-w-0 grow flex-col gap-[15px] overflow-y-auto p-5 sm:p-[22px]">
-            {thread.posts.map((item) =>
-              isSystem(item) ? (
-                <div key={item.postId} className="sys">
-                  {item.system}
-                </div>
-              ) : (
-                <MessageRow key={item.postId} post={item} />
-              ),
-            )}
-          </Inset>
+      {/* ── 嵌套内板：消息流 + 右详情。≥1024 才并排 ── */}
+      <div className="flex min-h-0 min-w-0 grow flex-col gap-3.5 px-3.5 pb-3.5 lg:flex-row">
+        <Inset className="stream flex min-w-0 grow flex-col gap-[15px] overflow-y-auto p-5 sm:p-[22px]">
+          {stream.map((item) =>
+            item.day ? (
+              <div key={item.key} className="sys">
+                {item.day}
+              </div>
+            ) : (
+              <MessageRow key={item.key} post={item.post!} thread={thread} />
+            ),
+          )}
+          {!isPending && stream.length === 0 && (
+            <div className="sys">这条 thread 还没有发言</div>
+          )}
+        </Inset>
 
-          <Inset className="hidden shrink-0 flex-col gap-[13px] p-[18px] sm:flex xl:w-[292px]">
+        {thread && (
+          <Inset className="hidden shrink-0 flex-col gap-[13px] p-[18px] sm:flex lg:w-[292px]">
             {/* 流光只给主 agent 卡片（§1.3） */}
             <Card className="glow runner">
               <CardHeader>主 AGENT · 必须响应</CardHeader>
@@ -232,30 +140,28 @@ export default function ThreadRoute() {
                 <div className="flex items-center gap-[11px]">
                   <Avatar
                     kind="primary"
-                    initials={primary.initials}
-                    online={primary.online}
-                    label={`@${primary.name}`}
+                    initials={initialsOf(primaryName)}
+                    online={primaryWatcher?.online ?? primaryCard?.online}
+                    label={`@${primaryName}`}
                   />
                   <div>
-                    <div className="text-[13.5px] font-bold leading-none">{primary.name}</div>
+                    <div className="text-[13.5px] font-bold leading-none">{primaryName}</div>
                     <div
                       className="mt-[5px] text-[10.5px] font-semibold leading-none"
                       style={{ color: 'var(--agent-ink)' }}
                     >
-                      在线 · {primary.tier}
+                      {(primaryWatcher?.online ?? primaryCard?.online) ? '在线' : '离线'} ·{' '}
+                      {tierLabel(primaryCard?.tier)}
                     </div>
                   </div>
                 </div>
                 <div className="sep" />
                 <div className="kv">
                   runtime
-                  <b className="mono text-[11px]">{primary.runtime}</b>
+                  <b className="mono text-[11px]">{primaryCard?.runtime ?? '—'}</b>
                 </div>
                 <div className="kv">
-                  本条已响应<b>{primary.respondedIn}</b>
-                </div>
-                <div className="kv">
-                  当前负责<b>{primary.owning} 条</b>
+                  典型响应<b>{latencyLabel(primaryCard?.typicalLatencySeconds)}</b>
                 </div>
                 <p
                   className="m-0 text-[10.5px] font-medium leading-[1.65]"
@@ -263,31 +169,27 @@ export default function ThreadRoute() {
                 >
                   一条 todo 有且只有一个主 agent。转派要在 thread 里留痕。
                 </p>
-                <Button size="block">转派</Button>
               </CardBody>
             </Card>
 
             <Card>
-              <CardHeader>关注者 · {thread.watchers.length} · 不必回复</CardHeader>
+              <CardHeader>关注者 · {watchers.length} · 不必回复</CardHeader>
               <CardBody>
-                {thread.watchers.map((w) => (
-                  <div key={w.name} className="flex items-center gap-2.5">
+                {watchers.map((w) => (
+                  <div key={w.agentId} className="flex items-center gap-2.5">
                     <Avatar
                       kind="agent"
                       size="sm"
-                      initials={w.initials}
+                      initials={initialsOf(w.name)}
                       online={w.online}
                       label={`@${w.name}`}
                     />
                     <div className="min-w-0">
                       <div className="text-[12px] font-semibold leading-none">{w.name}</div>
                       <div className="mt-1 text-[10px] font-medium" style={{ color: 'var(--ink3)' }}>
-                        {w.reason}
+                        {w.reason === 'mentioned' ? '正文被 @' : '回过帖'}
                       </div>
                     </div>
-                    <Chip size="sm" className="ml-auto">
-                      已回 {w.replies}
-                    </Chip>
                   </div>
                 ))}
                 <p
@@ -334,80 +236,93 @@ export default function ThreadRoute() {
                 ))}
                 <div className="sep" />
                 <div className="kv">
-                  开始于<b>{thread.startedAtLabel}</b>
+                  开始于<b>{dateTimeLabel(thread.startedAt)}</b>
                 </div>
-                <div className="kv">
-                  截止
-                  <b style={{ color: 'var(--human)' }}>{thread.dueAtLabel}</b>
-                </div>
+                {thread.dueAt && (
+                  <div className="kv">
+                    截止
+                    <b style={{ color: 'var(--human)' }}>{dateTimeLabel(thread.dueAt)}</b>
+                  </div>
+                )}
               </CardBody>
             </Card>
 
-            <div className="flex flex-col gap-2">
-              <Button variant="pri" size="block" className="py-3">
-                <Check size={14} aria-hidden /> 确认完成
-              </Button>
-              <Button size="block" className="py-3">
-                打回，继续做
-              </Button>
-            </div>
+            {thread.status === 'awaiting_review' && (
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="pri"
+                  size="block"
+                  className="py-3"
+                  disabled={act.isPending}
+                  onClick={() => act.mutate('confirm')}
+                >
+                  <Check size={14} aria-hidden /> 确认完成
+                </Button>
+                <Button
+                  size="block"
+                  className="py-3"
+                  disabled={act.isPending}
+                  onClick={() => act.mutate('reject')}
+                >
+                  打回，继续做
+                </Button>
+                {act.isError && (
+                  <span role="alert" className="text-[10.5px] font-semibold" style={{ color: 'var(--alert)' }}>
+                    {(act.error as Error).message}
+                  </span>
+                )}
+              </div>
+            )}
           </Inset>
-        </div>
+        )}
+      </div>
 
-        {/* ── 输入区 ── */}
+      {/* ── 输入区：管理员发言 authorKind=admin，界面据此靠右 ── */}
+      <div
+        className="px-5 pb-5 pt-3.5 sm:px-6"
+        style={{
+          borderTop: '1px solid var(--hair2)',
+          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+        }}
+      >
         <div
-          className="px-5 pb-5 pt-3.5 sm:px-6"
-          style={{ borderTop: '1px solid var(--hair2)', paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
+          className="flex items-end gap-[11px] rounded-[22px] py-[9px] pl-[18px] pr-[9px]"
+          style={{
+            background: 'var(--inset-bg)',
+            border: '1px solid var(--inset-bd)',
+            boxShadow: 'var(--inset-sh)',
+          }}
         >
-          <div
-            className="flex items-end gap-[11px] rounded-[22px] py-[9px] pl-[18px] pr-[9px]"
-            style={{
-              background: 'var(--inset-bg)',
-              border: '1px solid var(--inset-bd)',
-              boxShadow: 'var(--inset-sh)',
-            }}
+          <label className="sr-only" htmlFor="composer">
+            回复这条 thread
+          </label>
+          <textarea
+            id="composer"
+            rows={1}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="说点什么… 输入 @ 把别的 agent 拉进来关注"
+            className="grow resize-none bg-transparent py-2 text-[13.5px] leading-[1.5] outline-none placeholder:opacity-70"
+            style={{ color: 'var(--ink)' }}
+          />
+          <Button
+            variant="pri"
+            aria-label="发送"
+            className="px-3.5 py-2.5"
+            disabled={!draft.trim() || post.isPending}
+            onClick={send}
           >
-            <label className="sr-only" htmlFor="composer">
-              回复这条 thread
-            </label>
-            <textarea
-              id="composer"
-              rows={1}
-              placeholder="说点什么… 输入 @ 把别的 agent 拉进来关注"
-              className="grow resize-none bg-transparent py-2 text-[13.5px] leading-[1.5] outline-none placeholder:opacity-70"
-              style={{ color: 'var(--ink)' }}
-            />
-            <Button variant="pri" aria-label="发送" className="px-3.5 py-2.5">
-              <Send size={16} />
-            </Button>
-          </div>
+            <Send size={16} />
+          </Button>
+        </div>
+        {thread && (
           <div className="mt-2.5 flex items-center gap-2 pl-1.5">
             <Chip tone="human" size="sm">
-              回复会通知 {primary.name} 与 {thread.watchers.length} 位关注者
+              回复会通知 {primaryName} 与 {watchers.length} 位关注者
             </Chip>
           </div>
-        </div>
-      </Pane>
-
-      {/* <640px：底部 tab 取代侧栏 */}
-      <nav
-        className="pane fixed inset-x-3 bottom-3 z-10 flex items-center justify-around gap-2 rounded-pill px-3 py-2 md:hidden"
-        style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
-        aria-label="主导航"
-      >
-        <Button variant="gh" className="min-h-11 flex-col gap-1 text-[10px]">
-          <MessagesSquare size={18} /> 对话
-        </Button>
-        <Button variant="gh" className="min-h-11 flex-col gap-1 text-[10px]">
-          <LayoutGrid size={18} /> 看板
-        </Button>
-        <Button variant="gh" className="min-h-11 flex-col gap-1 text-[10px]">
-          <Megaphone size={18} /> 广播
-        </Button>
-        <Button variant="gh" className="min-h-11 flex-col gap-1 text-[10px]">
-          <Users size={18} /> 名录
-        </Button>
-      </nav>
-    </div>
+        )}
+      </div>
+    </AppShell>
   )
 }

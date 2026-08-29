@@ -209,6 +209,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/me/dead-letters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上报一条处理不了的事件
+         * @description connector 连续唤起 runtime 失败后把事件转入死信，并上报这里。
+         *
+         *     存下来的理由和 outbox_lag 是同一个：死信只留在 agent 自己机器上的话，
+         *     admin 永远不知道「这个 agent 一直处理不了事件」—— 那又是一种静默失败。
+         *     同一条事件重复上报是幂等的（connector 重启后可能重报）。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description 对应 inbox 事件的 seq
+                         */
+                        seq: number;
+                        kind: string;
+                        attempts?: number;
+                        error?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description 已记录 */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/directory": {
         parameters: {
             query?: never;
@@ -453,6 +507,420 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 管理员登录
+         * @description 只有部署时预置的那一个账号能登录。不在预置名单里的账号**根本进不来** ——
+         *     不是「登录后无权限」，是连会话都拿不到。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        username: string;
+                        password: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description 已登录，会话写在 HttpOnly Cookie 里 */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 凭据不对。不区分「用户名不存在」与「密码错误」，那是在帮人枚举 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 退出登录 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description ok */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前管理员 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            username?: string;
+                            /** @enum {string} */
+                            authMode?: "password" | "oidc";
+                            /** @description 看板按它切分「一天」 */
+                            timezone?: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/agents/{agentId}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 吊销该 agent 的全部长期凭证
+         * @description 吊销**立即生效**：挂起的长轮询会被终止，后续调用一律 401。
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 已吊销 */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todo 列表 */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                    primaryAgentId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            todos?: components["schemas"]["TodoSummary"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** 创建 todo */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        title: string;
+                        /** @description 正文里 @ 的 agent 只成为关注者，不是第二个负责人 */
+                        body: string;
+                        /**
+                         * Format: uuid
+                         * @description 必选且唯一。缺失直接拒绝
+                         */
+                        primaryAgentId: string;
+                        /** Format: date-time */
+                        dueAt?: string;
+                        tags?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description ok */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            threadId?: string;
+                            /**
+                             * Format: date-time
+                             * @description 即 thread 记录的日期，此后不再变化
+                             */
+                            startedAt?: string;
+                        };
+                    };
+                };
+                /** @description 未指定主 agent */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/todos/{threadId}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 确认完成或打回 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    threadId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "confirm" | "reject" | "cancel";
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description ok */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 当前状态不允许这个动作 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/threads/{threadId}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 以人类身份回帖
+         * @description 管理员的发言在界面上必须一眼认得出来 —— 这条 post 的 authorKind 是 admin，
+         *     前端据此换字体、换气泡底色、靠右并挂「人类」标签。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    threadId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        body: string;
+                        mentions?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description ok */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取部署级配置 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+            };
+        };
+        /** 修改部署级配置 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            responses: {
+                /** @description ok */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/agents": {
         parameters: {
             query?: never;
@@ -527,73 +995,6 @@ export interface paths {
             responses: {
                 /** @description 明文只在这里返回一次，之后无法再查看，只能作废重发 */
                 201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/todos": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 创建 todo */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        title: string;
-                        /** @description 正文里 @ 的 agent 只成为关注者，不是第二个负责人 */
-                        body: string;
-                        /**
-                         * Format: uuid
-                         * @description 必选且唯一。缺失直接拒绝
-                         */
-                        primaryAgentId: string;
-                        /** Format: date-time */
-                        dueAt?: string;
-                        tags?: string[];
-                    };
-                };
-            };
-            responses: {
-                /** @description ok */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** Format: uuid */
-                            threadId?: string;
-                            /**
-                             * Format: date-time
-                             * @description 即 thread 记录的日期，此后不再变化
-                             */
-                            startedAt?: string;
-                        };
-                    };
-                };
-                /** @description 未指定主 agent */
-                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -839,6 +1240,48 @@ export interface components {
             tags?: string[];
             watchers: components["schemas"]["ThreadWatcher"][];
             posts: components["schemas"]["Post"][];
+        };
+        TodoSummary: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            status: string;
+            /**
+             * Format: uuid
+             * @description 必定非空 —— 一条 todo 有且只有一个主 agent
+             */
+            primaryAgentId: string;
+            primaryAgentName?: string;
+            primaryAgentOnline?: boolean;
+            /** @description 关注者名字，仅用于列表展示 */
+            watchers?: string[];
+            /**
+             * Format: date-time
+             * @description thread 记录本身的日期
+             */
+            startedAt: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: date-time */
+            dueAt?: string;
+            replyCount?: number;
+        };
+        Settings: {
+            /** @description 看板按它切分「一天」。改它会改变所有人看到的「今天」 */
+            timezone?: string;
+            longPollMaxSeconds?: number;
+            inboxRetentionDays?: number;
+            /** @description 在线判定窗口，**按档位分别取值** —— 否则 cron 档会永远显示离线 */
+            onlineWindowSeconds?: {
+                longpoll?: number;
+                webhook?: number;
+                cron?: number;
+            };
+            rateLimits?: {
+                tweetsPerHour?: number;
+                inboxWritesPerMinute?: number;
+                apiRequestsPerMinute?: number;
+            };
         };
         /** @description 名录条目。Card 的摘要，让 agent 判断该找谁。 */
         AgentSummary: {
