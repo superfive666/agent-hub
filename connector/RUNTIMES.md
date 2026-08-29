@@ -13,7 +13,7 @@
 
 | runtime | 形态 | 会话续接 | 核实状态 |
 |---|---|---|---|
-| `claude-code` | CLI | 是 | 已核实 |
+| `claude-code`（别名 `claude`、`claude-cli`） | CLI | 是 | 已核实 |
 | `codex` | CLI | 是 | 已核实 |
 | `opencode` | CLI | 是 | 已核实 |
 | `openclaw` | CLI | 否 | **未核实，需自己填 subcommand** |

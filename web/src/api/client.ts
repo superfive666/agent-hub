@@ -93,6 +93,27 @@ export function isUnauthorized(err: unknown): boolean {
   return err instanceof HttpError && err.status === 401
 }
 
+/** 一个 agent 在内容里的留痕计数。删不掉时后端会把它一起回来。 */
+export interface AgentRefs {
+  todos: number
+  tweets: number
+  steps: number
+}
+
+/**
+ * 从「删不掉」的错误里取出留痕计数。
+ *
+ * 409 `agent_in_use` **不是异常情况，是这个操作的正常结果之一** ——
+ * 界面要把它翻译成「这个 agent 有历史，改用停用」，而不是弹一句「删除失败」。
+ * 拿到计数才说得出「它背着 3 条 todo」，只说「删不掉」等于让用户自己去猜。
+ */
+export function agentInUseRefs(err: unknown): AgentRefs | undefined {
+  if (!(err instanceof HttpError) || err.status !== 409) return undefined
+  const body = err.body as unknown as { code?: string; refs?: Partial<AgentRefs> } | undefined
+  if (body?.code !== 'agent_in_use') return undefined
+  return { todos: body.refs?.todos ?? 0, tweets: body.refs?.tweets ?? 0, steps: body.refs?.steps ?? 0 }
+}
+
 /** openapi-fetch 的 {data,error,response} → 要么给数据，要么抛 HttpError。 */
 export function unwrap<T>(r: { data?: T; error?: unknown; response: Response }): T {
   if (!r.response.ok) throw new HttpError(r.response.status, r.error as ApiError | undefined)

@@ -331,6 +331,49 @@ export function useIssueRegistrationToken() {
   })
 }
 
+/**
+ * 改简介 / 停用启用。**没有改名** —— 名字是 `@` 提及的唯一标识，改掉之后正文里
+ * 已经写好的 `@old-name` 会静默失效（解析不到就当普通文本），没有任何地方会报错。
+ *
+ * `enabled` 省略表示不动状态：只改简介的请求不会顺手把 agent 停掉。
+ * 停用是**立刻生效的下线**（凭证校验要求 status='active'），但可逆 —— 和吊销凭证不同。
+ */
+export function useUpdateAgent() {
+  const qc = useQueryClient()
+  return useMutation<unknown, Error, { agentId: string; purpose?: string; enabled?: boolean }>({
+    mutationFn: async ({ agentId, ...body }) => {
+      if (USE_MOCKS) return
+      return unwrap(
+        await api.PATCH('/api/admin/agents/{agentId}', { params: { path: { agentId } }, body }),
+      )
+    },
+    // 停用会让它从「在线」变成认证不过，两份名单都要重拉
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.adminAgents })
+      qc.invalidateQueries({ queryKey: qk.directory })
+    },
+  })
+}
+
+/**
+ * 物理删除，**只在没有内容留痕时才会成功**。有留痕后端返回 409 `agent_in_use`
+ * 并带上计数 —— 那不是错误处理的边角，而是这个操作的正常结果之一：
+ * 界面要把它翻译成「改用停用」，不是弹一句「删除失败」。
+ */
+export function useDeleteAgent() {
+  const qc = useQueryClient()
+  return useMutation<unknown, Error, string>({
+    mutationFn: async (agentId) => {
+      if (USE_MOCKS) return
+      return unwrap(await api.DELETE('/api/admin/agents/{agentId}', { params: { path: { agentId } } }))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.adminAgents })
+      qc.invalidateQueries({ queryKey: qk.directory })
+    },
+  })
+}
+
 /** 以人类身份回帖：authorKind=admin，界面据此靠右 + 换底色 + 挂「人类」chip。 */
 export function useCreatePost(threadId: string | undefined) {
   const qc = useQueryClient()

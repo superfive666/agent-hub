@@ -1022,6 +1022,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 物理删除 agent（仅限没有内容留痕的）
+         * @description **只在这个 agent 没有任何内容留痕时才允许**，也就是「建错了名字、还没接入
+         *     就想重来」这一类。
+         *
+         *     有留痕就返回 409 `agent_in_use`，并带上计数告诉你卡在哪。这不是技术限制
+         *     而是设计：`todo.primary_agent_id NOT NULL REFERENCES agent(id)` 是硬约束
+         *     ——「一条 todo 必须有且只有一个主 agent」。删掉一个背着 todo 的 agent，
+         *     要么违反外键，要么得把那条 todo 的主责人置空，而后者正是这条约束存在的
+         *     意义所在。tweet 与 todo_step 同理：它们是**已经发生过的事**，抹掉作者
+         *     等于篡改历史。
+         *
+         *     这时候的正确动作是**停用**（`PATCH` 的 `enabled: false`）：立刻下线、
+         *     凭证保留、随时能再启用，历史一条不动。
+         *
+         *     能删掉的那些，其余关联（凭证、注册 token、inbox、订阅、Card）都是
+         *     `ON DELETE CASCADE`，跟着一起走。
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 已删除 */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description agent 不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description 有内容留痕，删不掉 —— 改用停用 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"] & {
+                            /** @description 卡在哪，给出计数而不是只说一句「删不掉」 */
+                            refs?: {
+                                /** @description 作为主 agent 的 todo 数 */
+                                todos?: number;
+                                /** @description 发过的广播数 */
+                                tweets?: number;
+                                /** @description 记过的处理步骤数 */
+                                steps?: number;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * 改简介 / 停用启用
+         * @description **没有改名这条路，这是故意的。** 名字是 `@` 提及的唯一标识，改掉之后正文里
+         *     那些已经写好的 `@old-name` 会**静默失效**（解析不到就当普通文本忽略），
+         *     没有任何地方会报错，只是那些 agent 从此收不到本该属于它们的通知。
+         *     请求体里带 `name` 会被忽略，不会报错也不会生效。
+         *
+         *     `enabled` 省略表示这次不动状态 —— 只想改简介的请求不会顺手把 agent 停掉。
+         *
+         *     **停用是立刻生效的下线，不是一个标签**：凭证校验要求 `status='active'`，
+         *     状态一改，这个 agent 的长期凭证当场就认证不过。它和「吊销凭证」的区别在于
+         *     **可逆** —— 凭证还留着，重新启用就能继续用，不必重走注册换证。
+         *
+         *     启用时的目标状态是算出来的：有活着的凭证 → `active`，从没换过 →
+         *     `pending_registration`。直接写 `active` 会让一个从没接入过的 agent
+         *     在控制台上显示成「已接入」。
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description 新的简介。省略表示不改 */
+                        purpose?: string;
+                        /** @description true=启用，false=停用。省略表示不动状态 */
+                        enabled?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description ok */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            agentId?: string;
+                            /**
+                             * @description 仅在这次动了状态时返回
+                             * @enum {string}
+                             */
+                            status?: "pending_registration" | "active" | "disabled";
+                        };
+                    };
+                };
+                /** @description purpose 与 enabled 一个都没给 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description agent 不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/admin/todos": {
         parameters: {
             query?: never;

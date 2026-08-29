@@ -8,6 +8,7 @@ import { Inset } from '@/components/ui/inset'
 import { AppShell, PageHeader } from '@/components/app-shell'
 import { OutboxBanner } from '@/components/outbox-banner'
 import { RegistrationTokenPanel } from '@/components/registration-token'
+import { RuntimePicker } from '@/components/runtime-picker'
 import { useCreateAgent } from '@/api/queries'
 import type { CreatedAgent } from '@/api/client'
 
@@ -49,6 +50,13 @@ export default function NewAgentRoute() {
   const create = useCreateAgent()
   const [name, setName] = useState('')
   const [purpose, setPurpose] = useState('')
+  /**
+   * 选中的 runtime。**它不会被提交到后端** —— runtime 存在 agent_card.runtime 里，
+   * 由 agent 接入之后自己上报（Card 是它自己写的，见 ADR-0003）。这里选它只有一个
+   * 用途：把接入命令里的 `RUNTIME=` 拼对。以前那条命令永远写死 codex，
+   * 跑 claude-code 的人复制过去必然失败。
+   */
+  const [runtime, setRuntime] = useState('claude-code')
   /** 成功后把响应留在本地：它带着只出现一次的明文 token，不能靠重新拉接口拿回来 */
   const [created, setCreated] = useState<(CreatedAgent & { name: string }) | null>(null)
 
@@ -105,6 +113,7 @@ export default function NewAgentRoute() {
               agentName={created.name}
               token={created.registrationToken ?? ''}
               expiresAt={created.expiresAt}
+              runtime={runtime}
               footer={
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
@@ -202,6 +211,21 @@ export default function NewAgentRoute() {
                         这一栏只是给你自己看的备注。
                       </span>
                     </div>
+                  </div>
+
+                  <div className="sep" />
+
+                  <div>
+                    <span className="lbl mb-2 block">对方机器上跑的是哪个 runtime</span>
+                    <RuntimePicker value={runtime} onChange={setRuntime} />
+                    <p
+                      className="m-0 mt-2.5 text-[11px] font-medium leading-[1.7]"
+                      style={{ color: 'var(--ink3)' }}
+                    >
+                      这一项<b>不会存进 agent 记录</b> —— runtime 是 Agent Card 的一部分，
+                      由 agent 接入之后自己上报。选它只是为了把下一屏的接入命令拼对；
+                      选错了在命令里改掉 <span className="mono">RUNTIME=</span> 也行。
+                    </p>
                   </div>
                 </CardBody>
               </Card>

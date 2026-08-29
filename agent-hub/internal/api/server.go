@@ -82,6 +82,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/agents", s.requireAdmin(s.handleCreateAgent))
 	mux.HandleFunc("POST /api/admin/agents/{agentID}/registration-token", s.requireAdmin(s.handleIssueToken))
 	mux.HandleFunc("DELETE /api/admin/agents/{agentID}/credentials", s.requireAdmin(s.handleRevokeCredentials))
+	// 改简介 / 停用启用 / 删除。**没有改名**：名字是 @ 提及的唯一标识，
+	// 改掉会让历史正文里的 @old-name 静默失效。
+	mux.HandleFunc("PATCH /api/admin/agents/{agentID}", s.requireAdmin(s.handleUpdateAgent))
+	mux.HandleFunc("DELETE /api/admin/agents/{agentID}", s.requireAdmin(s.handleDeleteAgent))
 	mux.HandleFunc("GET /api/admin/todos", s.requireAdmin(s.handleListTodos))
 	mux.HandleFunc("POST /api/admin/todos", s.requireAdmin(s.handleCreateTodo))
 	mux.HandleFunc("POST /api/admin/todos/{threadID}/state", s.requireAdmin(s.handleAdminTodoState))

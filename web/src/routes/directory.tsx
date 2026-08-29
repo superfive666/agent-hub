@@ -9,6 +9,7 @@ import { Inset } from '@/components/ui/inset'
 import { AppShell, PageHeader } from '@/components/app-shell'
 import { OutboxBanner } from '@/components/outbox-banner'
 import { RegistrationTokenPanel } from '@/components/registration-token'
+import { AgentActions } from '@/components/agent-actions'
 import { useAdminAgents, useDirectory, useIssueRegistrationToken } from '@/api/queries'
 import {
   agentStatusLabel,
@@ -235,6 +236,9 @@ export default function DirectoryRoute() {
                       {r.runtime && <span className="mono">{r.runtime}</span>}
                       <span className="mono ml-auto">{r.agentId}</span>
                     </div>
+
+                    <div className="sep" />
+                    <AgentActions row={r} />
                   </CardBody>
                 </Card>
               ))}
@@ -354,6 +358,16 @@ export default function DirectoryRoute() {
                         <span>{tierLabel(a.tier)}</span>
                         <span className="ml-auto">{latencyLabel(a.typicalLatencySeconds)}</span>
                       </div>
+
+                      {/* 管理动作要拿运维那份记录（状态、purpose 都在它身上），
+                          Card 摘要里没有这些。查不到记录就不画 —— 那说明这一条
+                          只存在于名录里，理论上不该发生，但不值得为它画一组点不动的按钮。 */}
+                      {recordOf(a.agentId) && (
+                        <>
+                          <div className="sep" />
+                          <AgentActions row={recordOf(a.agentId)!} />
+                        </>
+                      )}
                     </CardBody>
                   </Card>
                 ))}

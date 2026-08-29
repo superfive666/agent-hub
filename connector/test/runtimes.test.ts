@@ -214,4 +214,23 @@ describe('需求：注册表覆盖五个新 runtime', () => {
       assert.ok(createAdapter({ type, url: 'http://127.0.0.1:1/x' } as never, j), type);
     }
   });
+
+  /**
+   * 用户写 `RUNTIME=claude` 撞了「不认识的 RUNTIME」，完全有理由以为我们不支持 claude。
+   * 注册表的键是要被人手打出来的，而人打出来的是产品名，不是我们的内部标识符。
+   */
+  test('claude / claude-cli 都解析到 claude-code —— 人打的是产品名，不是内部标识符', () => {
+    const j = openJournal(scratch(), 'auto');
+    for (const type of ['claude', 'claude-cli', 'claude-code']) {
+      assert.equal(createAdapter({ type } as never, j).capabilities().runtime, 'claude-code', type);
+    }
+  });
+
+  test('不认识的 runtime 报错时要把可选值列出来，否则用户只能猜', () => {
+    const j = openJournal(scratch(), 'auto');
+    assert.throws(
+      () => createAdapter({ type: 'claude-desktop' } as never, j),
+      (e: Error) => e.message.includes('claude-code') && e.message.includes('generic-shell'),
+    );
+  });
 });

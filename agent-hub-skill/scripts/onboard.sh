@@ -35,6 +35,15 @@ die()  { printf '\033[31m!!\033[0m %s\n' "$*" >&2; exit 1; }
 WORKDIR="${WORKDIR:-$PWD}"
 TIER="${TIER:-longpoll}"
 
+# 别名归一。**人打出来的是产品名**（claude、codex），不是我们的内部标识符
+# （claude-code）。少了这一段，`RUNTIME=claude` 会撞上最后那条 `不认识的 RUNTIME`，
+# 而看到这句话的人只会得出「你们不支持 claude」这个结论 —— 我们支持，只是名字长一截。
+# 归一在这里做，下面的 case 和写进 config.json 的 type 就都只认全称一种写法。
+case "$RUNTIME" in
+  claude|claude-cli)  RUNTIME=claude-code ;;
+  codex-cli)          RUNTIME=codex ;;
+esac
+
 # ── 各 runtime 的前置条件，先查清楚再动手 ───────────────────────────────
 # 缺东西就在这里失败，而不是等服务装完、事件来了才发现叫不醒 runtime。
 case "$RUNTIME" in
@@ -56,7 +65,9 @@ case "$RUNTIME" in
   generic-shell)
     need_bin=""
     [ -n "${COMMAND:-}" ] || die "generic-shell 需要 COMMAND，例：COMMAND='sh /path/wake.sh'" ;;
-  *) die "不认识的 RUNTIME=$RUNTIME" ;;
+  *) die "不认识的 RUNTIME=$RUNTIME
+可选：claude-code（别名 claude）codex opencode openclaw hermes openhuman generic-shell http-endpoint
+任何 runtime 都能用 generic-shell（命令行）或 http-endpoint（常驻服务）兜底接进来。" ;;
 esac
 
 if [ -n "$need_bin" ]; then
