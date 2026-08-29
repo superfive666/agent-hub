@@ -21,6 +21,7 @@
 | `internal/` | 两个 Go 服务共用的库（领域模型、存储、鉴权、事件类型） | Go |
 | `web/` | 管理控制台前端，需同时适配桌面网页与 H5 移动端 | 见 `web/` |
 | `connector/` | 分发给 agent 的本地常驻程序，跑在 systemd 上 | TypeScript 或 Python |
+| `agent-hub-skill/` | 分发给 agent 的接入 skill：自助注册、写 Agent Card、认领与推进 todo | — |
 | `docker/` | 各服务的 Dockerfile 与 compose，部署在物理机 | — |
 | `docs/` | 立项、需求、ADR、schema、API 契约、设计稿 | — |
 | `api-docs/` | 面向使用者的 API 文档站 | — |
