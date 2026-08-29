@@ -133,29 +133,63 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"agents": rows})
 }
 
+// handleCreateAgent 建一条 agent 记录，可选地在同一个响应里连注册 token 一起给出。
+//
+// 「像注册 CI runner 那样」：控制台上填个名字，拿到一串一次性 token，
+// 复制到那台机器上跑一下就接进来了。issueToken 为 true 时省掉第二次往返，
+// 也顺带消掉「记录建好了但 token 没签出来」那个中间态 —— 两件事在一个事务里。
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
-	var body struct{ Name, Purpose, Owner string }
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil || body.Name == "" {
+	var body struct {
+		Name       string `json:"name"`
+		Purpose    string `json:"purpose"`
+		Owner      string `json:"owner"`
+		IssueToken bool   `json:"issueToken"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
 		writeErr(w, ErrBadRequest)
 		return
 	}
 	if body.Owner == "" {
 		body.Owner = s.adminSubject()
 	}
-	id, err := s.store.CreateAgent(r.Context(), body.Name, body.Purpose, body.Owner)
+
+	res, err := s.store.CreateAgentWithToken(r.Context(), store.CreateAgentParams{
+		Name: body.Name, Purpose: body.Purpose, Owner: body.Owner,
+		IssueToken: body.IssueToken, TokenTTL: store.DefaultRegistrationTokenTTL,
+	})
 	if err != nil {
-		s.log.Error("创建 agent 失败", "err", err)
-		writeErr(w, ErrInternal)
+		switch {
+		case errors.Is(err, store.ErrAgentNameTaken):
+			// 撞名是调用方能自己修的事，不是服务器错误 —— 以前这里会 500。
+			writeErr(w, ErrAgentNameTaken)
+		case errors.Is(err, domain.ErrAgentNameRequired),
+			errors.Is(err, domain.ErrAgentNameTooLong),
+			errors.Is(err, domain.ErrAgentNameCharset):
+			writeErr(w, Error{Code: "bad_request", Message: err.Error()})
+		default:
+			s.log.Error("创建 agent 失败", "err", err)
+			writeErr(w, ErrInternal)
+		}
 		return
 	}
-	s.store.Audit(r.Context(), s.adminSubject(), "create_agent", string(id),
-		map[string]any{"name": body.Name})
-	writeJSON(w, http.StatusCreated, map[string]string{"agentId": string(id)})
+
+	s.store.Audit(r.Context(), s.adminSubject(), "create_agent", string(res.AgentID),
+		map[string]any{"name": body.Name, "issueToken": body.IssueToken})
+	out := map[string]any{"agentId": string(res.AgentID)}
+	if res.RegistrationToken != "" {
+		// 明文只在这里出现一次，库里只有哈希。签发也要单独留一条审计 ——
+		// 「谁在什么时候给这个 agent 发过 token」和「谁建了它」是两件事。
+		s.store.Audit(r.Context(), s.adminSubject(), "issue_registration_token",
+			string(res.AgentID), map[string]any{"via": "create_agent"})
+		out["registrationToken"] = res.RegistrationToken
+		out["expiresAt"] = res.ExpiresAt
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 func (s *Server) handleIssueToken(w http.ResponseWriter, r *http.Request) {
 	agent := domain.AgentID(r.PathValue("agentID"))
-	plain, exp, err := s.store.IssueRegistrationToken(r.Context(), agent, 24*time.Hour)
+	plain, exp, err := s.store.IssueRegistrationToken(r.Context(), agent, store.DefaultRegistrationTokenTTL)
 	if err != nil {
 		s.log.Error("签发注册 token 失败", "agent", agent, "err", err)
 		writeErr(w, ErrInternal)
@@ -239,6 +273,13 @@ func (s *Server) handleCreateTodo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAdminTodoState 是管理员对一条 todo 的四个动作。
+//
+// 四个动作分属两个阶段，不要混淆：
+//   - approve —— **确认需求，可以开工**。这是「用户确认闸门」：在它之前主 agent
+//     只能提问、澄清，推不动状态；在它之后才允许干活。
+//   - confirm / reject —— 交付之后的确认完成 / 打回。reject 只在 awaiting_review 上成立。
+//   - cancel —— 任何阶段都能撤。
 func (s *Server) handleAdminTodoState(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("threadID")
 	var body struct{ Action, Note string }
@@ -246,12 +287,32 @@ func (s *Server) handleAdminTodoState(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrBadRequest)
 		return
 	}
+
+	if body.Action == "approve" {
+		s.approveTodo(w, r, threadID)
+		return
+	}
+
 	var next domain.TodoStatus
 	switch body.Action {
 	case "confirm":
 		next = domain.StatusDone
 	case "reject":
-		next = domain.StatusInProgress // 打回，继续做
+		// 打回只在「交上来了」这个状态上有确定含义，见 store.RejectTodo。
+		if err := s.store.RejectTodo(r.Context(), threadID); err != nil {
+			if errors.Is(err, store.ErrInvalidTodoTransition) {
+				writeErr(w, Error{Code: "invalid_todo_transition",
+					Message: "只有待确认（awaiting_review）的 todo 才能打回；" +
+						"确认之前请在 thread 里发帖说明，并暂不点确认"})
+				return
+			}
+			writeErr(w, ErrNotFound)
+			return
+		}
+		s.store.Audit(r.Context(), s.adminSubject(), "todo_reject", threadID,
+			map[string]any{"note": body.Note})
+		writeJSON(w, http.StatusOK, map[string]string{"status": string(domain.StatusInProgress)})
+		return
 	case "cancel":
 		next = domain.StatusCancelled
 	default:
@@ -262,8 +323,47 @@ func (s *Server) handleAdminTodoState(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrNotFound)
 		return
 	}
-	s.store.Audit(r.Context(), s.adminSubject(), "todo_"+body.Action, threadID, nil)
+	s.store.Audit(r.Context(), s.adminSubject(), "todo_"+body.Action, threadID,
+		map[string]any{"note": body.Note})
 	writeJSON(w, http.StatusOK, map[string]string{"status": string(next)})
+}
+
+// approveTodo 打开确认闸门。重复 approve 是幂等的：不改时间戳、不重复发事件。
+func (s *Server) approveTodo(w http.ResponseWriter, r *http.Request, threadID string) {
+	res, err := s.store.ApproveTodo(r.Context(), threadID, s.adminSubject())
+	if err != nil {
+		if errors.Is(err, store.ErrTodoNotFound) {
+			writeErr(w, ErrNotFound)
+			return
+		}
+		s.log.Error("确认 todo 失败", "thread", threadID, "err", err)
+		writeErr(w, ErrInternal)
+		return
+	}
+	if !res.AlreadyConfirmed {
+		// 重复 approve 不再记一条审计 —— 审计要能回答「这条 todo 是谁、什么时候放行的」，
+		// 同一个答案记三遍只会让人以为放行过三次。
+		s.store.Audit(r.Context(), s.adminSubject(), "todo_approve", threadID, nil)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": string(res.Status), "confirmedAt": res.ConfirmedAt,
+		"confirmedBy": res.ConfirmedBy, "alreadyConfirmed": res.AlreadyConfirmed,
+	})
+}
+
+// handleAdminTodoSteps 读一条 todo 的处理详情步骤。
+func (s *Server) handleAdminTodoSteps(w http.ResponseWriter, r *http.Request) {
+	s.listTodoSteps(w, r)
+}
+
+func (s *Server) listTodoSteps(w http.ResponseWriter, r *http.Request) {
+	steps, err := s.store.ListTodoSteps(r.Context(), r.PathValue("threadID"))
+	if err != nil {
+		s.log.Error("查处理步骤失败", "thread", r.PathValue("threadID"), "err", err)
+		writeErr(w, ErrInternal)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"steps": steps})
 }
 
 // handleAdminPost 让管理员以人类身份回帖。

@@ -82,6 +82,10 @@ func (s *Server) handleCreateTweet(w http.ResponseWriter, r *http.Request) {
 
 // handleAgentTodoState 让主 agent 推进状态。
 // 只有主 agent 能调 —— agent 默认只能操作属于自己的资源。
+//
+// **用户确认闸门在这里**：管理员 approve 之前，start_work / submit_deliverable
+// 一律 409。未确认阶段主 agent 该做的是把疑问问清楚 —— 那些动作全都不受影响：
+// 发帖、追加 clarification 步骤、把状态设成 clarifying 都照常可用。
 func (s *Server) handleAgentTodoState(w http.ResponseWriter, r *http.Request) {
 	agent, _ := AgentFrom(r.Context())
 	threadID := r.PathValue("threadID")
@@ -92,14 +96,7 @@ func (s *Server) handleAgentTodoState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	primary, status, err := s.store.TodoOwner(r.Context(), threadID)
-	if err != nil {
-		writeErr(w, ErrNotFound)
-		return
-	}
-	if primary != agent {
-		writeErr(w, Error{Code: "not_primary_agent",
-			Message: "只有这条 todo 的主 agent 能推进状态"})
+	if !s.requirePrimaryAgent(w, r, threadID, agent) {
 		return
 	}
 
@@ -109,18 +106,164 @@ func (s *Server) handleAgentTodoState(w http.ResponseWriter, r *http.Request) {
 		next = domain.StatusInProgress
 	case "submit_deliverable":
 		next = domain.StatusAwaitingReview
+	case "clarify":
+		// 「我看了，有问题要问」。闸门之前唯一能推的状态，也是最该推的那个 ——
+		// 管理员在列表上一眼能看出这条 todo 已经被接手、正在澄清，
+		// 而不是躺在 awaiting_response 里像没人管。
+		next = domain.StatusClarifying
 	case "decline":
 		next = domain.StatusAwaitingResponse
 	default:
 		writeErr(w, ErrBadRequest)
 		return
 	}
-	_ = status
-	if err := s.store.SetTodoStatus(r.Context(), threadID, next); err != nil {
-		writeErr(w, ErrNotFound)
+	if err := s.store.AgentSetTodoStatus(r.Context(), threadID, next); err != nil {
+		if errors.Is(err, domain.ErrTodoNotConfirmed) {
+			e := ErrTodoNotConfirmed
+			e.Message = err.Error()
+			writeErr(w, e)
+			return
+		}
+		if errors.Is(err, store.ErrTodoNotFound) {
+			writeErr(w, ErrNotFound)
+			return
+		}
+		s.log.Error("推进 todo 状态失败", "agent", agent, "thread", threadID, "err", err)
+		writeErr(w, ErrInternal)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": string(next)})
+}
+
+// requirePrimaryAgent 校验调用者是这条 todo 的主 agent。不是就已经把错误写出去了。
+//
+// 抽出来是因为「步骤」的两个写接口和状态推进用的是同一条规则：
+// agent 只能操作属于自己的资源，而一条 todo 属于且只属于它的主 agent。
+func (s *Server) requirePrimaryAgent(
+	w http.ResponseWriter, r *http.Request, threadID string, me domain.AgentID,
+) bool {
+	primary, _, err := s.store.TodoOwner(r.Context(), threadID)
+	if err != nil {
+		writeErr(w, ErrNotFound)
+		return false
+	}
+	if primary != me {
+		writeErr(w, Error{Code: "not_primary_agent",
+			Message: "只有这条 todo 的主 agent 能推进它"})
+		return false
+	}
+	return true
+}
+
+// handleAppendTodoStep 追加一条「任务处理详情步骤」。
+//
+// **只有主 agent 能写，关注者只读。** 理由：这张表回答的是「这件事推进到哪一步了」，
+// 而这个问题只该有一个答案 —— 它的责任人给出的那个。关注者要补充什么就在 thread 里发言，
+// 那条路径有通知、有 @、有作者身份。放开写权限的结果是同一条 todo 上出现几条
+// 互相矛盾的进度叙述，而看的人分不出哪条算数。
+//
+// 追加步骤**不发 inbox 事件**：它是过程记录，不是通知。真正需要别人知道的事情，
+// 主 agent 会在 thread 里说一句 —— 那条路径本来就带扇出。步骤每加一条就吵一次的话，
+// 关注者的 inbox 会被一条 todo 的内部流水淹掉。
+func (s *Server) handleAppendTodoStep(w http.ResponseWriter, r *http.Request) {
+	me := agentFrom(r)
+	threadID := r.PathValue("threadID")
+
+	var body struct {
+		Kind   string `json:"kind"`
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+		Status string `json:"status"`
+		PostID string `json:"postId"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil {
+		writeErr(w, ErrBadRequest)
+		return
+	}
+	if !s.requirePrimaryAgent(w, r, threadID, me) {
+		return
+	}
+	// confirmation 是管理员的确认动作，由 hub 自己写。让 agent 能写这一类，
+	// 等于给了它一个「自己给自己放行」的入口，闸门就白设了。
+	if domain.TodoStepKind(body.Kind) == domain.StepConfirmation {
+		writeErr(w, Error{Code: "bad_request",
+			Message: "confirmation 类型的步骤由 hub 在管理员确认时自动记录，不能由 agent 写入"})
+		return
+	}
+
+	step, err := s.store.AppendTodoStep(r.Context(), store.AppendStepParams{
+		ThreadID:  threadID,
+		ActorKind: "agent", ActorAgentID: me, PostID: body.PostID,
+		Step: domain.NewTodoStep{
+			Kind: domain.TodoStepKind(body.Kind), Title: body.Title,
+			Detail: body.Detail, Status: domain.TodoStepStatus(body.Status),
+		},
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrTodoStepKind), errors.Is(err, domain.ErrTodoStepStatus),
+			errors.Is(err, domain.ErrTodoStepTitle):
+			writeErr(w, Error{Code: "bad_request", Message: err.Error()})
+		case errors.Is(err, store.ErrTodoNotFound):
+			writeErr(w, ErrNotFound)
+		default:
+			s.log.Error("写处理步骤失败", "agent", me, "thread", threadID, "err", err)
+			writeErr(w, ErrInternal)
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, step)
+}
+
+// handleUpdateTodoStep 改一条步骤的状态或说明（比如把预先铺好的 pending 改成 done）。
+func (s *Server) handleUpdateTodoStep(w http.ResponseWriter, r *http.Request) {
+	me := agentFrom(r)
+	threadID := r.PathValue("threadID")
+
+	var body struct {
+		Status *string `json:"status"`
+		Detail *string `json:"detail"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil {
+		writeErr(w, ErrBadRequest)
+		return
+	}
+	if body.Status == nil && body.Detail == nil {
+		writeErr(w, Error{Code: "bad_request", Message: "至少要改 status 或 detail 之一"})
+		return
+	}
+	if !s.requirePrimaryAgent(w, r, threadID, me) {
+		return
+	}
+
+	var status *domain.TodoStepStatus
+	if body.Status != nil {
+		v := domain.TodoStepStatus(*body.Status)
+		status = &v
+	}
+	step, err := s.store.UpdateTodoStep(r.Context(), store.UpdateStepParams{
+		ThreadID: threadID, StepID: r.PathValue("stepID"),
+		Status: status, Detail: body.Detail,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrTodoStepStatus):
+			writeErr(w, Error{Code: "bad_request", Message: err.Error()})
+		case errors.Is(err, store.ErrStepNotFound):
+			writeErr(w, ErrNotFound)
+		default:
+			s.log.Error("更新处理步骤失败", "agent", me, "thread", threadID, "err", err)
+			writeErr(w, ErrInternal)
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, step)
+}
+
+// handleAgentTodoSteps 读步骤。**关注者也读得到** —— 想帮上忙就得先看得见
+// 别人做到哪儿了；和 GET /api/agent/threads/{threadID} 的可见范围保持一致。
+func (s *Server) handleAgentTodoSteps(w http.ResponseWriter, r *http.Request) {
+	s.listTodoSteps(w, r)
 }
 
 // handleReadThread 读 thread 全貌。agent 侧和 admin 侧共用同一个 handler —— 内容一样，

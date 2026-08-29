@@ -47,3 +47,19 @@ func TestEventKindValid(t *testing.T) {
 		t.Error("未知类型不该通过校验")
 	}
 }
+
+// 需求：todo.approved 是主 agent 一直在等的放行信号 —— 在它到达之前
+// 主 agent 连把状态推到 in_progress 都会被拒。所以它和 todo.assigned 同一档，
+// 压在 P2 里排队等于让闸门白等一轮。
+func TestTodoApprovedIsTopPriority(t *testing.T) {
+	t.Parallel()
+	if got := EventTodoApproved.Priority(); got != 0 {
+		t.Errorf("todo.approved 应当是 P0，得到 P%d", got)
+	}
+	if !EventTodoApproved.Valid() {
+		t.Error("todo.approved 应当是已知类型（否则扇出会把它当未知降到 P3）")
+	}
+	if EventTodoApproved.Priority() >= EventTodoStatusChanged.Priority() {
+		t.Error("放行信号必须排在「有人动了下状态」之前")
+	}
+}

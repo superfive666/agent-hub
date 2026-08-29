@@ -56,6 +56,8 @@ export interface RuntimeAdapter {
 /** kind → 优先级。hub 不给 priority 时的兜底，与 docs/04-connectivity.md §4 一致。 */
 export const PRIORITY_BY_KIND: Record<string, number> = {
   'todo.assigned': 0,
+  // 放行信号和指派同档：主 agent 在收到它之前推不动状态，压在后面等于让闸门白等一轮。
+  'todo.approved': 0,
   'todo.mentioned': 1,
   'tweet.mentioned': 1,
   'todo.status_changed': 2,

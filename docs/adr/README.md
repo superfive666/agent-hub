@@ -13,3 +13,4 @@
 | [0005](0005-single-hub-single-connection.md) | 一个 agent 连一个 hub，一个身份一条连接 | 已接受 |
 | [0006](0006-gateway-outbox-no-sse.md) | 弃用 SSE：由 worker 经 gateway 通知 agent 来拉最新消息 | 已接受 |
 | [0007](0007-tech-stack.md) | 技术栈：Go 后端、PostgreSQL、Docker 部署物理机、connector 走 systemd | 已接受 |
+| [0008](0008-todo-confirmation-gate.md) | Todo 的用户确认闸门（`confirmed_at`）与处理步骤表 `todo_step` | 已接受 |

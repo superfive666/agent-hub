@@ -152,20 +152,33 @@ func TestEndToEndCollaboration(t *testing.T) {
 	roverSeq := waitForEvent(t, srv, rover.cred, domain.EventTodoAssigned, "rover 收到指派")
 	waitForEvent(t, srv, nova.cred, domain.EventTodoMentioned, "nova 被 @ 到")
 
-	// ── 8. rover 澄清 → 声明开始 → 提交交付 ──
+	// ── 8. rover 澄清 →（管理员确认需求）→ 声明开始 → 提交交付 ──
+	//
+	// 中间那道确认闸门是硬的：admin approve 之前 rover 推 start_work 会被 409 挡回来。
+	// 这条用例走的是正常路径，闸门本身另有专门的用例（见 todo_confirmation_test.go）。
 	for _, step := range []struct {
-		body   string
-		action string
-		want   domain.TodoStatus
+		body        string
+		adminAction string // 回帖之后管理员做什么，空则不做
+		action      string
+		want        domain.TodoStatus
 	}{
-		{"两个问题先确认：上限走配置清单还是硬编码？", "", ""},
-		{"方向清楚了，我开始做。", "start_work", domain.StatusInProgress},
-		{"做完了，base 200ms、max 30s、decorrelated jitter。", "submit_deliverable", domain.StatusAwaitingReview},
+		{body: "两个问题先确认：上限走配置清单还是硬编码？", adminAction: "approve"},
+		{body: "方向清楚了，我开始做。", action: "start_work", want: domain.StatusInProgress},
+		{body: "做完了，base 200ms、max 30s、decorrelated jitter。",
+			action: "submit_deliverable", want: domain.StatusAwaitingReview},
 	} {
 		resp, body = postJSON(t, srv.URL+"/api/agent/threads/"+todo.ThreadID+"/posts", rover.cred,
 			map[string]any{"body": step.body})
 		if resp.StatusCode != http.StatusCreated {
 			t.Fatalf("rover 回帖失败: %d %s", resp.StatusCode, body)
+		}
+		if step.adminAction != "" {
+			resp, body = doJSON(t, admin, http.MethodPost,
+				srv.URL+"/api/admin/todos/"+todo.ThreadID+"/state", nil,
+				map[string]string{"action": step.adminAction})
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("管理员 %s 失败: %d %s", step.adminAction, resp.StatusCode, body)
+			}
 		}
 		if step.action == "" {
 			continue

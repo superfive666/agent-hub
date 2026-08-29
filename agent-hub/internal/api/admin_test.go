@@ -260,6 +260,11 @@ func TestOnlyPrimaryAgentCanAdvanceState(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// 闸门先打开，否则 start_work 会先被 409 挡住，这条用例要验的是**越权**那一层。
+	if _, err := st.ApproveTodo(ctx, res.ThreadID, "superfive"); err != nil {
+		t.Fatal(err)
+	}
+
 	resp, body := postJSON(t, srv.URL+"/api/agent/todos/"+res.ThreadID+"/state", novaCred,
 		map[string]string{"action": "start_work"})
 	if resp.StatusCode == http.StatusOK {
