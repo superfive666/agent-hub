@@ -213,6 +213,91 @@ func (s *Server) handleRevokeCredentials(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleUpdateAgent 改简介、停用 / 启用。
+//
+// **没有改名这条路，这是故意的。** 名字是 `@` 提及的唯一标识，改掉之后正文里
+// 那些已经写好的 `@old-name` 会静默失效（解析不到就当普通文本），
+// 没有任何地方会报错，只是那些 agent 从此收不到本该属于它们的通知。
+func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
+	agent := domain.AgentID(r.PathValue("agentID"))
+	var body struct {
+		Purpose *string `json:"purpose"`
+		// Enabled 为 nil 表示这次不动状态。用指针而不是 bool ——
+		// 零值 false 和「没传」必须分得开，否则只想改简介的请求会顺手把 agent 停掉。
+		Enabled *bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
+		writeErr(w, ErrBadRequest)
+		return
+	}
+	if body.Purpose == nil && body.Enabled == nil {
+		writeErr(w, Error{Code: "bad_request", Message: "至少要给 purpose 或 enabled 其中之一"})
+		return
+	}
+
+	if body.Purpose != nil {
+		if err := s.store.UpdateAgentPurpose(r.Context(), agent, *body.Purpose); err != nil {
+			s.agentWriteErr(w, "改 agent 简介", agent, err)
+			return
+		}
+		s.store.Audit(r.Context(), s.adminSubject(), "update_agent_purpose", string(agent), nil)
+	}
+
+	status := ""
+	if body.Enabled != nil {
+		next, err := s.store.SetAgentEnabled(r.Context(), agent, *body.Enabled)
+		if err != nil {
+			s.agentWriteErr(w, "改 agent 状态", agent, err)
+			return
+		}
+		status = next
+		// 停用会立刻让这个 agent 的凭证认证不过（AuthenticateCredential 要求
+		// status='active'），所以这是一条安全相关的操作，必须留痕。
+		s.store.Audit(r.Context(), s.adminSubject(), "set_agent_enabled", string(agent),
+			map[string]any{"enabled": *body.Enabled, "status": next})
+	}
+
+	out := map[string]any{"agentId": string(agent)}
+	if status != "" {
+		out["status"] = status
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleDeleteAgent 物理删除，只在没有内容留痕时允许；有留痕就让调用方去停用。
+func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
+	agent := domain.AgentID(r.PathValue("agentID"))
+	refs, err := s.store.DeleteAgent(r.Context(), agent)
+	if err != nil {
+		if errors.Is(err, store.ErrAgentInUse) {
+			// 把计数一起回去 —— 只说「删不掉」的话，调用方只能自己去库里查为什么。
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"code": "agent_in_use",
+				"message": "这个 agent 已经在内容里留下痕迹，删掉会让已经发生的事失去主语。" +
+					"改用停用：它会立刻下线，凭证保留，随时能再启用。",
+				"retryable": false,
+				"refs":      refs,
+			})
+			return
+		}
+		s.agentWriteErr(w, "删除 agent", agent, err)
+		return
+	}
+	s.store.Audit(r.Context(), s.adminSubject(), "delete_agent", string(agent), nil)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// agentWriteErr 把 store 的错误翻成 HTTP。三个写接口共用，省得每处都抄一遍
+// 「不存在就 404，其余记日志再 500」。
+func (s *Server) agentWriteErr(w http.ResponseWriter, what string, agent domain.AgentID, err error) {
+	if errors.Is(err, store.ErrAgentNotFound) {
+		writeErr(w, ErrNotFound)
+		return
+	}
+	s.log.Error(what+"失败", "agent", agent, "err", err)
+	writeErr(w, ErrInternal)
+}
+
 func (s *Server) handleListTodos(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	rows, err := s.store.ListTodos(r.Context(), q.Get("status"), q.Get("primaryAgentId"))

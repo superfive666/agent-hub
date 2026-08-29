@@ -280,6 +280,27 @@
   .seg-item[data-state="on"]{background:var(--pane-bg);color:var(--ink);
     box-shadow:inset 0 1px 0 var(--hair),0 4px 12px -6px rgba(20,55,85,.35);border-color:var(--pane-bd)}
 
+  /* ═══ runtime 选择器：一块滑到选中项底下的玻璃滑块 ═══
+     和 .seg 的区别不是审美：.seg 是等宽两三项的视图切换器，这一组有 7 项、
+     窄屏必然换行，所以滑块位置由 JS 测量（见 runtime-picker.tsx），
+     这里只负责它长什么样、怎么滑过去。
+     滑块是 z-0 的背景，选项是 z-1 的前景 —— 反过来的话滑块会盖住文字。 */
+  .rpick{position:relative;display:flex;flex-wrap:wrap;gap:4px;padding:5px;
+    border-radius:var(--r-in);background:var(--inset-bg);border:1px solid var(--inset-bd);
+    box-shadow:var(--inset-sh)}
+  .rpick-thumb{position:absolute;z-index:0;border-radius:calc(var(--r-in) - 6px);
+    background:var(--pane-bg);border:1px solid var(--pane-bd);
+    box-shadow:inset 0 1px 0 var(--hair),0 6px 18px -8px rgba(20,55,85,.42);
+    backdrop-filter:blur(14px) saturate(170%);
+    /* 位置、尺寸一起过渡 —— 只过渡 left 的话换行时高度会瞬间跳 */
+    transition:left .34s var(--ease),top .34s var(--ease),
+               width .34s var(--ease),height .34s var(--ease)}
+  .rpick-item{position:relative;z-index:1;flex:1 1 auto;min-width:88px;text-align:center;
+    padding:9px 12px;border-radius:calc(var(--r-in) - 6px);border:1px solid transparent;
+    font:700 11.5px/1.2 var(--ui);color:var(--ink2);cursor:pointer;
+    transition:color .3s var(--ease)}
+  .rpick-item[aria-checked="true"]{color:var(--ink)}
+
   /* ═══ 语义流光：只给主 agent 卡片与当前会话，不许挂到别处 ═══ */
   .glow::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.4px;
     background:conic-gradient(from var(--ang),var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i1));

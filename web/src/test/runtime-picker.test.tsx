@@ -1,0 +1,126 @@
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ADMIN, HEALTHY, installFetch, json, renderApp } from './harness'
+
+afterEach(() => vi.unstubAllGlobals())
+
+function stub() {
+  return installFetch({
+    'GET /api/admin/me': () => json(ADMIN),
+    'GET /api/admin/todos': () => json({ todos: [] }),
+    'GET /api/admin/health': () => json(HEALTHY),
+    'GET /api/admin/directory': () => json({ agents: [] }),
+    'GET /api/admin/agents': () => json({ agents: [] }),
+    'POST /api/admin/agents': () =>
+      json(
+        {
+          agentId: '11111111-2222-3333-4444-555555555555',
+          registrationToken: 'ahr_test_9f8e7d6c',
+          expiresAt: '2026-08-30T11:30:00+08:00',
+        },
+        201,
+      ),
+  })
+}
+
+/** 建一个 agent 并走到展示 token 那一屏 */
+async function createAgent(name = 'orin') {
+  await userEvent.type(await screen.findByLabelText(/名称/), name)
+  await userEvent.click(screen.getByRole('button', { name: /创建/ }))
+  return screen.findByTestId('onboard-command')
+}
+
+describe('runtime 选择器', () => {
+  it('是一组 radio 而不是下拉菜单 —— 选项本身带信息量，藏起来用户选完才发现还差东西', async () => {
+    stub()
+    renderApp('/directory/new')
+
+    const picker = await screen.findByTestId('runtime-picker')
+    expect(picker).toHaveAttribute('role', 'radiogroup')
+    // 七个 runtime 全都摆在外面，不是点开才看得到
+    expect(within(picker).getAllByRole('radio')).toHaveLength(7)
+    expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
+  /**
+   * 这是用户报的那个 bug：命令永远写死 RUNTIME=codex，
+   * 跑 claude-code 的人复制过去必然失败。
+   */
+  it('选中的 runtime 会拼进接入命令，不再永远是 codex', async () => {
+    stub()
+    renderApp('/directory/new')
+
+    const picker = await screen.findByTestId('runtime-picker')
+    // 默认就是 claude-code，不是 codex
+    expect(within(picker).getByTestId('runtime-claude-code')).toHaveAttribute('aria-checked', 'true')
+
+    const cmd = await createAgent()
+    expect(cmd).toHaveTextContent('RUNTIME=claude-code')
+    expect(cmd).not.toHaveTextContent('RUNTIME=codex')
+  })
+
+  it('命令里用的是全称 claude-code，不是产品名 claude —— 照着它去查文档才对得上', async () => {
+    stub()
+    renderApp('/directory/new')
+    const cmd = await createAgent()
+    expect(cmd.textContent).toMatch(/RUNTIME=claude-code\b/)
+  })
+
+  it('换成 codex 之后命令跟着变', async () => {
+    stub()
+    renderApp('/directory/new')
+
+    const picker = await screen.findByTestId('runtime-picker')
+    await userEvent.click(within(picker).getByTestId('runtime-codex'))
+    await waitFor(() =>
+      expect(within(picker).getByTestId('runtime-codex')).toHaveAttribute('aria-checked', 'true'),
+    )
+
+    const cmd = await createAgent()
+    expect(cmd).toHaveTextContent('RUNTIME=codex')
+  })
+
+  /**
+   * 常驻服务型缺 RUNTIME_URL 时 onboard.sh 会直接 die。
+   * 与其让用户复制一条注定失败的命令，不如把这一行摆在他面前。
+   */
+  it('选常驻服务型时命令里带上 RUNTIME_URL 占位，并说明缺了它会停住', async () => {
+    stub()
+    renderApp('/directory/new')
+
+    const picker = await screen.findByTestId('runtime-picker')
+    await userEvent.click(within(picker).getByTestId('runtime-hermes'))
+    // 形态提示要当场变，用户在建之前就该知道还要准备一个 webhook URL
+    expect(await screen.findByTestId('runtime-hint')).toHaveTextContent('常驻服务')
+
+    const cmd = await createAgent()
+    expect(cmd).toHaveTextContent('RUNTIME=hermes')
+    expect(cmd).toHaveTextContent('RUNTIME_URL=')
+  })
+
+  it('openclaw 的 SUBCOMMAND 也摆出来 —— 本项目不替用户猜这个子命令', async () => {
+    stub()
+    renderApp('/directory/new')
+
+    const picker = await screen.findByTestId('runtime-picker')
+    await userEvent.click(within(picker).getByTestId('runtime-openclaw'))
+    const cmd = await createAgent()
+    expect(cmd).toHaveTextContent('SUBCOMMAND=')
+  })
+
+  it('方向键能在选项间走 —— radiogroup 是一个控件，不是七个 Tab 停靠点', async () => {
+    stub()
+    renderApp('/directory/new')
+
+    const picker = await screen.findByTestId('runtime-picker')
+    const first = within(picker).getByTestId('runtime-claude-code')
+    first.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    await waitFor(() =>
+      expect(within(picker).getByTestId('runtime-codex')).toHaveAttribute('aria-checked', 'true'),
+    )
+    // 未选中的项不进 Tab 序
+    expect(within(picker).getByTestId('runtime-claude-code')).toHaveAttribute('tabindex', '-1')
+  })
+})

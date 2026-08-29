@@ -6,6 +6,7 @@ import { Chip } from '@/components/ui/chip'
 import { apiUrl } from '@/api/client'
 import { copyText } from '@/lib/clipboard'
 import { dateTimeLabel } from '@/lib/format'
+import { runtimeById } from '@/components/runtime-picker'
 
 /** hub 的对外地址。接入命令要贴到别人机器上去跑，写 localhost 是没用的 —— 拿不到就留占位符。 */
 function hubOrigin(): string {
@@ -18,12 +19,21 @@ function hubOrigin(): string {
  * 编出来的命令行看着像那么回事，用户复制过去只会失败，而这串 token 用一次就没了。
  * onboard.sh 会换取长期凭证（0600 落盘）、生成 connector 配置、装 systemd user service、自检。
  */
-function onboardCommand(token: string): string {
-  return [
+function onboardCommand(token: string, runtime: string): string {
+  const opt = runtimeById(runtime)
+  const lines = [
     'git clone https://github.com/superfive666/agent-hub.git ~/agent-hub',
-    `HUB=${hubOrigin()} REG_TOKEN=${token} RUNTIME=codex \\`,
-    '  sh ~/agent-hub/agent-hub-skill/scripts/onboard.sh',
-  ].join('\n')
+    `HUB=${hubOrigin()} REG_TOKEN=${token} RUNTIME=${runtime} \\`,
+  ]
+  // 常驻服务型必须给 webhook 地址，onboard.sh 缺了它会直接 die。
+  // 与其让用户复制一条注定失败的命令，不如把这一行摆在他面前、留个显眼的占位。
+  if (opt?.form === 'service') lines.push('  RUNTIME_URL=<对方的 webhook 地址> \\')
+  // openclaw 的一次性发消息子命令没有文档化的默认值，猜错的表现是每次唤起都失败、
+  // 事件一路重试进死信 —— 很难联想到是命令写错了。所以这里也不替他猜。
+  if (runtime === 'openclaw') lines.push("  SUBCOMMAND='message send' \\")
+  if (runtime === 'generic-shell') lines.push("  COMMAND='sh /path/wake.sh' \\")
+  lines.push('  sh ~/agent-hub/agent-hub-skill/scripts/onboard.sh')
+  return lines.join('\n')
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -50,6 +60,8 @@ export interface RegistrationTokenPanelProps {
   agentName?: string
   token: string
   expiresAt?: string
+  /** 拼进接入命令的 RUNTIME=。默认 codex 只是个兜底，调用方应当把用户选的那个传进来 */
+  runtime?: string
   /** 「再建一个」「回名录」这类后续动作，由用它的页面决定 */
   footer?: ReactNode
 }
@@ -65,9 +77,10 @@ export function RegistrationTokenPanel({
   agentName,
   token,
   expiresAt,
+  runtime = 'codex',
   footer,
 }: RegistrationTokenPanelProps) {
-  const cmd = onboardCommand(token)
+  const cmd = onboardCommand(token, runtime)
   return (
     <Card data-testid="registration-token">
       <CardHeader>一次性注册 TOKEN{agentName ? ` · @${agentName}` : ''}</CardHeader>
@@ -137,9 +150,18 @@ export function RegistrationTokenPanel({
             <CopyButton text={cmd} label="复制接入命令" />
           </div>
           <p className="m-0 mt-2.5 text-[10.5px] font-medium leading-[1.7]" style={{ color: 'var(--ink3)' }}>
-            <span className="mono">RUNTIME</span> 换成对方机器上真正跑的那个：claude-code / codex /
-            opencode / openclaw / hermes / openhuman / generic-shell，对照表在
+            命令里的 <span className="mono">RUNTIME={runtime}</span> 就是上面选的那个；
+            对方机器上跑的不是它的话，改掉再执行，对照表在
             <span className="mono"> connector/RUNTIMES.md</span>。
+            {runtimeById(runtime)?.form === 'service' && (
+              <>
+                {' '}
+                <b style={{ color: 'var(--human)' }}>
+                  这一档是常驻服务，必须把 RUNTIME_URL 换成真实的 webhook 地址，
+                  否则 onboard.sh 会直接停在那里。
+                </b>
+              </>
+            )}
           </p>
         </div>
 

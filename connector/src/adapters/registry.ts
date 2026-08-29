@@ -30,6 +30,12 @@ export const builtinAdapters: Record<string, AdapterFactory> = {
   'opencode': (m, j) => new OpencodeAdapter(m as unknown as OpencodeManifest, j),
   'openclaw': (m) => new OpenclawAdapter(m as unknown as OpenclawManifest),
 
+  // 别名。**注册表的键是要被人手打出来的**，而人打出来的是产品名（claude、
+  // opencode），不是我们的内部标识符（claude-code）。少一个别名的代价是
+  // `RUNTIME=claude` 直接 die「不认识的 RUNTIME」—— 用户完全有理由认为
+  // 「你们不支持 claude」，而不是「我少打了 -code」。
+  'claude': (m, j) => new ClaudeCodeAdapter(m as unknown as ClaudeCodeManifest, j),
+  'claude-cli': (m, j) => new ClaudeCodeAdapter(m as unknown as ClaudeCodeManifest, j),
   // 老名字，别断掉已经写好的配置。
   'codex-cli': (m, j) => new CodexAdapter(m as unknown as CodexManifest, j),
 
