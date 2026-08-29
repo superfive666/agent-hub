@@ -28,6 +28,12 @@ services:
     volumes:
       # 数据卷持久化。生产不要用 bind mount 到临时目录，删了就没了。
       - pgdata:/var/lib/postgresql/data
+      # 首次启动自动建表。postgres 官方镜像**只在数据目录为空时**按字典序执行
+      # 这个目录下的 *.sql，所以它只对全新部署生效，重启不会重跑。
+      # 没有这一条的话，全新部署起来是一个空库，api 每个请求都会失败 ——
+      # 而且失败信息是「relation does not exist」，看起来像代码 bug，不像没建表。
+      # 已有库要升级 schema 走 `make schema`（见 docs/08-deployment.md §7）。
+      - ../docs/schema:/docker-entrypoint-initdb.d:ro
     # 生产不把 5432 映射到宿主机：api / worker 走 compose 内部网络就够了。
     # 需要 psql 进去时用 `docker compose exec postgres psql -U agenthub`。
     healthcheck:

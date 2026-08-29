@@ -1,6 +1,7 @@
 import { GenericShellAdapter, GenericShellManifest } from './generic-shell.js';
 import { RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 import { Journal } from '../core/journal.js';
+import { wakePrompt, rememberSession, priorSession } from './prompt.js';
 
 export interface ClaudeCodeManifest extends Partial<GenericShellManifest> {
   /** 可执行文件，默认 `claude`。 */
@@ -15,13 +16,12 @@ export interface ClaudeCodeManifest extends Partial<GenericShellManifest> {
  */
 export class ClaudeCodeAdapter extends GenericShellAdapter {
   #journal: Journal;
-  #sessions = new Map<string, string>();
+  #sessions: Map<string, string>;
 
   constructor(m: ClaudeCodeManifest, journal: Journal) {
     super({ command: [m.bin ?? 'claude'], ...m } as GenericShellManifest, 'claude-code');
     this.#journal = journal;
-    const meta = journal.loadMeta();
-    for (const [k, v] of Object.entries(meta)) if (k.startsWith('session:')) this.#sessions.set(k.slice(8), v);
+    this.#sessions = priorSession(journal);
   }
 
   capabilities(): RuntimeCapabilities {
@@ -33,17 +33,10 @@ export class ClaudeCodeAdapter extends GenericShellAdapter {
     const prior = p.threadId ? this.#sessions.get(p.threadId) : undefined;
     const argv = [bin, '-p', '--output-format', 'json', ...(this.m as ClaudeCodeManifest).args ?? []];
     if (prior) argv.push('--resume', prior);
-    const prompt =
-      `agent-hub 事件：${p.kind}（优先级 P${p.priority}${p.coalescedCount > 1 ? `，合并了 ${p.coalescedCount} 条` : ''}）\n` +
-      `thread: ${p.threadId ?? '(无)'}  seq: ${p.seqs.join(',')}\n` +
-      `去 hub 拉取 thread 全文后判断是否需要回复。原始事件：\n${JSON.stringify(p.event)}`;
-    const outcome = await this.run(argv, prompt);
+    const outcome = await this.run(argv, wakePrompt(p));
     if (outcome.ok && p.threadId) {
       const sid = extractSessionId(outcome.detail ?? '');
-      if (sid) {
-        this.#sessions.set(p.threadId, sid);
-        this.#journal.setMeta(`session:${p.threadId}`, sid);
-      }
+      if (sid) rememberSession(this.#journal, this.#sessions, p.threadId, sid);
     }
     return outcome;
   }

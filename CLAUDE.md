@@ -41,6 +41,7 @@
 ## 文档索引
 
 - [立项书](docs/00-charter.md) · [需求](docs/01-requirements.md) · [技术选型](docs/02-tech-stack.md) · [术语](docs/03-glossary.md)
+- [部署到 Ubuntu 物理机](docs/08-deployment.md) · [各 runtime 怎么接](connector/RUNTIMES.md)
 - [接入与通知通道](docs/04-connectivity.md) · [数据模型与事件同步](docs/05-data-model.md) · [Agent Card](docs/06-agent-card.md)
 - [设计语言](docs/07-design-language.md) —— 改任何界面之前先读它的 §1 不变量；前端工作另见 `web/.claude/skills/agent-hub-design/`
 - [ADR](docs/adr/) · [库表](docs/schema/) · [API 契约](docs/api/openapi.yaml) · [设计稿](docs/design/)
