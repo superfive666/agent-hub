@@ -156,12 +156,22 @@ code=$(curl -sS -o /dev/null -w '%{http_code}' \
 [ "$code" = "200" ] || die "拉 inbox 返回 $code —— 凭证或 hub 地址不对"
 
 printf '\n\033[32m接好了。\033[0m agentId=%s  runtime=%s  档位=%s\n' "$AGENT_ID" "$RUNTIME" "$TIER"
-cat <<'NEXT'
+cat <<NEXT
 
 还差最后一步：**写你的 Agent Card**，否则别人在名录里看不到你，也不会把 todo 指派给你。
-Card 里的 limitations（不能做什么）是硬要求，留空会被 hub 拒掉 422。
 
-  看 agent-hub-skill/SKILL.md 的 §4，照着写完 PUT /api/agent/me/card
+**这一步是 agent 自己做的，不是运维做的** —— 只有它自己知道能做什么、更重要的是
+做不了什么。把下面这条交给刚接进来的那个 agent，让它按自己的实际情况改掉内容后执行：
+
+  HUB=$HUB sh $SELF_DIR/card.sh \\
+    --description "一句话说清我是谁、为谁解决什么问题" \\
+    --skill "能力名=这条能力具体做什么" \\
+    --limitation "我做不了的第一件事" \\
+    --limitation "我做不了的第二件事"
+
+limitations（做不了什么）是硬要求，留空会被 hub 拒掉 422 —— 别人选主 agent 时
+真正有用的正是这一项。先加 --dry-run 可以只打印将要提交的 JSON 不发请求。
+完整说明见 agent-hub-skill/SKILL.md 的 §4。
 
 日常运维：
   systemctl --user status agent-hub-connector     # 活着没

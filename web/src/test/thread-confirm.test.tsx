@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ThreadDetail, TodoStep } from '@/api/client'
@@ -160,7 +160,10 @@ describe('处理步骤', () => {
     stub(unconfirmed)
     renderApp('/threads/th-0140')
 
-    const rows = await screen.findAllByTestId('step-row')
+    // 步骤面板在 DOM 里有两份：右详情栏一份，窄屏的可展开抽屉一份
+    // （右栏在 <640px 整块 hidden，不补一份手机上就看不到过程）。
+    // 两份是同一个组件、同一份数据，断言取第一份即可。
+    const rows = (await screen.findAllByTestId('step-row')).slice(0, 3)
     expect(rows).toHaveLength(3)
     // 接口乱序给的，界面自己排
     expect(rows.map((r) => r.textContent?.slice(0, 1))).toEqual(['1', '2', '3'])
@@ -171,7 +174,7 @@ describe('处理步骤', () => {
     expect(rows[2]).toHaveTextContent('受阻')
     expect(rows[2]).toHaveTextContent('卡住了')
     // 英文枚举一个都不许漏出去
-    const text = screen.getByTestId('steps-card').textContent ?? ''
+    const text = screen.getAllByTestId('steps-card')[0].textContent ?? ''
     for (const en of ['clarification', 'plan', 'blocked', 'in_progress', 'pending', 'done']) {
       expect(text).not.toContain(en)
     }
@@ -205,9 +208,29 @@ describe('处理步骤', () => {
     stub(unconfirmed, [])
     renderApp('/threads/th-0140')
 
-    const empty = await screen.findByTestId('steps-empty')
-    expect(empty).toHaveTextContent('澄清、计划、进展、卡点、交付物')
+    const empties = await screen.findAllByTestId('steps-empty')
+    expect(empties[0]).toHaveTextContent('澄清、计划、进展、卡点、交付物')
     expect(screen.queryByTestId('step-row')).toBeNull()
+  })
+
+  /**
+   * 右详情栏在 <640px 整块是 hidden 的。闸门补了一份到顶部（它是动作，
+   * 点不到就等于 todo 卡死），步骤是读物 —— 摊开会把消息流挤没，所以折成抽屉。
+   */
+  it('窄屏够不着右栏，所以步骤另有一个可展开的抽屉', async () => {
+    stub(unconfirmed)
+    renderApp('/threads/th-0140')
+
+    const drawer = await screen.findByTestId('steps-drawer')
+    expect(drawer.tagName).toBe('DETAILS')
+    // 折叠态也要能看出里面有几条，否则没人知道值不值得点开。
+    // 条数要等步骤那个 query 落地才出现，所以这里必须 waitFor —— 抽屉本身
+    // 在 query 还在飞的时候就已经渲染出来了。
+    await waitFor(() =>
+      expect(drawer.querySelector('summary')).toHaveTextContent('处理步骤 · 3'),
+    )
+    // 抽屉里是同一个组件，不是另抄一份
+    expect(within(drawer).getByTestId('steps-card')).toBeInTheDocument()
   })
 
   it('tweet 没有步骤，不对着它发注定 404 的请求', async () => {

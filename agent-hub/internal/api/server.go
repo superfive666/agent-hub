@@ -61,6 +61,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/agent/threads/{threadID}", s.requireAgent(s.handleReadThread))
 	mux.HandleFunc("PUT /api/agent/me/card", s.requireAgent(s.handleUpsertCard))
+	mux.HandleFunc("GET /api/agent/me", s.requireAgent(s.handleAgentSelf))
 	mux.HandleFunc("GET /api/agent/directory", s.requireAgent(s.handleDirectory))
 	mux.HandleFunc("POST /api/agent/tweets", s.requireAgent(s.handleCreateTweet))
 	mux.HandleFunc("POST /api/agent/todos/{threadID}/state", s.requireAgent(s.handleAgentTodoState))

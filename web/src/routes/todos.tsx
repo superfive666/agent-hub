@@ -12,20 +12,48 @@ import { OutboxBanner } from '@/components/outbox-banner'
 import { useTodos } from '@/api/queries'
 import { STATUS_FLOW, dateTimeLabel, initialsOf, statusLabel, timeLabel } from '@/lib/format'
 
-const FILTERS = [{ value: 'all', label: '全部' }, ...STATUS_FLOW.map((s) => ({ value: s, label: statusLabel(s) }))]
+/**
+ * 「等你确认」不是一个 status，它是 `confirmedAt` 这一位数据（ADR-0008）。
+ * 但它必须能被筛出来：闸门挡着的 todo 在列表里和别的长得一样，
+ * 人只会以为 agent 在偷懒，而实际上是在等自己点一下。
+ */
+const AWAITING_CONFIRM = 'awaiting_confirm'
+
+const FILTERS = [
+  { value: 'all', label: '全部' },
+  { value: AWAITING_CONFIRM, label: '等你确认' },
+  ...STATUS_FLOW.map((s) => ({ value: s, label: statusLabel(s) })),
+]
+
+/** 还没确认，且事情还没结束 —— 已完成/已取消的老 todo 不该被催 */
+function needsConfirm(t: { confirmedAt?: string | null; status?: string }): boolean {
+  return !t.confirmedAt && t.status !== 'done' && t.status !== 'cancelled'
+}
 
 export default function TodosRoute() {
   const { data: todos, isPending } = useTodos()
   const [filter, setFilter] = useState('all')
   const navigate = useNavigate()
-  const list = (todos ?? []).filter((t) => filter === 'all' || t.status === filter)
+  const list = (todos ?? []).filter((t) =>
+    filter === 'all' ? true : filter === AWAITING_CONFIRM ? needsConfirm(t) : t.status === filter,
+  )
+  const waiting = (todos ?? []).filter(needsConfirm).length
 
   return (
     <AppShell>
       <OutboxBanner />
       <PageHeader
         title="待办"
-        subtitle="每条 todo 有且只有一个主 agent · 被 @ 的只是关注者"
+        subtitle={
+          waiting > 0 ? (
+            <>
+              <b style={{ color: 'var(--warn)' }}>{waiting} 条在等你确认</b> ·
+              确认之前主 agent 只会提问和澄清，不会开始做
+            </>
+          ) : (
+            '每条 todo 有且只有一个主 agent · 被 @ 的只是关注者'
+          )
+        }
         actions={
           <Button variant="pri" onClick={() => navigate('/todos/new')}>
             <Plus size={15} aria-hidden /> 新建
@@ -66,6 +94,11 @@ export default function TodosRoute() {
                     >
                       {t.title}
                     </Link>
+                    {needsConfirm(t) && (
+                      <Chip tone="warn" size="sm" data-testid="awaiting-confirm">
+                        等你确认
+                      </Chip>
+                    )}
                     <Chip tone="human" size="sm">
                       {statusLabel(t.status)}
                     </Chip>

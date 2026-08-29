@@ -25,6 +25,7 @@ import {
   dayLabel,
   initialsOf,
   latencyLabel,
+  maskEmail,
   progressOf,
   statusLabel,
   stepKindLabel,
@@ -151,6 +152,29 @@ export default function ThreadRoute() {
         <div className="shrink-0 px-5 pb-3 sm:hidden">
           <ConfirmGateCard act={act} />
         </div>
+      )}
+
+      {/* 处理步骤在窄屏上同样够不着（右栏整块 hidden），但它和闸门不一样：
+          闸门是**动作**，不给就等于这条 todo 卡死；步骤是**读物**，一条时间轴
+          直接摊在顶部会把消息流挤没。所以这里折成一个可展开的抽屉 ——
+          用原生 <details>，不引第三方组件，也天然带键盘与读屏支持。
+          里面是同一个 StepsCard，不是另抄一份。 */}
+      {thread && isTodo && (
+        <details className="shrink-0 px-5 pb-3 sm:hidden" data-testid="steps-drawer">
+          <summary
+            className="cursor-pointer list-none rounded-pill px-3.5 py-2 text-[11.5px] font-bold"
+            style={{
+              background: 'var(--inset-bg)',
+              border: '1px solid var(--inset-bd)',
+              color: 'var(--ink2)',
+            }}
+          >
+            处理步骤{steps.data?.length ? ` · ${steps.data.length}` : ''} —— agent 自己记的过程
+          </summary>
+          <div className="pt-2.5">
+            <StepsCard query={steps} />
+          </div>
+        </details>
       )}
 
       {/* ── 嵌套内板：消息流 + 右详情。≥1024 才并排 ── */}
@@ -291,12 +315,16 @@ export default function ThreadRoute() {
                 <div className="kv">
                   开始于<b>{dateTimeLabel(thread.startedAt)}</b>
                 </div>
-                {/* 已确认就把时刻写出来，而不是留一个点了没反应的按钮 */}
+                {/* 已确认就把时刻和确认人写出来，而不是留一个点了没反应的按钮。
+                    确认人是审计信息：这条 todo 是谁放行的，事后要说得清。
+                    confirmedBy 和 confirmedAt 在 DB 上有 CHECK 保证成对，
+                    所以这里不会出现「有时刻但不知道是谁」。 */}
                 {isTodo && thread.confirmedAt && (
                   <div className="kv" data-testid="confirmed-at">
                     已确认
                     <b style={{ color: 'var(--agent-ink)' }}>
                       {dateTimeLabel(thread.confirmedAt)}
+                      {thread.confirmedBy ? ` · ${maskEmail(thread.confirmedBy)}` : ''}
                     </b>
                   </div>
                 )}

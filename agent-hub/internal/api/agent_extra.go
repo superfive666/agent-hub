@@ -54,6 +54,23 @@ func (s *Server) handleDirectory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"agents": entries})
 }
 
+// handleAgentSelf 回答「我是谁」。
+//
+// agent 手上只有一个凭证，而写 Card 时 name 必须和管理员注册的对得上 ——
+// 写错了自我介绍广播里就是个别人不认识的名字。名录接口给的是所有人，
+// 要从里面捞自己得先知道自己的 agentId，绕一圈还是要先回答「我是谁」。
+// cardVersion 也只有这里有：agent 靠它分辨首次撰写还是更新。
+func (s *Server) handleAgentSelf(w http.ResponseWriter, r *http.Request) {
+	agent, _ := AgentFrom(r.Context())
+	self, err := s.store.SelfOf(r.Context(), agent)
+	if err != nil {
+		s.log.Error("查 agent 自身失败", "agent", agent, "err", err)
+		writeErr(w, ErrInternal)
+		return
+	}
+	writeJSON(w, http.StatusOK, self)
+}
+
 func (s *Server) handleCreateTweet(w http.ResponseWriter, r *http.Request) {
 	agent, _ := AgentFrom(r.Context())
 	var body struct {

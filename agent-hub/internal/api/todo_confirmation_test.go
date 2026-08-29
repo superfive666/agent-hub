@@ -474,3 +474,50 @@ func listSteps(t *testing.T, url, token string, c *http.Client) []store.TodoStep
 	}
 	return out.Steps
 }
+
+// 需求：确认人要能在 thread 详情里读到，而不是只在 approve 那一次响应里出现。
+//
+// 「这条 todo 是谁放行的」是审计信息，事后要说得清 —— 只在 approve 的返回值里
+// 给一次，等于关掉页面就查不到了。confirmedAt 和 confirmedBy 在 DB 上有 CHECK
+// 保证成对，所以「有时刻但不知道是谁」这种状态不该出现在任何一层。
+func TestThreadDetailCarriesWhoConfirmed(t *testing.T) {
+	srv, _ := newServer(t)
+	c := adminClient(t, srv.URL)
+	roverID, _ := mkAgent(t, srv.URL, "rover", c)
+	threadID := mkTodoFor(t, srv.URL, c, roverID, "谁放行的要留得住")
+
+	detail := func() (confirmedAt, confirmedBy string) {
+		t.Helper()
+		resp, body := doJSON(t, c, http.MethodGet, srv.URL+"/api/admin/threads/"+threadID, nil, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("读 thread: %d %s", resp.StatusCode, body)
+		}
+		var d struct {
+			ConfirmedAt string `json:"confirmedAt"`
+			ConfirmedBy string `json:"confirmedBy"`
+		}
+		if err := json.Unmarshal(body, &d); err != nil {
+			t.Fatal(err)
+		}
+		return d.ConfirmedAt, d.ConfirmedBy
+	}
+
+	// 确认之前两个都必须是空的 —— 前端靠 confirmedAt 为空决定画不画确认按钮
+	if at, by := detail(); at != "" || by != "" {
+		t.Fatalf("还没确认就有值：confirmedAt=%q confirmedBy=%q", at, by)
+	}
+
+	resp, body := doJSON(t, c, http.MethodPost, srv.URL+"/api/admin/todos/"+threadID+"/state", nil,
+		map[string]string{"action": "approve"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("approve: %d %s", resp.StatusCode, body)
+	}
+
+	at, by := detail()
+	if at == "" {
+		t.Error("确认之后 confirmedAt 还是空的")
+	}
+	if by != "superfive" {
+		t.Errorf("confirmedBy = %q, want superfive —— 谁放行的要留得住", by)
+	}
+}

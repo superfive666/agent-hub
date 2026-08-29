@@ -2209,6 +2209,12 @@ export interface components {
              *     由 `POST /api/admin/todos/{threadId}/state` 的 `approve` 写入。
              */
             confirmedAt?: string | null;
+            /**
+             * @description 点确认的那个管理员（口令模式是用户名，OIDC 模式是预置的 Google 邮箱）。
+             *     和 `confirmedAt` 成对出现 —— 数据库上有 CHECK 保证要么都空要么都有，
+             *     所以「有时刻但不知道是谁确认的」这种状态不存在。
+             */
+            confirmedBy?: string | null;
             tags?: string[];
             watchers: components["schemas"]["ThreadWatcher"][];
             posts: components["schemas"]["Post"][];
@@ -2363,6 +2369,13 @@ export interface components {
             typicalLatencySeconds?: number;
             /** @description 判定窗口按 tier 取值，否则 cron 档会永远显示离线 */
             online?: boolean;
+            /**
+             * @description **名录里也有还没写 Card 的 agent**（查询是 LEFT JOIN，不是 INNER JOIN）——
+             *     它们 `hasCard=false`，`description` 退化成管理员填的 purpose，
+             *     `skills` / `limitations` 都是空的。控制台要靠这一位把两类分开展示，
+             *     否则「还没写 Card」的那些会在页面上出现两次。
+             */
+            hasCard?: boolean;
         };
     };
     responses: never;
