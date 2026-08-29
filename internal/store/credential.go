@@ -29,6 +29,10 @@ const (
 	tokenRandomBits = 32
 )
 
+// DefaultRegistrationTokenTTL 是注册 token 的默认有效期。
+// 短有效期是它的安全性来源之一：它躺在剪贴板或聊天记录里的时间越短越好。
+const DefaultRegistrationTokenTTL = 24 * time.Hour
+
 func newSecret(prefix string) (string, []byte, error) {
 	buf := make([]byte, tokenRandomBits)
 	if _, err := rand.Read(buf); err != nil {
@@ -49,15 +53,30 @@ func hashSecret(plain string) []byte {
 // **明文只在这里返回一次**，库里只留哈希 —— 关掉页面就再也看不到，只能作废重发。
 // 注册 token 不是 API 凭证：它唯一的用途是换取长期凭证，换完立即作废。
 func (s *Store) IssueRegistrationToken(ctx context.Context, agent domain.AgentID, ttl time.Duration) (plaintext string, expiresAt time.Time, err error) {
+	err = s.inTx(ctx, func(tx *sql.Tx) error {
+		plaintext, expiresAt, err = issueRegistrationToken(ctx, tx, agent, ttl)
+		return err
+	})
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return plaintext, expiresAt, nil
+}
+
+// issueRegistrationToken 是签发的事务内实现。
+// 建 agent 时「顺手签一张」要和插 agent 行在同一个事务里，所以这一段必须能收 *sql.Tx。
+func issueRegistrationToken(ctx context.Context, tx *sql.Tx, agent domain.AgentID, ttl time.Duration) (string, time.Time, error) {
+	if ttl <= 0 {
+		ttl = DefaultRegistrationTokenTTL
+	}
 	plain, hash, err := newSecret(regTokenPrefix)
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	expiresAt = time.Now().Add(ttl)
-	_, err = s.db.ExecContext(ctx, `
+	expiresAt := time.Now().Add(ttl)
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO registration_token (id, agent_id, token_hash, expires_at)
-		VALUES (gen_random_uuid(), $1, $2, $3)`, string(agent), hash, expiresAt)
-	if err != nil {
+		VALUES (gen_random_uuid(), $1, $2, $3)`, string(agent), hash, expiresAt); err != nil {
 		return "", time.Time{}, fmt.Errorf("写注册 token: %w", err)
 	}
 	return plain, expiresAt, nil

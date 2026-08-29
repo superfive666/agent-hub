@@ -117,6 +117,8 @@ func loadFanoutInput(
 	var meta struct {
 		ThreadKind string `json:"threadKind"`
 		IsOpening  bool   `json:"isOpening"`
+		// TodoEvent 只有状态动作类事件（todo.approved）才有，见 domain.FanoutInput。
+		TodoEvent string `json:"todoEvent"`
 	}
 	if len(payload) > 0 {
 		if err := json.Unmarshal(payload, &meta); err != nil {
@@ -127,6 +129,7 @@ func loadFanoutInput(
 	in := domain.FanoutInput{
 		ThreadKind:      domain.ThreadKind(meta.ThreadKind),
 		IsThreadOpening: meta.IsOpening,
+		TodoEvent:       domain.EventKind(meta.TodoEvent),
 	}
 	if actor.Valid {
 		in.Actor = domain.AgentID(actor.String)

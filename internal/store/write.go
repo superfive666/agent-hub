@@ -4,23 +4,95 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/superfive666/agent-hub/internal/domain"
 )
 
-// CreateAgent 建一条 agent 记录，返回它的 id。
-func (s *Store) CreateAgent(ctx context.Context, name, purpose, owner string) (domain.AgentID, error) {
-	var id string
-	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO agent (id, name, purpose, owner, status)
-		VALUES (gen_random_uuid(), $1, $2, $3, 'active')
-		RETURNING id`, name, purpose, owner).Scan(&id)
+// ErrAgentNameTaken 说明这个名字已经被占了。
+//
+// 名字是 @ 提及的唯一入口，所以它必须唯一（DB 上是 UNIQUE 约束）。
+// 撞名是调用方能自己修的事 —— 换个名字重试 —— 所以它是 409 而不是 500。
+var ErrAgentNameTaken = errors.New("这个名称已经被占用了，换一个")
+
+// CreateAgentParams 是新建一个 agent 记录的输入。
+type CreateAgentParams struct {
+	Name    string
+	Purpose string
+	Owner   string
+	// IssueToken 为 true 时在**同一个事务里**顺手签一张注册 token。
+	// 分两次调用会出现「agent 建好了但 token 没签出来」的中间态 ——
+	// 控制台上那一行既不能用也不知道该不该删。合成一个事务就没有这个态。
+	IssueToken bool
+	TokenTTL   time.Duration
+}
+
+// CreateAgentResult 是新建 agent 的结果。
+type CreateAgentResult struct {
+	AgentID domain.AgentID
+	// RegistrationToken 的**明文只在这里出现一次**，库里只有哈希。
+	// 没要求签发时为空。
+	RegistrationToken string
+	ExpiresAt         *time.Time
+}
+
+// CreateAgentWithToken 建一条 agent 记录，可选地在同一事务里签发注册 token。
+//
+// 新记录的状态是 pending_registration 而不是 active：这条记录此刻只是一个占位，
+// 它还没有换过长期凭证，也就还没有真的接进来。控制台的「未接入 / 已接入」两态
+// 直接读这个字段 —— 建完就写 active 的话，两态在数据上根本区分不出来。
+// 状态在 ExchangeRegistrationToken 里才翻成 active。
+func (s *Store) CreateAgentWithToken(ctx context.Context, p CreateAgentParams) (CreateAgentResult, error) {
+	name, err := domain.ValidateAgentName(p.Name)
 	if err != nil {
-		return "", fmt.Errorf("创建 agent: %w", err)
+		return CreateAgentResult{}, err
 	}
-	return domain.AgentID(id), nil
+
+	var res CreateAgentResult
+	err = s.inTx(ctx, func(tx *sql.Tx) error {
+		var id string
+		err := tx.QueryRowContext(ctx, `
+			INSERT INTO agent (id, name, purpose, owner, status)
+			VALUES (gen_random_uuid(), $1, $2, $3, 'pending_registration')
+			RETURNING id`, name, p.Purpose, p.Owner).Scan(&id)
+		if isUniqueViolation(err) {
+			return ErrAgentNameTaken
+		}
+		if err != nil {
+			return fmt.Errorf("创建 agent: %w", err)
+		}
+		res.AgentID = domain.AgentID(id)
+
+		if !p.IssueToken {
+			return nil
+		}
+		plain, exp, err := issueRegistrationToken(ctx, tx, res.AgentID, p.TokenTTL)
+		if err != nil {
+			return err
+		}
+		res.RegistrationToken, res.ExpiresAt = plain, &exp
+		return nil
+	})
+	if err != nil {
+		return CreateAgentResult{}, err
+	}
+	return res, nil
+}
+
+// CreateAgent 建一条 agent 记录，返回它的 id。CreateAgentWithToken 的简写。
+func (s *Store) CreateAgent(ctx context.Context, name, purpose, owner string) (domain.AgentID, error) {
+	res, err := s.CreateAgentWithToken(ctx, CreateAgentParams{Name: name, Purpose: purpose, Owner: owner})
+	return res.AgentID, err
+}
+
+// isUniqueViolation 判断错误是不是唯一约束冲突（PostgreSQL 23505）。
+// 靠错误码而不是匹配错误文案 —— 文案会随 PostgreSQL 版本和 locale 变。
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // CreateTodoParams 是创建一条 todo 需要的输入。

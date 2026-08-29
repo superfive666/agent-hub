@@ -19,6 +19,11 @@ const serialLockID int64 = 0x7E57D8
 
 // New 返回一个已经清空的测试库。没配 TEST_DATABASE_URL 就跳过整个用例。
 //
+// **加了新表就要加进下面的 TRUNCATE 名单。** CASCADE 确实会连带清掉引用它的表，
+// 但那是「碰巧被清到」而不是「说好要清」—— 名单是这份文件里唯一能读出
+// 「用例之间到底重置了什么」的地方，漏写一张表的代价是用例之间互相污染，
+// 而这种失败通常表现为「单独跑就过、一起跑就挂」。
+//
 //	make dev-db && make test-db
 func New(t *testing.T) *store.Store {
 	t.Helper()
@@ -62,8 +67,9 @@ func New(t *testing.T) *store.Store {
 
 	if _, err := s.DB().ExecContext(ctx, `
 		TRUNCATE inbox_event, outbox_event, agent_inbox_state, mention, thread_watcher,
-		         post, todo, tweet, thread, agent_card, agent_credential, agent_dead_letter,
-		         registration_token, agent, audit_log RESTART IDENTITY CASCADE`); err != nil {
+		         todo_step, post, todo, tweet, thread, agent_card, agent_credential,
+		         agent_dead_letter, registration_token, agent, audit_log,
+		         subscription RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("清空测试库: %v", err)
 	}
 	return s

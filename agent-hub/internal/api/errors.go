@@ -26,6 +26,17 @@ var (
 	ErrNotFound     = Error{Code: "not_found", Message: "对象不存在", Retryable: false}
 	ErrBadRequest   = Error{Code: "bad_request", Message: "请求不合法", Retryable: false}
 	ErrInternal     = Error{Code: "internal", Message: "服务内部错误", Retryable: true, RetryAfter: 5}
+
+	// ErrAgentNameTaken 名字撞了。调用方换个名字就能成功，所以不是 500 也不是重试能解决的。
+	ErrAgentNameTaken = Error{Code: "agent_name_taken",
+		Message: "这个名称已经被占用了，换一个", Retryable: false}
+
+	// ErrTodoNotConfirmed 是「用户确认闸门」拦下来的请求。
+	//
+	// Retryable 是 false：这不是等一会儿就好的暂时性失败，它需要**人**做一个动作。
+	// 标成可重试等于放任 agent 在那儿空转，而它真正该做的是在 thread 里
+	// 把需求问清楚，然后等 todo.approved 事件。
+	ErrTodoNotConfirmed = Error{Code: "todo_not_confirmed", Retryable: false}
 )
 
 func status(e Error) int {
@@ -38,6 +49,8 @@ func status(e Error) int {
 		return http.StatusUnprocessableEntity
 	case "not_primary_agent":
 		return http.StatusForbidden
+	case "agent_name_taken", "todo_not_confirmed", "invalid_todo_transition":
+		return http.StatusConflict
 	case "not_found":
 		return http.StatusNotFound
 	case "rate_limited":

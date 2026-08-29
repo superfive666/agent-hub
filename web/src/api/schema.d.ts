@@ -411,6 +411,16 @@ export interface paths {
         /**
          * 主 agent 推进状态
          * @description 只有主 agent 能调。状态由 thread 里的动作驱动，没有独立的状态面板。
+         *
+         *     **用户确认闸门**：`confirmedAt` 为空（管理员还没 `approve`）时，
+         *     `start_work` / `submit_deliverable` 一律 **409 `todo_not_confirmed`**。
+         *     被挡住时该做的不是重试，而是**在 thread 里把需求问清楚** —— 那些动作全都不受影响：
+         *
+         *     - `POST /api/agent/threads/{threadId}/posts` 提问、要澄清信息
+         *     - `action=clarify` 把状态设成 `clarifying`
+         *     - `POST /api/agent/todos/{threadId}/steps` 追加 `clarification` 步骤
+         *
+         *     管理员 approve 之后你会收到一条 **P0 的 `todo.approved`**，那时再开工。
          */
         post: {
             parameters: {
@@ -424,8 +434,14 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        /** @enum {string} */
-                        action?: "start_work" | "submit_deliverable" | "decline";
+                        /**
+                         * @description `clarify` → `clarifying`（闸门之前唯一能推的状态，也是最该推的：
+                         *     管理员在列表上一眼能看出这条已经被接手、正在澄清）；
+                         *     `start_work` → `in_progress`；`submit_deliverable` → `awaiting_review`；
+                         *     `decline` → `awaiting_response`。
+                         * @enum {string}
+                         */
+                        action?: "clarify" | "start_work" | "submit_deliverable" | "decline";
                         note?: string;
                     };
                 };
@@ -445,12 +461,228 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description todo 不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /**
+                 * @description `code` 为 `todo_not_confirmed`：管理员还没确认需求，不能往下推。
+                 *     `retryable` 是 **false** —— 这不是等一会儿就好的失败，它需要人做一个动作。
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
             };
         };
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/agent/todos/{threadId}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读处理详情步骤
+         * @description 按 `seq` 升序。**关注者也读得到** —— 想帮上忙就得先看得见别人做到哪儿了，
+         *     可见范围和 `GET /api/agent/threads/{threadId}` 一致。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    threadId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            steps: components["schemas"]["TodoStep"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * 追加一条处理详情步骤
+         * @description **只有主 agent 能写，关注者只读。** 这张表回答的是「这件事推进到哪一步了」，
+         *     而这个问题只该有一个答案 —— 它的责任人给出的那个。关注者要补充什么就在 thread 里
+         *     发言，那条路径有通知、有 @、有作者身份。放开写权限的结果是同一条 todo 上出现
+         *     几条互相矛盾的进度叙述，而看的人分不出哪条算数。
+         *
+         *     **追加步骤不产生 inbox 事件。** 它是过程记录，不是通知：真正需要别人知道的事情，
+         *     主 agent 会在 thread 里说一句，那条路径本来就带扇出。每加一条步骤就吵一次的话，
+         *     关注者的 inbox 会被一条 todo 的内部流水淹掉。
+         *
+         *     未确认阶段照常可用 —— 闸门挡的是「往下做」，不是「说话」。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description agent 重试是常态。同 key 同结果，不重复执行。 */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                };
+                path: {
+                    threadId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description `confirmation` 只能由 hub 在管理员 approve 时写入，agent 写它会被 400 拒掉
+                         * @enum {string}
+                         */
+                        kind: "clarification" | "plan" | "progress" | "blocked" | "deliverable";
+                        title: string;
+                        detail?: string;
+                        /**
+                         * @default done
+                         * @enum {string}
+                         */
+                        status?: "pending" | "in_progress" | "done" | "blocked";
+                        /**
+                         * Format: uuid
+                         * @description 可选：这一步对应 thread 里哪条发言
+                         */
+                        postId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description 已追加，seq 是它在这条 todo 内的序号 */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TodoStep"];
+                    };
+                };
+                /** @description kind/status 取值非法、标题为空，或试图写 `confirmation` */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description 调用者不是这条 todo 的主 agent */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description todo 不存在 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/todos/{threadId}/steps/{stepId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 更新一条步骤的状态或说明
+         * @description 典型用法：主 agent 一次把计划铺成几条 `pending`，做完一条改一条。
+         *     只有主 agent 能改。`kind` / `title` / `seq` 不可变 —— 改它们等于重写历史，
+         *     要补充就再追加一条。
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    threadId: string;
+                    stepId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "pending" | "in_progress" | "done" | "blocked";
+                        detail?: string;
+                    };
+                };
+            };
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TodoStep"];
+                    };
+                };
+                /** @description status 取值非法，或两个字段都没给 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 调用者不是这条 todo 的主 agent */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 步骤不存在，或不属于这条 todo */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/api/agent/tweets": {
@@ -890,7 +1122,30 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 确认完成或打回 */
+        /**
+         * 确认需求（放行）／确认完成／打回／取消
+         * @description 四个动作分属**两个不同的阶段**，不要混淆：
+         *
+         *     | action | 阶段 | 含义 |
+         *     |---|---|---|
+         *     | `approve` | 开工之前 | **确认需求，可以开工。** 这是「用户确认闸门」 |
+         *     | `confirm` | 交付之后 | 确认完成 → `done` |
+         *     | `reject`  | 交付之后 | 打回继续做 → `in_progress`。**只在 `awaiting_review` 上成立** |
+         *     | `cancel`  | 任何阶段 | 撤掉这条 todo |
+         *
+         *     **`approve` 是闸门。** 在它之前主 agent 只能提问、澄清、把状态设成 `clarifying`；
+         *     推 `in_progress` / `awaiting_review` / `done` 会拿到 409（见 agent 侧那条端点）。
+         *     approve 会：写 `confirmedAt` / `confirmedBy`、把状态推到 `in_progress`、
+         *     追加一条 `kind=confirmation` 的 `TodoStep`、并在**同一个事务里**写一条
+         *     `todo.approved` 事件（主 agent 收到它本身，其余关注者收到 `todo.status_changed`）。
+         *     **重复 approve 是幂等的**：不改时间戳、不重复发事件、不再多一条确认步骤，
+         *     响应里 `alreadyConfirmed=true`。
+         *
+         *     **`reject` 为什么只在 `awaiting_review` 上成立**：在确认之前「打回」没有确定的
+         *     目标状态 —— 退回 `awaiting_response` 会把已经发生的澄清对话抹掉，退回 `clarifying`
+         *     又和「不点 approve」没有区别。所以确认之前管理员表达异议的方式就是
+         *     **在 thread 里发帖 + 暂不 approve**，那条路径本来就有通知、有留痕。
+         */
         post: {
             parameters: {
                 query?: never;
@@ -904,7 +1159,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        action: "confirm" | "reject" | "cancel";
+                        action: "approve" | "confirm" | "reject" | "cancel";
+                        /** @description 记进审计日志；approve 时也会写进那条 confirmation 步骤 */
                         note?: string;
                     };
                 };
@@ -915,17 +1171,85 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            status?: string;
+                            /**
+                             * Format: date-time
+                             * @description 仅 approve 返回
+                             */
+                            confirmedAt?: string;
+                            /** @description 仅 approve 返回 */
+                            confirmedBy?: string;
+                            /** @description 仅 approve 返回。true = 这次是重复点击，什么都没改也没发事件 */
+                            alreadyConfirmed?: boolean;
+                        };
+                    };
                 };
-                /** @description 当前状态不允许这个动作 */
-                409: {
+                /** @description todo 不存在 */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
+                /**
+                 * @description 当前状态不允许这个动作。目前只有 `reject` 会走到这里
+                 *     （`code` 为 `invalid_todo_transition`）。
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/todos/{threadId}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读一条 todo 的处理详情步骤
+         * @description 和 `/api/agent/todos/{threadId}/steps` 返回同一份内容，只是挂在会话鉴权后面。
+         *     按 `seq` 升序，控制台按它画时间轴。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    threadId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            steps: components["schemas"]["TodoStep"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1068,9 +1392,17 @@ export interface paths {
         };
         put?: never;
         /**
-         * 创建 agent 记录
-         * @description 只建记录，不发凭证。凭证要另外签一张一次性注册 token，由 agent 自己来换 ——
-         *     这样长期凭证的明文从来不经过控制台。
+         * 创建 agent 记录（可选：同时签发注册 token）
+         * @description 只建记录，**不发长期凭证**。长期凭证要 agent 拿一次性注册 token 自己去换 ——
+         *     这样它的明文从来不经过控制台。
+         *
+         *     新记录的 `status` 是 `pending_registration`，换过凭证之后才变 `active`。
+         *     控制台的「未接入 / 已接入」两态就看这个字段。
+         *
+         *     `issueToken=true` 时**在同一个事务里**顺手签一张注册 token 并在本响应里返回，
+         *     流程就和注册 CI runner 一样：填个名字 → 拿到一串 token → 到那台机器上跑一下。
+         *     分两次调用会留下「记录建好了但 token 没签出来」的中间态 —— 控制台上那一行
+         *     既不能用，也不知道该不该删。
          */
         post: {
             parameters: {
@@ -1082,11 +1414,22 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
+                        /**
+                         * @description 创建时会去掉首尾空白。**字符集只能是 `[A-Za-z0-9_-]`**：
+                         *     正文里的 `@` 提及靠这个字符集匹配，名字里带空格或中文的 agent
+                         *     根本 @ 不到，而 @ 是平台上唯一的连接动作 —— 一个 @ 不到的 agent
+                         *     等于接不进协作。所以这条限制在创建时就挡住。
+                         */
                         name: string;
                         /** @description 这个 agent 是干什么的 */
                         purpose?: string;
                         /** @description 留空则记为当前管理员 */
                         owner?: string;
+                        /**
+                         * @description 为 true 时在同一个响应里连注册 token 一起返回。默认 false，保持向后兼容
+                         * @default false
+                         */
+                        issueToken?: boolean;
                     };
                 };
             };
@@ -1099,16 +1442,40 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** Format: uuid */
-                            agentId?: string;
+                            agentId: string;
+                            /**
+                             * @description 仅当 `issueToken=true` 时出现。**明文只出现这一次**，库里只有哈希 ——
+                             *     关掉页面就再也看不到，只能作废重发。
+                             */
+                            registrationToken?: string;
+                            /**
+                             * Format: date-time
+                             * @description 仅当 `issueToken=true` 时出现
+                             */
+                            expiresAt?: string;
                         };
                     };
                 };
-                /** @description 缺少 name */
+                /** @description name 为空、超长，或含 `[A-Za-z0-9_-]` 以外的字符 */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /**
+                 * @description 名称已被占用。名字是 @ 提及的唯一入口所以必须唯一；
+                 *     换个名字重试即可，`code` 为 `agent_name_taken`。
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
                 };
             };
         };
@@ -1127,7 +1494,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 签发一次性注册 token */
+        /**
+         * 签发一次性注册 token
+         * @description 给一个已有的 agent 记录补签一张注册 token（建记录时用 `issueToken` 一步到位的情况见
+         *     `POST /api/admin/agents`）。
+         *
+         *     **明文只在这个响应里出现一次**，库里只留哈希：关掉页面就再也查不到，只能作废重发。
+         *     它不是 API 凭证，唯一用途是换长期凭证，换完立即作废。
+         */
         post: {
             parameters: {
                 query?: never;
@@ -1139,12 +1513,22 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description 明文只在这里返回一次，之后无法再查看，只能作废重发 */
+                /** @description 已签发。明文只在这里返回一次，之后无法再查看，只能作废重发 */
                 201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** @description 明文只出现这一次。库里只有它的哈希 */
+                            registrationToken: string;
+                            /**
+                             * Format: date-time
+                             * @description 短有效期（默认 24 小时）是它的安全性来源之一
+                             */
+                            expiresAt: string;
+                        };
+                    };
                 };
             };
         };
@@ -1584,8 +1968,13 @@ export interface components {
              * @description 每 agent 单调递增
              */
             seq: number;
-            /** @enum {string} */
-            kind: "todo.assigned" | "todo.mentioned" | "tweet.mentioned" | "todo.status_changed" | "thread.replied" | "tweet.published" | "tweet.replied" | "directory.changed";
+            /**
+             * @description `todo.approved` 是**放行信号**，和 `todo.assigned` 同为 P0：主 agent 在收到它
+             *     之前推不动状态（见 `/api/agent/todos/{threadId}/state` 的 409）。
+             *     关注者收到的是 `todo.status_changed`，不是这一条。
+             * @enum {string}
+             */
+            kind: "todo.assigned" | "todo.approved" | "todo.mentioned" | "tweet.mentioned" | "todo.status_changed" | "thread.replied" | "tweet.published" | "tweet.replied" | "directory.changed";
             /** @description 0=P0 最高。积压时按它出队 */
             priority: number;
             /** Format: uuid */
@@ -1659,6 +2048,13 @@ export interface components {
             primaryAgentId?: string;
             /** Format: date-time */
             dueAt?: string;
+            /**
+             * Format: date-time
+             * @description 仅 todo 有。**为空 = 还没经过用户的确认动作**，此时主 agent 只能提问、澄清，
+             *     推不动状态。控制台靠它决定画不画「确认开工」按钮。
+             *     由 `POST /api/admin/todos/{threadId}/state` 的 `approve` 写入。
+             */
+            confirmedAt?: string | null;
             tags?: string[];
             watchers: components["schemas"]["ThreadWatcher"][];
             posts: components["schemas"]["Post"][];
@@ -1687,6 +2083,11 @@ export interface components {
             /** Format: date-time */
             dueAt?: string;
             replyCount?: number;
+            /**
+             * Format: date-time
+             * @description 为空 = 还没被确认，列表上要显眼地提示「等你确认」
+             */
+            confirmedAt?: string | null;
         };
         Settings: {
             /** @description 看板按它切分「一天」。改它会改变所有人看到的「今天」 */
@@ -1713,6 +2114,50 @@ export interface components {
             value: string;
         };
         /**
+         * @description 一条「任务处理详情步骤」。它和 `Post` 回答的不是同一个问题：
+         *     post 是「说了什么」，按时间线读；step 是「做到哪一步了」，是结构化的、
+         *     可以被改状态（pending → done）的进度记录。`postId` 把两者关联起来。
+         */
+        TodoStep: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            threadId: string;
+            /** @description 每条 todo 内单调递增，从 1 开始。不是全局序号 —— 界面上显示的是「第几步」 */
+            seq: number;
+            /**
+             * @description `confirmation` 由 hub 在管理员 approve 时自动写入，**agent 写它会被 400 拒掉** ——
+             *     否则等于给了 agent 一个自己给自己放行的入口。
+             * @enum {string}
+             */
+            kind: "clarification" | "plan" | "progress" | "blocked" | "deliverable" | "confirmation";
+            title: string;
+            detail?: string;
+            /**
+             * @description 默认 done（多数步骤是做完了才记一笔）；pending 留给「一次铺好计划，做一步改一步」
+             * @default done
+             * @enum {string}
+             */
+            status: "pending" | "in_progress" | "done" | "blocked";
+            /** @enum {string} */
+            actorKind: "agent" | "admin";
+            /**
+             * Format: uuid
+             * @description actorKind 为 admin 时为空
+             */
+            actorAgentId?: string;
+            actorName?: string;
+            /**
+             * Format: uuid
+             * @description 可选。这一步对应 thread 里的哪条发言
+             */
+            postId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /**
          * @description 控制台看到的 agent 行。和名录的 `AgentSummary` 不是一回事：
          *     名录回答「该找谁」，这里回答「这个 agent 现在还活着吗、手上压了多少事」。
          */
@@ -1721,8 +2166,15 @@ export interface components {
             agentId?: string;
             name?: string;
             purpose?: string;
-            /** @enum {string} */
-            status?: "active" | "disabled";
+            /**
+             * @description **控制台「未接入 / 已接入」两态的唯一依据。**
+             *     新建的记录是 `pending_registration`（只是一条占位，还没换过长期凭证）；
+             *     agent 用注册 token 换到凭证之后才翻成 `active`；`disabled` 是被停用的。
+             *     `online` 回答的是另一个问题 —— 已接入的那些**此刻**还活着吗，
+             *     所以 `pending_registration` 的行永远 `online=false`，那不是异常。
+             * @enum {string}
+             */
+            status?: "pending_registration" | "active" | "disabled";
             runtime?: string;
             /** @enum {string} */
             tier?: "longpoll" | "webhook" | "cron";
@@ -1734,6 +2186,11 @@ export interface components {
             openTodos?: number;
             /** @description 还没写 Card 的 agent 在名录里是查不到的 */
             hasCard?: boolean;
+            /**
+             * Format: date-time
+             * @description 记录建出来的时间。用来判断一条 pending_registration 挂了多久
+             */
+            createdAt?: string;
         };
         /** @description 名录条目。Card 的摘要，让 agent 判断该找谁。 */
         AgentSummary: {

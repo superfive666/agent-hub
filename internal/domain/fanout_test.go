@@ -246,3 +246,40 @@ func TestDedupMentions(t *testing.T) {
 		})
 	}
 }
+
+// 需求：管理员确认需求后，主 agent 与关注者的 inbox 都要收到。
+// 但两者收到的不是同一种事件：主 agent 收到的是放行信号（它被闸门挡着），
+// 关注者收到的只是「这条事推进了」。
+func TestFanoutTodoApproved(t *testing.T) {
+	t.Parallel()
+	got := Fanout(FanoutInput{
+		ThreadKind:     ThreadTodo,
+		PrimaryAgentID: "rover",
+		TodoEvent:      EventTodoApproved,
+		Watchers: []Watcher{
+			{AgentID: "rover", Reason: WatchPrimary},
+			{AgentID: "nova", Reason: WatchMentioned},
+		},
+	})
+	want := []Delivery{
+		{AgentID: "nova", Kind: EventTodoStatusChanged},
+		{AgentID: "rover", Kind: EventTodoApproved},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Fanout()\n got = %v\nwant = %v", got, want)
+	}
+}
+
+// 确认动作是管理员发起的，没有 actor agent —— 主 agent 不会因为「不通知自己」
+// 这条规则被漏掉。这是最容易写错的一处：approve 的收件人里必须有主 agent。
+func TestFanoutTodoApprovedAlwaysReachesPrimary(t *testing.T) {
+	t.Parallel()
+	got := Fanout(FanoutInput{
+		ThreadKind:     ThreadTodo,
+		PrimaryAgentID: "rover",
+		TodoEvent:      EventTodoApproved,
+	})
+	if len(got) != 1 || got[0].AgentID != "rover" || got[0].Kind != EventTodoApproved {
+		t.Errorf("Fanout() = %v, want 只有 rover 拿到 todo.approved", got)
+	}
+}

@@ -27,6 +27,12 @@ const (
 	EventTodoMentioned EventKind = "todo.mentioned"
 	// EventTweetMentioned 某条 post 在广播里 @ 了你。
 	EventTweetMentioned EventKind = "tweet.mentioned"
+	// EventTodoApproved 管理员确认了这条 todo 的需求，主 agent 可以开工了。
+	//
+	// 和 todo.assigned 同一档（P0）：它不是「有人动了一下状态」这种周知，
+	// 而是主 agent 一直在等的那个放行信号 —— 在它到达之前，主 agent
+	// 连把状态推到 in_progress 都会被拒。压在 P2 里排队等于让闸门白等一轮。
+	EventTodoApproved EventKind = "todo.approved"
 	// EventTodoStatusChanged 你关注的 todo 状态变化。
 	EventTodoStatusChanged EventKind = "todo.status_changed"
 	// EventThreadReplied 你关注的 todo thread 有新回复。
@@ -45,7 +51,7 @@ const (
 // 积压时必须先处理「你要负责这件事」，而不是「有人发了条广播」。
 func (k EventKind) Priority() int {
 	switch k {
-	case EventTodoAssigned:
+	case EventTodoAssigned, EventTodoApproved:
 		return 0
 	case EventTodoMentioned, EventTweetMentioned:
 		return 1
@@ -62,7 +68,7 @@ func (k EventKind) Priority() int {
 // Valid 报告 k 是否是已知事件类型。
 func (k EventKind) Valid() bool {
 	switch k {
-	case EventTodoAssigned, EventTodoMentioned, EventTweetMentioned,
+	case EventTodoAssigned, EventTodoApproved, EventTodoMentioned, EventTweetMentioned,
 		EventTodoStatusChanged, EventThreadReplied,
 		EventTweetReplied, EventTweetPublished, EventDirectoryChanged:
 		return true

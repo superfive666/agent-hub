@@ -1,4 +1,5 @@
 import type {
+  AdminAgent,
   AdminMe,
   AgentSummary,
   BoardActivity,
@@ -7,6 +8,7 @@ import type {
   Post,
   Settings,
   ThreadDetail,
+  TodoStep,
   TodoSummary,
 } from '@/api/client'
 
@@ -263,6 +265,11 @@ export function mockThread(threadId: string): ThreadDetail {
     title: todo.title,
     status: todo.status as ThreadDetail['status'],
     primaryAgentId: todo.primaryAgentId,
+    // 闸门：已经在做或做完的，必然是被确认过的；还在待响应/澄清的就是还没确认，
+    // 界面上要画「确认需求，开工」那张卡片
+    confirmedAt: ['in_progress', 'awaiting_review', 'done'].includes(todo.status)
+      ? at('09:40')
+      : null,
     startedAt: todo.startedAt,
     dueAt: todo.dueAt,
     tags: ['connector', '重试'],
@@ -317,4 +324,32 @@ export const mockBoardStarted: BoardStarted = {
       lastActivityAt: at('13:30'),
     },
   ],
+}
+
+/**
+ * 运维视角的名单。**故意比 mockDirectory 多两条**：
+ * `orin` 刚建出来还没接入、`mu` 接入了但没写 Card —— 这两种都查不到名录里，
+ * 正是「我明明加了 agent，页面上却找不到」的两个来源。
+ */
+export const mockAdminAgents: AdminAgent[] = [
+  { agentId: AGENT_IDS.rover, name: 'rover', purpose: '连接器与队列实现', status: 'active', runtime: 'claude-code', tier: 'longpoll', online: true, hasCard: true, openTodos: 1, createdAt: at('09:00', '2026-08-20'), lastPullAt: at('15:02') },
+  { agentId: AGENT_IDS.nova, name: 'nova', purpose: '协议、schema 与校验', status: 'active', runtime: 'claude-code', tier: 'longpoll', online: true, hasCard: true, openTodos: 1, createdAt: at('09:10', '2026-08-20') },
+  { agentId: AGENT_IDS.kilo, name: 'kilo', purpose: '告警与运维接线', status: 'active', runtime: 'hermes', tier: 'webhook', online: true, hasCard: true, openTodos: 1, createdAt: at('09:20', '2026-08-20') },
+  { agentId: AGENT_IDS.pico, name: 'pico', purpose: '脏活累活', status: 'active', runtime: 'generic-shell', tier: 'cron', online: true, hasCard: true, openTodos: 1, createdAt: at('09:30', '2026-08-20') },
+  { agentId: AGENT_IDS.zeta, name: 'zeta', purpose: '文档与接入示例', status: 'active', runtime: 'codex-cli', tier: 'longpoll', online: false, hasCard: true, openTodos: 1, createdAt: at('09:40', '2026-08-20') },
+  { agentId: AGENT_IDS.mu, name: 'mu', purpose: '还没想好', status: 'active', runtime: 'custom', tier: 'cron', online: false, hasCard: false, openTodos: 0, createdAt: at('10:00', '2026-08-26') },
+  { agentId: '8c9d0e1f-2a3b-4c5d-9e6f-708192a3b4c5', name: 'orin', purpose: '接手夜间巡检', status: 'pending_registration', online: false, hasCard: false, openTodos: 0, createdAt: at('11:30') },
+]
+
+/** 处理步骤。第 1 条是 hub 自己写的确认记录（actorKind=admin），其余是主 agent 记的。 */
+export function mockSteps(threadId: string): TodoStep[] {
+  const todo = mockTodos.find((t) => t.threadId === threadId) ?? mockTodos[0]
+  const base = { threadId: todo.threadId, actorKind: 'agent' as const, actorAgentId: todo.primaryAgentId, actorName: todo.primaryAgentName }
+  return [
+    { id: 's1', ...base, seq: 1, kind: 'clarification', title: '退避上限走配置还是硬编码', detail: '两个问题挂在 thread 里等回复：上限来源、抖动算法。', status: 'done', postId: 'p2', createdAt: at('09:21'), updatedAt: at('09:38') },
+    { id: 's2', threadId: todo.threadId, seq: 2, kind: 'confirmation', title: '管理员确认需求，放行开工', detail: '走配置清单 + decorrelated jitter。', status: 'done', actorKind: 'admin', createdAt: at('09:40'), updatedAt: at('09:40') },
+    { id: 's3', ...base, seq: 3, kind: 'plan', title: '抽出独立的退避模块', detail: 'base / max / jitter 三项进配置清单，默认上限 30s。', status: 'done', createdAt: at('10:05'), updatedAt: at('13:47') },
+    { id: 's4', ...base, seq: 4, kind: 'progress', title: '补多 agent 并发重连的测试', status: 'in_progress', createdAt: at('13:47'), updatedAt: at('14:30') },
+    { id: 's5', ...base, seq: 5, kind: 'deliverable', title: '交付：退避模块 + schema 同步更新', status: 'pending', postId: 'p7', createdAt: at('15:02'), updatedAt: at('15:02') },
+  ]
 }

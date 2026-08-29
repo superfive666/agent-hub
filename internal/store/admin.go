@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,9 +23,15 @@ type AgentRow struct {
 	LastPullAt *time.Time     `json:"lastPullAt,omitempty"`
 	OpenTodos  int            `json:"openTodos"`
 	HasCard    bool           `json:"hasCard"`
+	CreatedAt  time.Time      `json:"createdAt"`
 }
 
 // ListAgents 给控制台用。
+//
+// status 是「未接入 / 已接入」两态的唯一依据：新建的记录是 pending_registration，
+// 换过长期凭证之后才翻成 active（见 ExchangeRegistrationToken）。
+// online 回答的是另一个问题 —— 已接入的那些**此刻**还活着吗，
+// 一个 pending_registration 的 agent 永远 online=false，那不是异常。
 //
 // 在线判定不是「连接是否存在」而是「最近一次拉取在窗口内」，
 // **窗口按接入档位取值** —— 否则 cron 档的 agent 明明工作得好好的，界面上会永远显示离线。
@@ -33,7 +40,7 @@ func (s *Store) ListAgents(ctx context.Context) ([]AgentRow, error) {
 		SELECT a.id, a.name, a.purpose, a.status,
 		       coalesce(c.runtime,''), coalesce(c.tier,''), c.agent_id IS NOT NULL,
 		       st.last_pull_at,
-		       coalesce(t.open_count, 0)
+		       coalesce(t.open_count, 0), a.created_at
 		FROM agent a
 		LEFT JOIN LATERAL (
 			SELECT * FROM agent_card WHERE agent_id = a.id ORDER BY version DESC LIMIT 1
@@ -54,7 +61,7 @@ func (s *Store) ListAgents(ctx context.Context) ([]AgentRow, error) {
 		var r AgentRow
 		var lastPull sql.NullTime
 		if err := rows.Scan(&r.AgentID, &r.Name, &r.Purpose, &r.Status,
-			&r.Runtime, &r.Tier, &r.HasCard, &lastPull, &r.OpenTodos); err != nil {
+			&r.Runtime, &r.Tier, &r.HasCard, &lastPull, &r.OpenTodos, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		if lastPull.Valid {
@@ -92,6 +99,9 @@ type TodoRow struct {
 	UpdatedAt          time.Time  `json:"updatedAt"`
 	DueAt              *time.Time `json:"dueAt,omitempty"`
 	ReplyCount         int        `json:"replyCount"`
+	// ConfirmedAt 为空表示这条 todo 还没经过用户的确认动作 ——
+	// 前端靠它决定画不画「确认开工」按钮，主 agent 在它为空时被闸门挡着。
+	ConfirmedAt *time.Time `json:"confirmedAt,omitempty"`
 }
 
 // ListTodos 给控制台的 todo 列表。startedAt 取的是 thread 记录本身的日期。
@@ -104,7 +114,7 @@ func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT th.id, td.title, td.status, td.primary_agent_id, pa.name,
 		       st.last_pull_at, coalesce(c.tier,''),
-		       th.created_at, td.updated_at, td.due_at,
+		       th.created_at, td.updated_at, td.due_at, td.confirmed_at,
 		       coalesce(pc.n, 0),
 		       coalesce(array_agg(wa.name) FILTER (WHERE wa.id IS NOT NULL AND wa.id <> td.primary_agent_id), '{}')
 		FROM todo td
@@ -120,7 +130,8 @@ func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([
 		WHERE ($1 = '' OR td.status = $1)
 		  AND ($2 = '' OR td.primary_agent_id = $2::uuid)
 		GROUP BY th.id, td.title, td.status, td.primary_agent_id, pa.name,
-		         st.last_pull_at, c.tier, th.created_at, td.updated_at, td.due_at, pc.n
+		         st.last_pull_at, c.tier, th.created_at, td.updated_at, td.due_at,
+		         td.confirmed_at, pc.n
 		ORDER BY td.updated_at DESC`, status, primaryAgentID)
 	if err != nil {
 		return nil, fmt.Errorf("查 todo 列表: %w", err)
@@ -132,11 +143,16 @@ func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([
 		var r TodoRow
 		var lastPull sql.NullTime
 		var tier string
-		var due sql.NullTime
+		var due, confirmed sql.NullTime
 		var watchers []byte
 		if err := rows.Scan(&r.ThreadID, &r.Title, &r.Status, &r.PrimaryAgentID, &r.PrimaryAgentName,
-			&lastPull, &tier, &r.StartedAt, &r.UpdatedAt, &due, &r.ReplyCount, &watchers); err != nil {
+			&lastPull, &tier, &r.StartedAt, &r.UpdatedAt, &due, &confirmed,
+			&r.ReplyCount, &watchers); err != nil {
 			return nil, err
+		}
+		if confirmed.Valid {
+			t := confirmed.Time
+			r.ConfirmedAt = &t
 		}
 		if lastPull.Valid {
 			r.PrimaryAgentOnline = time.Since(lastPull.Time) < onlineWindow(tier)
@@ -180,6 +196,37 @@ func parsePGArray(s string) []string {
 		out = append(out, string(cur))
 	}
 	return out
+}
+
+// ErrInvalidTodoTransition 说明当前状态不允许这个动作。
+var ErrInvalidTodoTransition = errors.New("当前状态不允许这个动作")
+
+// RejectTodo 是「打回」：把交上来的东西退回去继续做。
+//
+// **只在 awaiting_review 上成立**，其余状态一律拒绝。理由是「打回」这个词在
+// 未确认阶段没有确定的目标状态 —— 退回哪儿？退回 awaiting_response 等于把
+// 已经发生的澄清对话抹掉，退回 clarifying 又和「管理员不 approve」没有区别。
+// 确认之前管理员表达异议的方式就是**在 thread 里发帖 + 不点确认**，
+// 那条路径本来就有通知、有留痕，不需要第二套语义模糊的按钮。
+func (s *Store) RejectTodo(ctx context.Context, threadID string) error {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE todo SET status = $2, updated_at = now()
+		WHERE thread_id = $1 AND status = $3`,
+		threadID, string(domain.StatusInProgress), string(domain.StatusAwaitingReview))
+	if err != nil {
+		return fmt.Errorf("打回 todo: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// 分不清「不存在」和「状态不对」时优先报后者：调用方拿着 threadID 过来，
+		// 它更可能是点了一个此刻不该出现的按钮。
+		var exists bool
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT true FROM todo WHERE thread_id = $1`, threadID).Scan(&exists); err != nil {
+			return sql.ErrNoRows
+		}
+		return ErrInvalidTodoTransition
+	}
+	return nil
 }
 
 // SetTodoStatus 推进 todo 状态。状态由 thread 里的动作驱动，这里只落库。
@@ -384,16 +431,19 @@ type ThreadPost struct {
 
 // ThreadDetailResult 是一条 thread 的全貌。todo 与 tweet 共用。
 type ThreadDetailResult struct {
-	ThreadID       string       `json:"threadId"`
-	Kind           string       `json:"kind"`
-	StartedAt      time.Time    `json:"startedAt"`
-	Title          string       `json:"title,omitempty"`
-	Status         string       `json:"status,omitempty"`
-	PrimaryAgentID string       `json:"primaryAgentId,omitempty"`
-	DueAt          *time.Time   `json:"dueAt,omitempty"`
-	Tags           []string     `json:"tags"`
-	Watchers       []WatcherRow `json:"watchers"`
-	Posts          []ThreadPost `json:"posts"`
+	ThreadID       string     `json:"threadId"`
+	Kind           string     `json:"kind"`
+	StartedAt      time.Time  `json:"startedAt"`
+	Title          string     `json:"title,omitempty"`
+	Status         string     `json:"status,omitempty"`
+	PrimaryAgentID string     `json:"primaryAgentId,omitempty"`
+	DueAt          *time.Time `json:"dueAt,omitempty"`
+	// ConfirmedAt 仅 todo 有。为空 = 还没经过用户的确认动作，
+	// 前端靠它决定画不画「确认开工」按钮，agent 在它为空时推不动状态。
+	ConfirmedAt *time.Time   `json:"confirmedAt,omitempty"`
+	Tags        []string     `json:"tags"`
+	Watchers    []WatcherRow `json:"watchers"`
+	Posts       []ThreadPost `json:"posts"`
 }
 
 // WatcherRow 是关注者。reason 为 primary 的必须响应，另两种只是关注。
@@ -408,17 +458,18 @@ type WatcherRow struct {
 func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetailResult, error) {
 	var d ThreadDetailResult
 	var title, status, primary sql.NullString
-	var due sql.NullTime
+	var due, confirmed sql.NullTime
 	var tags []byte
 	err := s.db.QueryRowContext(ctx, `
 		SELECT th.id, th.kind, th.created_at,
-		       td.title, td.status, td.primary_agent_id, td.due_at,
+		       td.title, td.status, td.primary_agent_id, td.due_at, td.confirmed_at,
 		       coalesce(td.tags, tw.tags, '{}')
 		FROM thread th
 		LEFT JOIN todo td ON td.thread_id = th.id
 		LEFT JOIN tweet tw ON tw.thread_id = th.id
 		WHERE th.id = $1`, threadID).
-		Scan(&d.ThreadID, &d.Kind, &d.StartedAt, &title, &status, &primary, &due, &tags)
+		Scan(&d.ThreadID, &d.Kind, &d.StartedAt, &title, &status, &primary, &due,
+			&confirmed, &tags)
 	if err != nil {
 		return d, err
 	}
@@ -426,6 +477,10 @@ func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetail
 	if due.Valid {
 		t := due.Time
 		d.DueAt = &t
+	}
+	if confirmed.Valid {
+		t := confirmed.Time
+		d.ConfirmedAt = &t
 	}
 	d.Tags = parsePGArray(string(tags))
 

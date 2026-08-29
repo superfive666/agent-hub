@@ -37,12 +37,75 @@ export interface ProgressStep {
   state: 'done' | 'current' | 'todo'
 }
 
-export function progressOf(status: string | undefined): ProgressStep[] {
+/**
+ * 进度条。第二个参数是 todo 的 `confirmedAt`（可空）。
+ *
+ * **为什么确认是画出来的、而不是加进 `STATUS_FLOW`。** 确认不是一个 status，
+ * 它是 `confirmedAt` 这一位数据（ADR-0008 明确拒绝了「加一个 awaiting_approval 状态」）。
+ * `STATUS_FLOW` 还兼着待办页筛选器的值域（`todos.tsx` 拿它和 `t.status` 逐个比），
+ * 往里塞一个不存在的状态，会平白多出一个永远筛不到东西的筛选项。
+ *
+ * 所以流程本身不动，只在「澄清中」和「进行中」之间**插一个由 confirmedAt 推出来的
+ * 节点**：确认过是 ✓，没确认就是灰的下一步。它必须出现在进度里 —— 未确认的 todo
+ * 卡在这儿推不动，进度条上却完全看不出原因，人只会以为 agent 在偷懒。
+ *
+ * 不传 `confirmedAt` 时行为和以前完全一样（tweet、以及不关心闸门的调用方）。
+ */
+export function progressOf(
+  status: string | undefined,
+  confirmedAt?: string | null | undefined,
+  options: { withGate?: boolean } = {},
+): ProgressStep[] {
+  const withGate = options.withGate ?? confirmedAt !== undefined
   const at = STATUS_FLOW.indexOf(status as TodoStatus)
-  return STATUS_FLOW.map((s, i) => ({
+  const steps: ProgressStep[] = STATUS_FLOW.map((s, i) => ({
     label: statusLabel(s),
     state: at < 0 ? 'todo' : i < at ? 'done' : i === at ? 'current' : 'todo',
   }))
+  if (!withGate) return steps
+  const gateAt = STATUS_FLOW.indexOf('in_progress')
+  const gate: ProgressStep = { label: GATE_LABEL, state: confirmedAt ? 'done' : 'todo' }
+  return [...steps.slice(0, gateAt), gate, ...steps.slice(gateAt)]
+}
+
+/** 闸门节点在进度条上的名字。卡片标题也用它，两处叫法必须一致。 */
+export const GATE_LABEL = '需求确认'
+
+const STEP_KIND_LABEL: Record<string, string> = {
+  clarification: '澄清',
+  plan: '计划',
+  progress: '进展',
+  blocked: '受阻',
+  deliverable: '交付物',
+  confirmation: '确认放行',
+}
+
+/** 步骤类型 → 中文。英文枚举直接甩给用户等于没写。 */
+export function stepKindLabel(kind: string | undefined): string {
+  return kind ? (STEP_KIND_LABEL[kind] ?? kind) : '—'
+}
+
+const STEP_STATUS_LABEL: Record<string, string> = {
+  pending: '待开始',
+  in_progress: '进行中',
+  done: '已完成',
+  // 和 kind 的「受阻」区分开：这里说的是这一步现在被卡住了
+  blocked: '卡住了',
+}
+
+export function stepStatusLabel(status: string | undefined): string {
+  return status ? (STEP_STATUS_LABEL[status] ?? status) : '—'
+}
+
+const AGENT_STATUS_LABEL: Record<string, string> = {
+  // 只是一条占位记录，还没拿注册 token 换过长期凭证
+  pending_registration: '未接入',
+  active: '已接入',
+  disabled: '已停用',
+}
+
+export function agentStatusLabel(status: string | undefined): string {
+  return status ? (AGENT_STATUS_LABEL[status] ?? status) : '—'
 }
 
 function fmt(iso: string, opts: Intl.DateTimeFormatOptions, timeZone?: string) {
@@ -129,4 +192,26 @@ export function latencyLabel(seconds: number | undefined): string {
   if (seconds < 90) return `~${seconds} 秒`
   if (seconds < 3600) return `~${Math.round(seconds / 60)} 分钟`
   return `~${Math.round(seconds / 3600)} 小时`
+}
+
+/**
+ * 邮箱局部打码：`wuchao900726@gmail.com` → `wuchao**@gmail.com`。
+ *
+ * OIDC 模式下 `me.username` 就是那个 Google 邮箱（后端 `adminSubject()` 直接给邮箱），
+ * 整串画在侧栏底部会把那一栏撑破。三条规则一条都不能少：
+ * - **域名完整保留** —— 用户要靠它认出自己登录的是哪个账号，打掉域名等于没法确认；
+ * - 本地部分不超过 `keep` 就原样返回，短邮箱不该被无谓地遮起来；
+ * - **不是邮箱就原样返回** —— 口令模式下 `username` 是普通用户名（`superfive`），
+ *   把用户名也打码只会让人以为自己登错了。
+ *
+ * 这只是缩短，**不是布局保证** —— 用它的地方仍然要 `truncate` / `min-w-0` 兜底。
+ */
+export function maskEmail(v: string | undefined, keep = 6): string {
+  const s = (v ?? '').trim()
+  const at = s.lastIndexOf('@')
+  // 没有 @、@ 开头、@ 结尾：都不是邮箱，原样交回去
+  if (at <= 0 || at === s.length - 1) return s
+  const local = s.slice(0, at)
+  if (local.length <= keep) return s
+  return `${local.slice(0, keep)}**${s.slice(at)}`
 }

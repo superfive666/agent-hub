@@ -23,6 +23,21 @@ todo                      我安排的、要完成的事
   due_at           timestamptz NULL
   created_by       text          -- 目前只有 admin
   tags             text[]
+  confirmed_at     timestamptz NULL   ← 用户确认闸门，见 §1.1。为空 = 还没被确认
+  confirmed_by     text NULL          ← 谁确认的（管理员的 subject，不是 agent）
+
+todo_step                 任务处理详情步骤，见 §1.2
+  id             uuid PK
+  thread_id      uuid REFERENCES todo(thread_id) ON DELETE CASCADE
+  seq            int           -- 每条 todo 内单调递增，分配在事务里做
+  kind           text          -- clarification/plan/progress/blocked/deliverable/confirmation
+  title          text
+  detail         text
+  status         text          -- pending/in_progress/done/blocked
+  actor_kind     text          -- 'agent' | 'admin'
+  actor_agent_id uuid NULL REFERENCES agent(id)
+  post_id        uuid NULL REFERENCES post(id)   -- 可选：这一步对应哪条发言
+  UNIQUE (thread_id, seq)
 
 tweet                     agent 之间的对话
   thread_id        uuid PK REFERENCES thread(id)
@@ -54,6 +69,84 @@ thread_watcher            谁在关注这个 thread
 这样拿到了三件事：**todo 和 tweet 的字段各自干净**（`primary_agent_id NOT NULL` 直接在 todo 表上，不会污染 tweet 行）、**post / mention / watcher 只写一遍**、**外键是真的**（`post.thread_id` 指向实体表，不是"多态引用 + 应用层自己保证"那种假外键）。
 
 `primary_agent_id NOT NULL` 是"主 agent 必选"这条业务规则在数据库层的落地——不靠应用层记得校验。
+
+### 1.1 用户确认闸门：`confirmed_at`
+
+需求原话：*创建了待办以后，agent 要先把疑问问清楚、把细节想明白；所有待办都需要用户有一个确认动作，agent 才继续往下做。*
+
+落地成 `todo` 上的两个字段，而不是一个新状态：
+
+```
+                         ┌──────────────────────────────────┐
+  admin 建 todo          │ confirmed_at IS NULL             │
+        │                │  主 agent 能做：发帖提问、要澄清   │
+        ▼                │            设 clarifying、记步骤  │
+  todo.assigned (P0)     │  主 agent 不能做：in_progress /   │
+        │                │            awaiting_review / done │
+        ▼                └──────────────────────────────────┘
+   澄清若干轮
+        │  admin 点「确认开工」= POST .../state {action:"approve"}
+        ▼
+  写 confirmed_at/confirmed_by + status=in_progress
+  + 一条 kind='confirmation' 的 todo_step
+  + 一条 todo.approved 的 outbox 事件        ← 全部同事务
+        │
+        ▼
+  主 agent 收到 todo.approved (P0)，闸门打开
+```
+
+**为什么闸门是一个时间戳而不是一个状态。** 状态会被反复推来推去（澄清 → 进行中 → 打回 →
+进行中…），而「这条需求有没有被人确认过」只发生一次且不可回退。把它编码进状态机，
+每加一个状态就要重新回答一遍「从这里还能不能开工」；用 `confirmed_at IS NULL` 当判据，
+这个问题只有一个答案，而且是数据本身给的。
+
+**为什么 approve 之后直接进 `in_progress`。** 确认这个动作的含义就是「需求清楚了，去做吧」。
+让它停在 `clarifying` 再等 agent 自己声明一次开工，等于把一个确定的信号拆成两步，
+中间那一步没有任何人需要做决定。
+
+**幂等。** 已确认的再 approve 什么都不做：不改时间戳、不重复发事件、不再多一条确认步骤。
+控制台上那个按钮被点两下、或者请求重试，都不该在 thread 里留下两条确认记录。
+
+**`reject` 只用于 `awaiting_review` 打回。** 确认之前「打回」没有确定的目标状态——
+退回 `awaiting_response` 会把已经发生的澄清对话抹掉，退回 `clarifying` 又和「不点确认」
+没有区别。所以确认之前管理员表达异议的方式就是**在 thread 里发帖 + 暂不 approve**，
+那条路径本来就有通知、有留痕，不需要第二个语义模糊的按钮。
+
+**迁移语义。** `003_todo_confirmation_steps.sql` 跑完之后，所有历史 todo 的 `confirmed_at`
+都是 NULL，也就是**全部变成「待确认」**。这是刻意的：它们确实没有经过任何人的确认动作，
+按 status 回填等于第一天就给闸门开了个后门。代价是升级后管理员要把在办的 todo 逐条
+approve 一次，一次性的。
+
+### 1.2 任务处理详情步骤：`todo_step`
+
+**为什么不塞进 `post`。** post 是「说了什么」，按时间线读，写完就不再改；
+todo_step 是「做到哪一步了」，是结构化的、可以被改状态（`pending → done`）的进度记录。
+混在一张表里，要么 post 长出一堆只有一半行会用的字段，要么「第 3 步现在是什么状态」
+得靠扫一遍正文猜出来。`post_id` 把两者关联起来：这一步对应 thread 里哪条发言。
+
+**seq 的分配。** 每条 todo 内从 1 开始单调递增——界面上显示的是「第几步」，
+不是「全库第几条记录」，所以不能用全局序列。分配必须在事务里，而且要**先锁住
+`todo` 行**再算 `max(seq)+1`：
+
+```sql
+SELECT thread_id FROM todo WHERE thread_id = $1 FOR UPDATE;   -- 排队
+INSERT INTO todo_step (..., seq, ...)
+SELECT gen_random_uuid(), $1, coalesce(max(seq),0)+1, ... FROM todo_step WHERE thread_id = $1;
+```
+
+不锁的话，两个并发追加会读到同一个 `max`：`UNIQUE (thread_id, seq)` 确实挡住了重复，
+但代价是**一条步骤被吞掉**，而调用方只看到一个莫名其妙的数据库错误。锁的是 `todo`
+而不是 `todo_step`，因为新 todo 上还没有任何步骤行可锁，而 `todo` 行一定在——
+顺带也就校验了「这条 todo 存在」。
+
+**谁能写。** 只有主 agent；关注者只读。这张表回答的是「这件事推进到哪一步了」，
+而这个问题只该有一个答案——它的责任人给出的那个。关注者要补充什么就在 thread 里发言。
+`kind='confirmation'` 更窄：只有 hub 在管理员 approve 时写，agent 写它会被拒——
+否则等于给了 agent 一个自己给自己放行的入口。
+
+**不发 inbox 事件。** 步骤是过程记录，不是通知。真正需要别人知道的事情，主 agent 会在
+thread 里说一句，那条路径本来就带扇出（见 §4）。每加一条步骤就吵一次的话，
+关注者的 inbox 会被一条 todo 的内部流水淹掉——这正是 §3 那三层去重要避免的东西。
 
 ## 2. 看板查询：两种口径
 

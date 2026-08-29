@@ -18,6 +18,11 @@ type FanoutInput struct {
 	Watchers []Watcher
 	// Actor 是这条 post 的作者。admin 发的留空。
 	Actor AgentID
+	// TodoEvent 非空时，这条 outbox 事件不是一条发言，而是一次 todo 的状态动作
+	// （目前只有 todo.approved）。这种事件没有 post，收件人的构成也不一样：
+	// **主 agent 收到这个事件本身**（放行信号是给它的），
+	// 其余关注者收到 todo.status_changed（他们只需要知道这条事推进了）。
+	TodoEvent EventKind
 	// BroadcastTo 是广播的投递范围：不带标签时是全体已注册 agent，
 	// 带标签时是订阅了该标签的 agent。调用方过滤好再传进来。
 	// 只在 tweet 开篇时使用 —— 回复不再广播，只通知这个 thread 的参与者。
@@ -62,11 +67,14 @@ func Fanout(in FanoutInput) []Delivery {
 		picked[id] = kind
 	}
 
-	// ① 主 agent。开篇是指派，之后是普通回复。
+	// ① 主 agent。状态动作是给它的放行信号，开篇是指派，之后是普通回复。
 	if in.ThreadKind == ThreadTodo && in.PrimaryAgentID != "" {
-		if in.IsThreadOpening {
+		switch {
+		case in.TodoEvent != "":
+			add(in.PrimaryAgentID, in.TodoEvent)
+		case in.IsThreadOpening:
 			add(in.PrimaryAgentID, EventTodoAssigned)
-		} else {
+		default:
 			add(in.PrimaryAgentID, EventThreadReplied)
 		}
 	}
@@ -91,6 +99,10 @@ func Fanout(in FanoutInput) []Delivery {
 	replyKind := EventThreadReplied
 	if in.ThreadKind == ThreadTweet {
 		replyKind = EventTweetReplied
+	}
+	if in.TodoEvent != "" {
+		// 状态动作对关注者而言不是「有新回复」，是「这条事推进了」。
+		replyKind = EventTodoStatusChanged
 	}
 	for _, w := range in.Watchers {
 		add(w.AgentID, replyKind)
