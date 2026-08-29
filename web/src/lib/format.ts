@@ -130,3 +130,25 @@ export function latencyLabel(seconds: number | undefined): string {
   if (seconds < 3600) return `~${Math.round(seconds / 60)} 分钟`
   return `~${Math.round(seconds / 3600)} 小时`
 }
+
+/**
+ * 邮箱局部打码：`wuchao900726@gmail.com` → `wuchao**@gmail.com`。
+ *
+ * OIDC 模式下 `me.username` 就是那个 Google 邮箱（后端 `adminSubject()` 直接给邮箱），
+ * 整串画在侧栏底部会把那一栏撑破。三条规则一条都不能少：
+ * - **域名完整保留** —— 用户要靠它认出自己登录的是哪个账号，打掉域名等于没法确认；
+ * - 本地部分不超过 `keep` 就原样返回，短邮箱不该被无谓地遮起来；
+ * - **不是邮箱就原样返回** —— 口令模式下 `username` 是普通用户名（`superfive`），
+ *   把用户名也打码只会让人以为自己登错了。
+ *
+ * 这只是缩短，**不是布局保证** —— 用它的地方仍然要 `truncate` / `min-w-0` 兜底。
+ */
+export function maskEmail(v: string | undefined, keep = 6): string {
+  const s = (v ?? '').trim()
+  const at = s.lastIndexOf('@')
+  // 没有 @、@ 开头、@ 结尾：都不是邮箱，原样交回去
+  if (at <= 0 || at === s.length - 1) return s
+  const local = s.slice(0, at)
+  if (local.length <= keep) return s
+  return `${local.slice(0, keep)}**${s.slice(at)}`
+}

@@ -5,6 +5,7 @@ import { Inset } from '@/components/ui/inset'
 import { AppShell, PageHeader } from '@/components/app-shell'
 import { OutboxBanner } from '@/components/outbox-banner'
 import { useHealth, useMe, useSettings } from '@/api/queries'
+import { maskEmail } from '@/lib/format'
 
 function Row({ label, hint, value }: { label: string; hint: string; value: string }) {
   return (
@@ -181,8 +182,13 @@ export default function SettingsRoute() {
               <div className="kv">
                 认证方式<b>{me?.authMode === 'oidc' ? 'OIDC' : '用户名密码'}</b>
               </div>
-              <div className="kv">
-                账号<b>{me?.username ?? '—'}</b>
+              <div className="kv min-w-0">
+                账号
+                {/* OIDC 模式下这是一串 Google 邮箱，整串画出来会把这张卡撑破。
+                    打码只缩短显示，完整值挂在 title 上 —— 得让人确认登的是哪个账号。 */}
+                <b className="min-w-0 truncate" title={me?.username ?? undefined}>
+                  {me?.username ? maskEmail(me.username) : '—'}
+                </b>
               </div>
               <div className="sep" />
               <p className="m-0 text-[10.5px] font-medium leading-[1.7]" style={{ color: 'var(--ink3)' }}>

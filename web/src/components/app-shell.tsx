@@ -15,7 +15,7 @@ import { Pane } from '@/components/ui/pane'
 import { Seg } from '@/components/ui/seg'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useLogout, useMe, useTodos } from '@/api/queries'
-import { initialsOf, statusLabel, timeLabel } from '@/lib/format'
+import { initialsOf, maskEmail, statusLabel, timeLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
 const NAV = [
@@ -52,6 +52,10 @@ export function AppShell({
   const logout = useLogout()
 
   const meName = me?.username ?? '管理员'
+  // OIDC 模式下这就是一串 Google 邮箱，整串画出来会把 278px 的侧栏撑破。
+  // 打码只负责缩短，布局仍旧靠外面那层 min-w-0 + truncate 兜底；
+  // 完整值挂在 title 与头像的 aria-label 上 —— 用户得能确认自己登的是哪个账号。
+  const meLabel = maskEmail(meName)
 
   return (
     // h-dvh 而不是 min-h-dvh：舞台必须被视口框住，里面的内板才谈得上「在板子里滚」。
@@ -172,7 +176,9 @@ export function AppShell({
           <div className="flex items-center gap-2.5">
             <Avatar kind="human" size="sm" initials={initialsOf(meName)} label={meName} />
             <div className="hidden min-w-0 lg:block">
-              <div className="text-[12px] font-bold leading-none">{meName}</div>
+              <div className="truncate text-[12px] font-bold leading-none" title={meName}>
+                {meLabel}
+              </div>
               <div className="mt-1 text-[10px] font-medium" style={{ color: 'var(--human)' }}>
                 唯一管理员
               </div>

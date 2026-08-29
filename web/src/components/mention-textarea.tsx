@@ -4,7 +4,33 @@ import type { AgentSummary } from '@/api/client'
 import { initialsOf, latencyLabel, tierLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
+/**
+ * 光标前那一小段：行首或空白之后的 `@`，后面跟着还在打的名字。
+ * `*` 而不是 `+` 是关键 —— 刚敲下 `@`、一个字都还没打时 query 是空串，
+ * 空串能前缀匹配任何名字，下拉立刻把全部 agent 摊开给你看。
+ * 这正是 facebook 式 @ 的基本盘，写成 `+` 就变成"要先猜对首字母才有提示"。
+ */
 const TOKEN = /(^|\s)@([A-Za-z0-9_-]*)$/
+
+/** 名字里可能有正则元字符（`.`、`+`），拼进 RegExp 之前先转义。 */
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * 从正文里解析出被 @ 到的 agent，按名录映射成 agentId。
+ *
+ * 匹配不上的 `@xxx` **直接忽略，不报错** —— 正文里本来就可能有普通的 @。
+ * 后面用 `(?![A-Za-z0-9_-])` 收边，否则 `@nova` 会把 `@nova2` 也算进来。
+ */
+export function mentionedAgentIds(text: string, agents: AgentSummary[]): string[] {
+  const ids: string[] = []
+  for (const a of agents) {
+    if (!a.name || !a.agentId) continue
+    if (new RegExp(`(^|\\s)@${escapeRe(a.name)}(?![A-Za-z0-9_-])`).test(text)) ids.push(a.agentId)
+  }
+  return ids
+}
 
 export interface MentionTextareaProps {
   id?: string
@@ -13,7 +39,23 @@ export interface MentionTextareaProps {
   agents: AgentSummary[]
   placeholder?: string
   rows?: number
+  /** 外层定位容器的类名 */
   className?: string
+  /**
+   * 覆盖 textarea 自己的类名。默认那套（`.in` 胶囊 + 18px 圆角）是给「新建待办」
+   * 的多行表单写的；thread 的 composer 已经有自己的实心底容器，进去要的是一个透明的裸输入框。
+   * **别为此复制一份组件出来** —— @ 的解析、键盘、无障碍属性只该有一份实现。
+   */
+  textareaClassName?: string
+  /**
+   * 下拉往哪边开。composer 贴在页面最下沿，往下开会整块落到视口外面，只能往上。
+   */
+  placement?: 'bottom' | 'top'
+  /**
+   * 下拉没有消费掉的按键才交给它。**下拉开着时 Enter / Tab / 上下 / Esc 一律归下拉**，
+   * 不会传下来 —— 否则在 composer 里选候选项的那一下会顺手把消息发出去。
+   */
+  onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void
   'aria-label'?: string
 }
 
@@ -29,6 +71,9 @@ export function MentionTextarea({
   placeholder,
   rows = 5,
   className,
+  textareaClassName,
+  placement = 'bottom',
+  onKeyDown: onKeyDownOuter,
   ...rest
 }: MentionTextareaProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -61,19 +106,34 @@ export function MentionTextarea({
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!open) return
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setActive((i) => (i + 1) % matches.length)
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setActive((i) => (i - 1 + matches.length) % matches.length)
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
-      pick(matches[active].name ?? '')
-    } else if (e.key === 'Escape') {
-      setQuery(null)
+    // 输入法组词过程中的 Enter 是"选这个候选词"，既不是选 agent 也不是发送。
+    // 中文输入下这一下按得最多，误判一次就是把半句话发出去。
+    if (e.nativeEvent.isComposing) return
+    // 下拉开着时这几个键归下拉，**不再往外传**：composer 上 Enter 是"发送"，
+    // 传下去就成了"选中候选项的同时把消息发出去"。
+    if (open) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActive((i) => (i + 1) % matches.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActive((i) => (i - 1 + matches.length) % matches.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        pick(matches[active].name ?? '')
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setQuery(null)
+        return
+      }
     }
+    onKeyDownOuter?.(e)
   }
 
   return (
@@ -87,7 +147,7 @@ export function MentionTextarea({
         aria-label={rest['aria-label']}
         aria-expanded={open}
         aria-controls={open ? 'mention-list' : undefined}
-        className="in w-full resize-none rounded-[18px] leading-[1.75]"
+        className={textareaClassName ?? 'in w-full resize-none rounded-[18px] leading-[1.75]'}
         onChange={(e) => {
           onChange(e.target.value)
           sync(e.target.value, e.target.selectionStart)
@@ -101,7 +161,10 @@ export function MentionTextarea({
           role="listbox"
           aria-label="@ 提及"
           data-testid="mention-list"
-          className="absolute left-4 top-full z-10 mt-1.5 w-[280px] overflow-hidden rounded-[16px]"
+          className={cn(
+            'absolute left-4 z-10 w-[280px] overflow-hidden rounded-[16px]',
+            placement === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
+          )}
           style={{
             background: 'var(--pane-bg)',
             border: '1px solid var(--pane-bd)',
