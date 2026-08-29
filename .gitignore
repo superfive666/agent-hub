@@ -5,15 +5,23 @@
 *.pem
 *.key
 
-# 依赖与构建产物（技术栈确定后按需收敛）
+# Go
+/bin/
+*.test
+coverage.out
+
+# 依赖与构建产物
 node_modules/
 dist/
 build/
-target/
-__pycache__/
-*.py[cod]
 .venv/
 venv/
+__pycache__/
+*.py[cod]
+
+# 设计稿的构建产物（约 2MB，不入库）
+docs/design/*.html
+!docs/design/*.dc.html
 
 # 日志与临时文件
 *.log

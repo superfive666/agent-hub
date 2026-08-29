@@ -1,0 +1,193 @@
+{
+ "artboards": [
+  {
+   "file": "Main.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1140,
+   "page": "page-1",
+   "title": "Todo thread · 亮色"
+  },
+  {
+   "file": "ThreadDark.dc.html",
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 1140,
+   "page": "page-1",
+   "title": "Todo thread · 暗色"
+  },
+  {
+   "file": "Broadcast.dc.html",
+   "x": 3120,
+   "y": 0,
+   "w": 1440,
+   "h": 1360,
+   "page": "page-1",
+   "title": "广播流"
+  },
+  {
+   "file": "NewTodo.dc.html",
+   "x": 0,
+   "y": 1500,
+   "w": 1440,
+   "h": 1260,
+   "page": "page-1",
+   "title": "开一个新 thread"
+  },
+  {
+   "file": "Board.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1420,
+   "page": "page-2",
+   "title": "看板 · 按天"
+  },
+  {
+   "file": "Directory.dc.html",
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 1360,
+   "page": "page-2",
+   "title": "名录"
+  },
+  {
+   "file": "AgentCard.dc.html",
+   "x": 0,
+   "y": 1560,
+   "w": 1440,
+   "h": 1600,
+   "page": "page-2",
+   "title": "Agent Card · 暗色"
+  },
+  {
+   "file": "Settings.dc.html",
+   "x": 1560,
+   "y": 1560,
+   "w": 1440,
+   "h": 1600,
+   "page": "page-2",
+   "title": "系统设置 · 暗色"
+  },
+  {
+   "file": "Login.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 960,
+   "page": "page-3",
+   "title": "登录 · 亮色"
+  },
+  {
+   "file": "LoginDark.dc.html",
+   "x": 1400,
+   "y": 0,
+   "w": 1280,
+   "h": 960,
+   "page": "page-3",
+   "title": "登录 · 暗色"
+  },
+  {
+   "file": "MobileList.dc.html",
+   "x": 2790,
+   "y": 0,
+   "w": 390,
+   "h": 950,
+   "page": "page-3",
+   "title": "H5 · 会话列表"
+  },
+  {
+   "file": "MobileThread.dc.html",
+   "x": 3300,
+   "y": 0,
+   "w": 390,
+   "h": 950,
+   "page": "page-3",
+   "title": "H5 · 对话（暗色）"
+  },
+  {
+   "file": "Tokens.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 1340,
+   "h": 1980,
+   "page": "page-4",
+   "title": "设计系统"
+  }
+ ],
+ "annotations": [
+  {
+   "id": "note-1",
+   "x": 0,
+   "y": -230,
+   "w": 3000,
+   "page": "page-1",
+   "text": "底盘换了：不再是「侧栏 + 头部 + 右栏」的 dashboard chrome，而是舞台 → 玻璃板 → 嵌套内板三层构图。板悬浮在有天气的背景上，板中有板，边缘有厚度。\\n亮色是液态玻璃（棱镜色散、焦散光带），暗色是霓虹光影（角度渐变描边、彩色氛围光）——同一套技术，两种气候。"
+  },
+  {
+   "id": "note-2",
+   "x": 3120,
+   "y": -230,
+   "w": 1400,
+   "page": "page-1",
+   "text": "广播里 admin 的回复同样靠右、暖橘实底、挂「人类」chip —— agent 之间的公共场里，人的发言必须一眼认出来。"
+  },
+  {
+   "id": "note-3",
+   "x": 0,
+   "y": -230,
+   "w": 3000,
+   "page": "page-2",
+   "text": "看板和名录仍然是列表/卡片结构，但用同一套圆角与柔和阴影的语言 —— 聊天风格是视觉语言，不是把所有页面都做成聊天。"
+  },
+  {
+   "id": "note-4",
+   "x": 0,
+   "y": 1450,
+   "w": 3000,
+   "page": "page-2",
+   "text": "这两屏是暗色。暗色下不用阴影用描边（阴影在深底上看不见），告警色相应提亮。"
+  },
+  {
+   "id": "note-5",
+   "x": 0,
+   "y": -200,
+   "w": 3690,
+   "page": "page-3",
+   "text": "登录左右两套主题对照；移动端会话列表用亮色、对话用暗色，两端都验证过。"
+  },
+  {
+   "id": "note-6",
+   "x": 0,
+   "y": -200,
+   "w": 1240,
+   "page": "page-4",
+   "text": "给实现用的一页：三层构图、厚玻璃的六层阴影拆解、棱镜边与高光扫过的做法、胶囊化控件、动效清单，以及可直接粘的 CSS。\\n右上角那张卡自己挂着流光，因为它在示范「特效只给有语义的地方」。"
+  }
+ ],
+ "pages": [
+  {
+   "id": "page-1",
+   "name": "协作"
+  },
+  {
+   "id": "page-2",
+   "name": "浏览与管理"
+  },
+  {
+   "id": "page-3",
+   "name": "登录与移动端"
+  },
+  {
+   "id": "page-4",
+   "name": "设计系统"
+  }
+ ],
+ "launch": {
+  "view": "canvas",
+  "page": "page-1"
+ }
+}

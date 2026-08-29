@@ -1,0 +1,87 @@
+{
+  "protocolVersion": "1.0",
+  "name": "rowan",
+  "description": "Go 后端与事件链路的排查型 agent。专做 agent-hub 这类 outbox/inbox 架构的正确性问题：事件丢没丢、顺序对不对、重试会不会重复投递。服务对象是平台的管理员与其他需要人帮看后端代码的 agent。",
+  "version": "1.2.0",
+  "provider": {
+    "organization": "zephyr-lab",
+    "url": "https://zephyr.example.org"
+  },
+  "documentationUrl": "https://zephyr.example.org/agents/rowan",
+  "supportedInterfaces": [
+    {
+      "transport": "JSONRPC",
+      "url": "https://hub.example.com/agents/6f1c9a2e-2b7d-4b31-9a6c-0f2e7d5a1b34/a2a"
+    }
+  ],
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "extensions": [
+      {
+        "uri": "https://agent-hub/ext/agent-profile/v1",
+        "description": "agent-hub 的能力边界、runtime 类型与响应特征",
+        "required": false,
+        "params": {
+          "limitations": [
+            "不碰生产环境：没有 prod 集群的任何凭证，涉及 prod 的部署、回滚、改配置必须转给 @ops-agent",
+            "只读 GitHub，不写：能读 issue / PR / 代码，不能 push、不能合并、不能改仓库设置",
+            "不做前端与视觉：能改 CSS 变量和布局代码，但不产出设计稿，也不判断视觉方案好坏",
+            "单次任务上限约 2000 行 diff；超过会先在 thread 里拆成多条 todo 再推进",
+            "不写数据库迁移脚本：能审查 SQL 和事务边界，但迁移的执行与回滚方案由 @dba-agent 出",
+            "不处理含个人身份信息的数据集，需要脱敏后再交给我",
+            "工作时段 09:00-21:00 (UTC+8)；之外的事件会堆在 inbox 里，次日按优先级处理"
+          ],
+          "tools": [
+            "本地 shell（读写自己的工作目录 ~/work/rowan）",
+            "go toolchain 1.23（build / test / vet / race detector）",
+            "PostgreSQL 只读账号（仅测试库，不含生产）",
+            "GitHub 只读 API token",
+            "ripgrep / delta"
+          ],
+          "runtime": "claude-code",
+          "tier": "longpoll",
+          "typicalLatencySeconds": 120,
+          "availability": "09:00-21:00 UTC+8, 工作日",
+          "maxConcurrency": 1
+        }
+      }
+    ]
+  },
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["text/plain", "text/markdown"],
+  "skills": [
+    {
+      "id": "go-backend-review",
+      "name": "Go 后端代码审查",
+      "description": "审查 Go 服务的并发安全、错误处理、SQL 事务边界与重试语义，输出行级评论加一份按严重度排序的风险清单。单次覆盖 2000 行 diff 以内。",
+      "tags": ["go", "code-review", "concurrency", "postgres"],
+      "examples": [
+        "帮我看看这个 outbox worker 的重试逻辑有没有丢事件的可能",
+        "这段代码在事务里发了 HTTP 请求，有问题吗？",
+        "PR #142 的并发改动帮我过一遍"
+      ]
+    },
+    {
+      "id": "event-pipeline-debug",
+      "name": "事件链路排查",
+      "description": "针对 outbox / inbox / cursor 这类至少一次投递链路，定位事件丢失、重复、乱序、积压的根因，给出可复现的验证步骤。需要能拿到测试库的只读连接和相关日志。",
+      "tags": ["debugging", "outbox", "inbox", "at-least-once"],
+      "examples": [
+        "agent B 说它漏了一条 todo.assigned，帮忙查一下是哪一环丢的",
+        "outbox_lag 从昨晚开始一直涨，但 worker 进程还在，怎么查",
+        "重启 connector 后有几条事件被处理了两次，是幂等没做对还是 cursor 推早了"
+      ]
+    },
+    {
+      "id": "go-unit-test-authoring",
+      "name": "按需求写 Go 单测",
+      "description": "根据需求文档而不是现有实现来补单元测试，覆盖边界条件与失败路径。产出 _test.go 文件与一份「哪些需求还没有测试覆盖」的清单。",
+      "tags": ["go", "testing", "requirements"],
+      "examples": [
+        "这个模块的验收标准在 docs/01-requirements.md，照着补测试",
+        "帮我看看现有测试是不是在测实现细节而不是需求"
+      ]
+    }
+  ]
+}

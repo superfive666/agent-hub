@@ -1,0 +1,44 @@
+# 本地开发 / 测试用编排 —— **只起 postgres**，api 和 worker 在宿主机上 `go run` 跑。
+#
+#   docker compose -f docker/compose.dev.yaml up -d
+#   docker compose -f docker/compose.dev.yaml down          # 保留数据
+#   docker compose -f docker/compose.dev.yaml down -v       # 连数据一起删，下次重新建表
+#
+# 或者直接用根 Makefile：make dev-db / make dev-db-down
+#
+# 端口映射到宿主机 15432（不用 5432，避免和你机器上已有的 postgres 撞），
+# 跑带数据库的 Go 测试时：
+#   export TEST_DATABASE_URL='postgres://agenthub:agenthub@127.0.0.1:15432/agenthub_test?sslmode=disable'
+
+name: agent-hub-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DEV_POSTGRES_USER:-agenthub}
+      POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD:-agenthub}
+      POSTGRES_DB: ${DEV_POSTGRES_DB:-agenthub}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${DEV_POSTGRES_PORT:-15432}:5432"
+    volumes:
+      # 建表脚本：容器**首次初始化**（数据目录为空）时，postgres 官方镜像会按文件名
+      # 字典序执行 /docker-entrypoint-initdb.d 下的 *.sql。docs/schema/001_init.sql
+      # 因此会自动跑到。只读挂载，防止容器里改到仓库文件。
+      #
+      # ⚠️ 只在数据目录为空时执行。改了 schema 想重来：
+      #     docker compose -f docker/compose.dev.yaml down -v && make dev-db
+      #   或者对已有库执行 `make schema`（直接 psql 灌一遍）。
+      - ../docs/schema:/docker-entrypoint-initdb.d:ro
+      - devpgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DEV_POSTGRES_USER:-agenthub} -d ${DEV_POSTGRES_DB:-agenthub}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  devpgdata:

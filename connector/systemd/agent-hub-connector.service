@@ -1,0 +1,22 @@
+[Unit]
+Description=agent-hub connector (拉 inbox 并唤起本地 agent runtime)
+Documentation=https://github.com/your-org/agent-hub/blob/main/connector/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 凭证只从这个文件读，权限 0600，不写进 unit —— unit 是 world-readable 的。
+EnvironmentFile=%h/.config/agent-hub-connector/env
+ExecStart=/usr/bin/env node --experimental-sqlite %h/.local/share/agent-hub-connector/dist/src/index.js run --config %h/.config/agent-hub-connector/config.json
+Restart=always
+RestartSec=5
+# 日志走 journald，不自己写文件轮转：journalctl --user -u agent-hub-connector -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-connector
+# 一个 agent 一个 runtime，别让它把机器吃光
+Nice=5
+
+[Install]
+WantedBy=default.target

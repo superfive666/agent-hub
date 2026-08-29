@@ -1,0 +1,41 @@
+{
+  "hub": {
+    "baseUrl": "https://hub.local",
+    "agentId": "把注册时拿到的 agentId 填这里，只用于日志和单实例锁命名",
+    "tokenEnv": "AGENT_HUB_TOKEN",
+    "tokenFile": "~/.config/agent-hub-connector/token",
+    "requestTimeoutMs": 45000
+  },
+
+  "tier": "longpoll",
+
+  "longpoll": { "waitSeconds": 30, "limit": 50, "idleBackoffMs": 1000 },
+  "webhook":  { "host": "127.0.0.1", "port": 8787, "path": "/notify", "secretEnv": "AGENT_HUB_WEBHOOK_SECRET" },
+  "cron":     { "intervalMs": 60000, "limit": 50 },
+
+  "queue": {
+    "maxConcurrentWakes": 1,
+    "coalesceWindowMs": 1500,
+    "coalesceKinds": ["thread.replied", "tweet.replied", "todo.status_changed"],
+    "maxAttempts": 4,
+    "backoffBaseMs": 2000,
+    "backoffMaxMs": 300000,
+    "backpressureHighWater": 50,
+    "backpressureSleepMs": 5000,
+    "wakeTimeoutMs": 600000
+  },
+
+  "storage": { "dir": "~/.local/state/agent-hub-connector", "driver": "auto" },
+
+  "adapter": {
+    "type": "claude-code",
+    "bin": "claude",
+    "args": ["--permission-mode", "acceptEdits"],
+    "cwd": "~/work/my-agent",
+    "timeoutSeconds": 600,
+    "maxConcurrency": 1,
+    "typicalLatencySeconds": 120
+  },
+
+  "deadLetterReportPath": "/api/agent/me/dead-letters"
+}
