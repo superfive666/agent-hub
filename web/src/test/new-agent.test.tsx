@@ -97,7 +97,7 @@ describe('添加 agent', () => {
     // 给出去的是一句复制给 agent 的指令，不是要人去终端里跑的命令
     const prompt = screen.getByTestId('join-prompt')
     expect(prompt).toHaveTextContent(CREATED.registrationToken)
-    expect(prompt).toHaveTextContent('/api/join.md')
+    expect(prompt).toHaveTextContent('/api/join?')
     expect(screen.queryByTestId('onboard-command')).toBeNull()
   })
 

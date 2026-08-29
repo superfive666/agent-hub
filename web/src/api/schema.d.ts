@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/join.md": {
+    "/api/join": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,41 +12,59 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * JOIN.md —— 给 agent 读的接入说明（公开）
-         * @description 正文就是**仓库根的 `JOIN.md`**（英文），由 `go:embed` 嵌进二进制。
+         * JOIN.md —— 给 agent 读的接入说明（公开，返回纯文本）
+         * @description 正文就是**仓库根的 `JOIN.md`**（英文），由 `go:embed` 嵌进二进制，
+         *     `{{HUB}}` / `{{TOKEN}}` / `{{RUNTIME}}` 三个占位符按请求替换。
          *
-         *     控制台建完 agent 后给出的是**一句指令**，不是给人在终端里跑的命令 ——
-         *     接入这件事该由 agent 自己完成。那句话只带三样东西：这个 URL、一次性注册
-         *     token、以及它的 runtime；步骤一句都不内联，由 agent 自己来这里读。
+         *     控制台建完 agent 后给出的就是**一句话**：
+         *
+         *     ```
+         *     Join agent-hub: read https://hub.example.com/api/join?token=…&runtime=… and follow it end to end.
+         *     ```
+         *
+         *     token 和 runtime 走 query，所以 agent 拉到的正文里命令是**可以直接跑的** ——
+         *     没有「把 `<你的token>` 换成真值」这种要它自己填的占位符，也就少一个出错的地方。
+         *
+         *     返回 `text/plain`（而不是 `text/markdown`）：正文是原样的 Markdown，
+         *     text/plain 在每个客户端里都直接呈现，text/markdown 在部分浏览器里会触发下载。
          *
          *     **必须公开。** agent 读它的时候手上只有一张一次性注册 token，那张 token 只能用来
          *     换凭证、不是 Bearer 凭证 —— 挂在鉴权后面就成了「要先接入才能知道怎么接入」。
-         *     文档里没有任何秘密，只有步骤和这台 hub 自己的地址。
          *
          *     **路径在 `/api/` 下是必需的**，不是风格选择：部署形态是反向代理把 `/api/*` 与
          *     `/healthz` 转给 hub、其余路径交给控制台那份静态产物（docs/08-deployment.md §5）。
-         *     挂成 `/JOIN.md` 的话现有部署会把它交给 SPA 的 index.html，
+         *     挂成 `/join` 的话现有部署会把它交给 SPA 的 index.html，
          *     agent 拉到一坨 HTML 还以为自己读到了说明。
          *
-         *     正文里的 hub 地址按 `X-Forwarded-Proto` / `X-Forwarded-Host` 拼，
-         *     因为生产上 TLS 在代理终结、到 hub 这一跳是明文 HTTP。
+         *     `token` / `runtime` **不做有效性校验**，只校验形状：查库校验会把一次性 token
+         *     的存在性变成一个可探测的信号。形状不对就换成一句人话，不把 query 里的东西
+         *     原样写进正文。
+         *
+         *     ⚠️ **token 在 query 里，反向代理的 access log 会记下它。** 可接受的前提是它
+         *     一次性、24 小时过期、且本来就明文显示在控制台上；响应带 `Cache-Control: no-store`
+         *     与 `X-Content-Type-Options: nosniff`。
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description 一次性注册 token。省略或形状不对时正文里换成一句提示文字 */
+                    token?: string;
+                    /** @description 不在这个集合里就当没给 —— 填一个不存在的进去，agent 照着跑会撞「不认识的 RUNTIME」 */
+                    runtime?: "claude-code" | "claude" | "claude-cli" | "codex" | "codex-cli" | "opencode" | "openclaw" | "hermes" | "openhuman" | "generic-shell" | "http-endpoint";
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description Markdown 正文 */
+                /** @description JOIN.md 全文（纯文本） */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/markdown": string;
+                        "text/plain": string;
                     };
                 };
             };

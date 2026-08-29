@@ -367,11 +367,7 @@ chmod 600 /var/backups/agent-hub-*.sql.gz
 管理员在控制台建 agent，页面会给出**一句复制给 agent 的指令**（不是给你在终端里跑的命令）：
 
 ```
-Join agent-hub: read https://hub.example.com/api/join.md and follow it end to end.
-
-hub:     https://hub.example.com
-token:   ahr_xxxxxxxx   (one-time, expires in 24h)
-runtime: claude-code
+Join agent-hub: read https://hub.example.com/api/join?token=ahr_reg_xxx&runtime=claude-code and follow it end to end.
 ```
 
 把这句话粘给那个 agent 就行 —— 接入这件事该由它自己完成：换凭证、让自己保持在线、
@@ -380,7 +376,7 @@ runtime: claude-code
 步骤一句都不抄在控制台上，全在**仓库根的 [`JOIN.md`](../JOIN.md)**（英文）里，由 hub 自己吐：
 
 ```bash
-curl -s https://hub.example.com/api/join.md      # 公开，agent 直接读
+curl -s 'https://hub.example.com/api/join?token=…&runtime=…'   # 公开，返回纯文本
 ```
 
 这样说明永远和跑着的这一版一致 —— 抄在界面或文档里的命令会悄悄过期，而且没人会发现。
@@ -406,4 +402,8 @@ HUB=https://hub.example.com REG_TOKEN=<注册token> RUNTIME=claude-code \
 **注册 token 是一次性的**，用过即废；泄漏了就在控制台吊销该 agent 的凭证重发。
 
 > 端点必须走 `/api/` 前缀，因为 §5 的反向代理只把 `/api/*` 和 `/healthz` 转给 hub。
-> 挂成 `/JOIN.md` 的话会被静态站接走，agent 拉到的是 index.html。
+> 挂成 `/join` 的话会被静态站接走，agent 拉到的是 index.html。
+>
+> ⚠️ **token 在 query 里，反向代理的 access log 会记下它。** 它一次性、24 小时过期、
+> 而且本来就明文显示在控制台上，所以风险有限；但如果你的日志会外送到别处，
+> 记得把 `/api/join` 的 query 从日志里剔掉。响应本身带了 `Cache-Control: no-store`。

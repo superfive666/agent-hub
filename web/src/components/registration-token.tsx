@@ -15,25 +15,20 @@ function hubOrigin(): string {
 }
 
 /**
- * 交给 agent 的那句话。
+ * 交给 agent 的那**一句话**。
  *
- * **一句指令 + 一个 URL + 一张 token，就这些。** 步骤全在 JOIN.md 里，
- * 由 hub 自己吐（`GET /api/join.md`，内容就是仓库根那份 JOIN.md）——
- * 抄进界面的话，这段字面量会随契约漂移，而界面上的文字没人会记得更新。
+ * token 和 runtime 走 query，所以 agent 拉到的 JOIN.md 里命令是可以直接跑的 ——
+ * 没有「把 <你的token> 换成真值」这种需要它自己填的占位符，也就少一个出错的地方。
  *
- * 用英文：它是给 agent 读的，和它接下来要读的 JOIN.md 是同一串上下文，
- * 中英混排只会让指代变糊。控制台自己的界面语言不受这里影响。
+ * 英文：它和 agent 接下来读到的 JOIN.md 是同一串上下文，中英混排只会让指代变糊。
+ * 控制台自己的界面语言不受这里影响。
+ *
+ * ⚠️ token 在 URL 里，**反向代理的 access log 会记下它**。可接受的前提是它一次性、
+ * 24 小时过期、而且本来就明文显示在这一屏上；服务端那边加了 no-store。
  */
 function joinPrompt(token: string, runtime: string): string {
-  const hub = hubOrigin()
-  const opt = runtimeById(runtime)
-  return [
-    `Join agent-hub: read ${hub}/api/join.md and follow it end to end.`,
-    '',
-    `hub:     ${hub}`,
-    `token:   ${token}   (one-time, expires in 24h)`,
-    `runtime: ${opt?.id ?? runtime}`,
-  ].join('\n')
+  const q = new URLSearchParams({ token, runtime })
+  return `Join agent-hub: read ${hubOrigin()}/api/join?${q} and follow it end to end.`
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -131,7 +126,7 @@ export function RegistrationTokenPanel({
         <div>
           <div className="lbl mb-2">把这句话交给你的 agent</div>
           <p className="m-0 mb-2.5 text-[11.5px] font-medium leading-[1.75]" style={{ color: 'var(--ink2)' }}>
-            <b>不用你去终端里跑任何东西。</b> 复制下面这句，粘给那个 agent 就行 ——
+            <b>不用你去终端里跑任何东西。</b> 复制这一句，粘给那个 agent 就行 ——
             接入这件事本来就该它自己做：换凭证、让自己保持在线、写自己的 Agent Card。
             尤其是 Card 里的「做不了什么」，只有它自己说得清。
           </p>
@@ -151,10 +146,9 @@ export function RegistrationTokenPanel({
             <CopyButton text={prompt} label="复制给 agent 的接入指令" />
           </div>
           <p className="m-0 mt-2.5 text-[10.5px] font-medium leading-[1.7]" style={{ color: 'var(--ink3)' }}>
-            步骤全在 <span className="mono">JOIN.md</span> 里，agent 自己去{' '}
-            <span className="mono">{hubOrigin()}/api/join.md</span> 读 —— 那份文档由 hub 吐出来
-            （就是仓库根的 <span className="mono">JOIN.md</span>），永远和当前跑着的这一版一致，
-            不会像抄在界面上的步骤那样悄悄过期。
+            步骤全在仓库根的 <span className="mono">JOIN.md</span> 里，由 hub 自己吐给它；
+            token 和 runtime 在 URL 里，所以文档里的命令 agent 拿到就能直接跑，
+            没有需要它自己填的占位符。
             {runtimeById(runtime)?.form === 'service' && (
               <>
                 {' '}
