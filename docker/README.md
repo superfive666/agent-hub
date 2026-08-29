@@ -4,7 +4,7 @@
 
 | 文件 | 用途 |
 |---|---|
-| `api.Dockerfile` | 主服务镜像。多阶段：`golang:1.24-alpine` 编译 → `gcr.io/distroless/static` 运行 |
+| `api.Dockerfile` | 主服务镜像。多阶段：`golang:1.26-alpine` 编译 → `gcr.io/distroless/static` 运行 |
 | `worker.Dockerfile` | worker 镜像，同上 |
 | `compose.yaml` | 生产编排（api / worker / postgres） |
 | `compose.dev.yaml` | 本地开发，只起 postgres |

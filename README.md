@@ -120,7 +120,7 @@ worker 是单实例的，靠 PostgreSQL 的 advisory lock 保证——抢不到�
 
 ## 跑起来
 
-需要 Go 1.25+、Node 22+、PostgreSQL 16+（或 Docker）。
+需要 Go 1.26+、Node 22+、PostgreSQL 13+（实测 16；或直接用 Docker）。
 
 ```bash
 make dev-db          # 起本地 postgres，首次启动自动建表
