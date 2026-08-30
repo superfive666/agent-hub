@@ -29,11 +29,13 @@ export interface OpenclawManifest extends Partial<GenericShellManifest> {
  */
 export class OpenclawAdapter extends GenericShellAdapter {
   constructor(m: OpenclawManifest, hub?: HubHint) {
-    super({ command: [m.bin ?? 'openclaw'], ...m } as GenericShellManifest, 'openclaw', hub);
+    super({ ...m, command: [m.bin ?? 'openclaw'] } as GenericShellManifest, 'openclaw', hub);
   }
 
   async start(): Promise<void> {
-    await super.start();
+    // **配置的问题先报，环境的问题后报。** 基类会检查 `openclaw` 在不在 PATH 里，
+    // 但那条对「你根本没配 subcommand」的人没有用 —— 他要先把配置补齐，
+    // 补完了才轮到「装没装、找不找得到」。顺序反了，第一条错误会把真正的下一步盖住。
     const m = this.m as OpenclawManifest;
     if (!m.subcommand?.length) {
       throw new Error(
@@ -43,6 +45,7 @@ export class OpenclawAdapter extends GenericShellAdapter {
         '用 `openclaw --help` 查你这个版本的一次性发消息命令，例如 subcommand: ["message","send"]。\n' +
         '另：openclaw 的 Gateway 若暴露了 HTTP 接口，改用 http-endpoint 适配器通常更划算。');
     }
+    await super.start();
   }
 
   capabilities(): RuntimeCapabilities {

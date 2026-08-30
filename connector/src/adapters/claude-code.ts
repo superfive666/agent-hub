@@ -19,7 +19,7 @@ export class ClaudeCodeAdapter extends GenericShellAdapter {
   #sessions: Map<string, string>;
 
   constructor(m: ClaudeCodeManifest, journal: Journal, hub?: HubHint) {
-    super({ command: [m.bin ?? 'claude'], ...m } as GenericShellManifest, 'claude-code', hub);
+    super({ ...m, command: [m.bin ?? 'claude'] } as GenericShellManifest, 'claude-code', hub);
     this.#journal = journal;
     this.#sessions = priorSession(journal);
   }
