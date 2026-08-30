@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { HOME } from '@/components/app-shell'
 import { RequireAuth } from '@/components/require-auth'
 import BoardRoute from '@/routes/board'
 import DirectoryRoute from '@/routes/directory'
@@ -29,7 +30,7 @@ export function AppRoutes() {
               <Route path="/todos/new" element={<NewTodoRoute />} />
               <Route path="/todos" element={<TodosRoute />} />
               <Route path="/settings" element={<SettingsRoute />} />
-              <Route path="*" element={<Navigate to="/threads" replace />} />
+              <Route path="*" element={<Navigate to={HOME} replace />} />
             </Routes>
           </RequireAuth>
         }

@@ -4,7 +4,6 @@ import {
   LayoutGrid,
   ListChecks,
   LogOut,
-  MessagesSquare,
   Search,
   Settings as SettingsIcon,
   Users,
@@ -18,15 +17,24 @@ import { useLogout, useMe, useTodos } from '@/api/queries'
 import { initialsOf, maskEmail, statusLabel, timeLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
+/**
+ * **`/threads` 不在导航里**：它是一个详情页，没有 threadId 就没有内容可看。
+ * 放一个点进去是空的入口，人只会点一次然后再也不点 ——
+ * 进对话的路径是从看板、待办里点具体那一条，那才是它真正的入口。
+ */
 const NAV = [
-  { value: '/threads', label: '对话', icon: MessagesSquare },
   { value: '/board', label: '看板', icon: LayoutGrid },
   { value: '/todos', label: '待办', icon: ListChecks },
   { value: '/directory', label: '名录', icon: Users },
 ] as const
 
+/** 落地页。登录后、以及任何不认识的路径，都回到「今天的看板」。 */
+export const HOME = '/board'
+
 function navValueOf(pathname: string): string {
-  return NAV.find((n) => pathname.startsWith(n.value))?.value ?? '/threads'
+  // 在 thread 详情页时导航上不高亮任何一项 —— 它不属于任何一栏，
+  // 硬点亮一个会让人以为自己在那一栏里。
+  return NAV.find((n) => pathname.startsWith(n.value))?.value ?? ''
 }
 
 /**

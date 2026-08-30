@@ -63,6 +63,25 @@ export default function ThreadRoute() {
   const primaryName = primaryWatcher?.name ?? primaryCard?.name ?? '—'
   const watchers = (thread?.watchers ?? []).filter((w) => w.reason !== 'primary')
   const isTodo = thread?.kind === 'todo'
+
+  /**
+   * 右栏第一张卡画的是「这条 thread 归谁」：todo 是**主 agent**（必须响应），
+   * 广播是**发起人**（没人必须响应）。
+   *
+   * 广播的发起人只能由后端给（`authorAgentId`）—— 它在 thread_watcher 里的 reason
+   * 是 `replied`，和「回过帖的人」长得一模一样，从关注者里是猜不出来的。
+   * 以前这里无条件用主 agent，于是广播的右栏画出一张空的「主 AGENT · 必须响应」：
+   * 一个「—」、一个「离线」，看着像出了故障。
+   */
+  const ownerId = isTodo ? primaryId : thread?.authorAgentId
+  const ownerCard = agents?.find((a) => a.agentId === ownerId)
+  const ownerWatcher = thread?.watchers?.find((w) => w.agentId === ownerId)
+  const ownerName = isTodo
+    ? primaryName
+    : (thread?.authorName ?? ownerCard?.name ?? primaryName)
+  const ownerOnline = isTodo
+    ? (primaryWatcher?.online ?? primaryCard?.online)
+    : (ownerWatcher?.online ?? ownerCard?.online)
   /**
    * 用户确认闸门（ADR-0008）。**判据是 `confirmedAt` 这一位数据，不是某个状态** ——
    * 为空就是还没被确认，主 agent 此刻推不动状态（后端会 409），但可以自由发帖提问。
@@ -207,41 +226,43 @@ export default function ThreadRoute() {
                 不该被两张只读卡片压到看不见的地方。没有闸门要过时它整块不画。 */}
             {gateOpen && <ConfirmGateCard act={act} />}
 
-            {/* 流光只给主 agent 卡片（§1.3） */}
-            <Card className="glow runner">
-              <CardHeader>主 AGENT · 必须响应</CardHeader>
+            {/* 流光只给主 agent 卡片（§1.3）。广播没有主责人，那张卡画的是**发起人** ——
+                所以不挂流光：流光表达的是「这个人必须响应」，广播里没人必须响应。 */}
+            <Card className={isTodo ? 'glow runner' : undefined} data-testid="owner-card">
+              <CardHeader>{isTodo ? '主 AGENT · 必须响应' : '广播 · 发起人'}</CardHeader>
               <CardBody>
                 <div className="flex items-center gap-[11px]">
                   <Avatar
                     kind="primary"
-                    initials={initialsOf(primaryName)}
-                    online={primaryWatcher?.online ?? primaryCard?.online}
-                    label={`@${primaryName}`}
+                    initials={initialsOf(ownerName)}
+                    online={ownerOnline}
+                    label={`@${ownerName}`}
                   />
                   <div>
-                    <div className="text-[13.5px] font-bold leading-none">{primaryName}</div>
+                    <div className="text-[13.5px] font-bold leading-none">{ownerName}</div>
                     <div
                       className="mt-[5px] text-[10.5px] font-semibold leading-none"
                       style={{ color: 'var(--agent-ink)' }}
                     >
-                      {(primaryWatcher?.online ?? primaryCard?.online) ? '在线' : '离线'} ·{' '}
-                      {tierLabel(primaryCard?.tier)}
+                      {ownerOnline ? '在线' : '离线'} · {tierLabel(ownerCard?.tier)}
                     </div>
                   </div>
                 </div>
                 <div className="sep" />
                 <div className="kv">
                   runtime
-                  <b className="mono text-[11px]">{primaryCard?.runtime ?? '—'}</b>
+                  <b className="mono text-[11px]">{ownerCard?.runtime ?? '—'}</b>
                 </div>
                 <div className="kv">
-                  典型响应<b>{latencyLabel(primaryCard?.typicalLatencySeconds)}</b>
+                  典型响应<b>{latencyLabel(ownerCard?.typicalLatencySeconds)}</b>
                 </div>
                 <p
                   className="m-0 text-[10.5px] font-medium leading-[1.65]"
                   style={{ color: 'var(--ink3)' }}
                 >
-                  一条 todo 有且只有一个主 agent。转派要在 thread 里留痕。
+                  {isTodo
+                    ? '一条 todo 有且只有一个主 agent。转派要在 thread 里留痕。'
+                    : '广播没有主责人，也没人必须回复。回复只通知发起人和被 @ 到的人。'}
                 </p>
               </CardBody>
             </Card>
@@ -278,10 +299,14 @@ export default function ThreadRoute() {
             {/* 两张卡片画的不是一回事，标题要一眼分得开：
                 这张是「状态推进」（契约里那 5 个状态 + 确认闸门这一个节点），
                 下面那张「处理步骤」是 agent 自己记的过程。 */}
+            {/* 广播没有状态：契约里 status 就是「仅 todo 有」。
+                对着一条广播画那 5 个状态，画出来的是 5 个永远点不亮的圆点 ——
+                看的人只会以为它卡在第一步。所以只留「开始于」。 */}
             <Card data-testid="progress-card">
-              <CardHeader>状态推进</CardHeader>
+              <CardHeader>{isTodo ? '状态推进' : '这条广播'}</CardHeader>
               <CardBody className="gap-2.5">
-                {progress.map((p) => (
+                {isTodo &&
+                  progress.map((p) => (
                   <div key={p.label} className="flex items-center gap-[9px]">
                     <span
                       className="shrink-0 rounded-pill text-center text-[9px] font-bold leading-5"
@@ -310,8 +335,8 @@ export default function ThreadRoute() {
                       {p.label}
                     </span>
                   </div>
-                ))}
-                <div className="sep" />
+                  ))}
+                {isTodo && <div className="sep" />}
                 <div className="kv">
                   开始于<b>{dateTimeLabel(thread.startedAt)}</b>
                 </div>

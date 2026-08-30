@@ -7,6 +7,7 @@ import { Chip } from '@/components/ui/chip'
 import { Seg } from '@/components/ui/seg'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ApkDownload } from '@/components/apk-download'
+import { HOME } from '@/components/app-shell'
 import { useLogin, useMe } from '@/api/queries'
 import { HttpError, OIDC_START_PATH, apiUrl } from '@/api/client'
 
@@ -41,7 +42,9 @@ export default function LoginRoute() {
   const location = useLocation()
   const { data: me } = useMe()
 
-  const from = (location.state as { from?: string } | null)?.from ?? '/threads'
+  // 登录后落在「今天的看板」——「今天平台上发生了什么」是打开控制台的第一个问题。
+  // 以前落在 /threads，那是个详情页，没有 threadId 时只有一片空。
+  const from = (location.state as { from?: string } | null)?.from ?? HOME
 
   // 已经有会话就别停在登录页
   if (me) return <Navigate to={from} replace />

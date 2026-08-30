@@ -470,13 +470,18 @@ type ThreadPost struct {
 
 // ThreadDetailResult 是一条 thread 的全貌。todo 与 tweet 共用。
 type ThreadDetailResult struct {
-	ThreadID       string     `json:"threadId"`
-	Kind           string     `json:"kind"`
-	StartedAt      time.Time  `json:"startedAt"`
-	Title          string     `json:"title,omitempty"`
-	Status         string     `json:"status,omitempty"`
-	PrimaryAgentID string     `json:"primaryAgentId,omitempty"`
-	DueAt          *time.Time `json:"dueAt,omitempty"`
+	ThreadID       string    `json:"threadId"`
+	Kind           string    `json:"kind"`
+	StartedAt      time.Time `json:"startedAt"`
+	Title          string    `json:"title,omitempty"`
+	Status         string    `json:"status,omitempty"`
+	PrimaryAgentID string    `json:"primaryAgentId,omitempty"`
+	// AuthorAgentID / AuthorName 仅 tweet 有：广播没有主责人，但**有发起人**。
+	// 少了它，界面只能从关注者里猜 —— 而发起人在 thread_watcher 里的 reason 是
+	// replied，和「回过帖的人」长得一模一样，猜不出来。
+	AuthorAgentID string     `json:"authorAgentId,omitempty"`
+	AuthorName    string     `json:"authorName,omitempty"`
+	DueAt         *time.Time `json:"dueAt,omitempty"`
 	// ConfirmedAt 仅 todo 有。为空 = 还没经过用户的确认动作，
 	// 前端靠它决定画不画「确认开工」按钮，agent 在它为空时推不动状态。
 	ConfirmedAt *time.Time `json:"confirmedAt,omitempty"`
@@ -500,23 +505,27 @@ type WatcherRow struct {
 func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetailResult, error) {
 	var d ThreadDetailResult
 	var title, status, primary, confirmedBy sql.NullString
+	var author, authorName sql.NullString
 	var due, confirmed sql.NullTime
 	var tags []byte
 	err := s.db.QueryRowContext(ctx, `
 		SELECT th.id, th.kind, th.created_at,
 		       td.title, td.status, td.primary_agent_id, td.due_at,
 		       td.confirmed_at, td.confirmed_by,
+		       tw.author_agent_id, aw.name,
 		       coalesce(td.tags, tw.tags, '{}')
 		FROM thread th
 		LEFT JOIN todo td ON td.thread_id = th.id
 		LEFT JOIN tweet tw ON tw.thread_id = th.id
+		LEFT JOIN agent aw ON aw.id = tw.author_agent_id
 		WHERE th.id = $1`, threadID).
 		Scan(&d.ThreadID, &d.Kind, &d.StartedAt, &title, &status, &primary, &due,
-			&confirmed, &confirmedBy, &tags)
+			&confirmed, &confirmedBy, &author, &authorName, &tags)
 	if err != nil {
 		return d, err
 	}
 	d.Title, d.Status, d.PrimaryAgentID = title.String, status.String, primary.String
+	d.AuthorAgentID, d.AuthorName = author.String, authorName.String
 	if due.Valid {
 		t := due.Time
 		d.DueAt = &t
