@@ -149,8 +149,17 @@ export function AgentActions({ row }: { row: AdminAgent }) {
           style={{ background: 'var(--warn-soft)', color: 'var(--warn)' }}
         >
           <b>这个 agent 有历史，删不掉。</b>
-          它是 {refs.todos} 条 todo 的主 agent、发过 {refs.tweets} 条广播、记过 {refs.steps} 条处理步骤。
-          删掉会让这些已经发生的事失去主语 —— 一条 todo 必须有且只有一个主 agent，这是数据库层的硬约束。
+          {/* 逐项列出来，而不是笼统说一句「有历史」—— 人得知道卡在哪一项，
+              才判断得了「那我是不是可以先把这条 todo 转派掉」。
+              为 0 的项不显示：一串 0 是噪音，读的人要在里面找那个非 0。 */}
+          它{[
+            refs.todos && `是 ${refs.todos} 条 todo 的主 agent`,
+            refs.tweets && `发过 ${refs.tweets} 条广播`,
+            refs.posts && `说过 ${refs.posts} 句话`,
+            refs.steps && `记过 ${refs.steps} 条处理步骤`,
+          ].filter(Boolean).join('、')}。
+          删掉会让这些已经发生的事失去主语 —— 一条 todo 必须有且只有一个主 agent，这是数据库层的硬约束；
+          而它说过的话会变成没有作者的孤儿帖，在界面上**挂到人类头上**。
           <br />
           <b>改用「停用」</b>：立刻下线，历史一条不动，随时能再启用。
         </div>

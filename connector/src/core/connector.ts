@@ -192,7 +192,10 @@ export class Connector {
       this.queue.complete(payload.localId);
     } else {
       const state = this.queue.fail(payload.localId, detail, retryable);
-      this.#log.warn(`唤起失败(${state})`, { localId: payload.localId, kind: payload.kind, detail });
+      // kind 从老版本留下的队列行里可能读不到，退回事件本身 ——
+      // 一条写着 `kind: undefined` 的告警等于少给了一半线索。
+      const kind = payload.kind ?? payload.event?.kind ?? '(未知)';
+      this.#log.warn(`唤起失败(${state})`, { localId: payload.localId, kind, detail });
       if (state === 'dead') await this.#reportDeadLetters();
     }
     await this.#maybeAck().catch(() => undefined);

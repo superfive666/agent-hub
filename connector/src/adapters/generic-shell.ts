@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { accessSync, constants, statSync } from 'node:fs';
+import { delimiter, isAbsolute, join } from 'node:path';
 import { HubHint, RuntimeAdapter, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 
 export interface GenericShellManifest {
@@ -30,6 +32,12 @@ export class GenericShellAdapter implements RuntimeAdapter {
     for (const k of this.m.requiresEnv ?? []) {
       if (!process.env[k]) throw new Error(`runtime 需要环境变量 ${k}，未设置`);
     }
+    assertExecutable(this.m.command[0], this.env());
+  }
+
+  /** 子进程实际会用的环境。start() 的探测和 run() 的 spawn 必须用同一份，否则探测没意义。 */
+  protected env(): NodeJS.ProcessEnv {
+    return { ...process.env, ...this.m.env };
   }
   async stop(): Promise<void> {}
 
@@ -60,7 +68,7 @@ export class GenericShellAdapter implements RuntimeAdapter {
   protected run(argv: string[], stdin: string): Promise<Outcome> {
     return new Promise((resolve) => {
       const child = spawn(argv[0], argv.slice(1), {
-        cwd: this.m.cwd, env: { ...process.env, ...this.m.env }, stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: this.m.cwd, env: this.env(), stdio: ['pipe', 'pipe', 'pipe'],
       });
       let out = '', err = '', settled = false;
       const timer = this.m.timeoutSeconds
@@ -78,4 +86,39 @@ export class GenericShellAdapter implements RuntimeAdapter {
       child.stdin.end(stdin);
     });
   }
+}
+
+/**
+ * 启动时就确认那个命令**真的能执行**，而不是等第一个事件来了才发现。
+ *
+ * 这一条是踩出来的。systemd user service 的 PATH 和你交互 shell 的 PATH **不是一回事**
+ * （通常只有 /usr/local/bin:/usr/bin:/bin，没有 ~/.local/bin，也没有 nvm 那一套），
+ * 于是 `claude` 在终端里跑得好好的，服务里却找不到。
+ *
+ * 而它失败的样子毫无线索：execvp 找到一个同名但没有合法 shebang 的文件时，
+ * 会**退回用 /bin/sh 去跑它**，于是参数被 dash 当成自己的选项，
+ * 报出来的是 `sh: 0: Illegal option --` —— 里面既没有 claude 也没有 PATH，
+ * 没有任何东西指向真正的原因。
+ *
+ * 所以宁可在启动时炸掉：install.sh 的连通性检查会拦住它，人当场就知道要改什么。
+ */
+export function assertExecutable(bin: string, env: NodeJS.ProcessEnv): void {
+  const path = env.PATH ?? '';
+  const candidates = bin.includes('/')
+    ? [isAbsolute(bin) ? bin : join(process.cwd(), bin)]
+    : path.split(delimiter).filter(Boolean).map((d) => join(d, bin));
+
+  for (const c of candidates) {
+    try {
+      if (!statSync(c).isFile()) continue;
+      accessSync(c, constants.X_OK);
+      return;
+    } catch { /* 下一个 */ }
+  }
+  throw new Error(
+    `找不到可执行的 \`${bin}\`。\n` +
+    `当前 PATH：${path || '(空)'}\n` +
+    `装成 systemd user service 时最常见的原因就是这个 —— 服务的 PATH 比你交互 shell 的窄。\n` +
+    `要么在 adapter.bin 里写绝对路径（\`command -v ${bin}\` 查出来的那个），\n` +
+    `要么在 unit 里加一行 Environment=PATH=…。`);
 }

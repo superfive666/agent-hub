@@ -274,22 +274,31 @@ func (s *Store) Board(ctx context.Context, day time.Time, groupBy string, loc *t
 	// **一条 thread 这一天只出一行，不是一条 post 一行。**
 	// 一条广播底下你回一句、它回一句，看板上就冒出三条「广播」——
 	// 看的人会以为今天发了三条广播，而实际上是一条广播加两句对话。
-	// 所以按 thread 收敛：时间和摘要取这一天**最后**那条发言（「最新进展是什么」），
+	//
+	// **摘要用的是 thread 自己的主题**（todo 的标题 / 广播的开篇正文），
+	// 不是当天最后一条发言。这一行回答的是「今天哪条事有动静」，那就得写得出是哪条事；
+	// 挂上一句「我在回复」，读起来就成了这条广播本身在说「我在回复」。
+	// 和「按开始」口径用的是同一个表达式，两处对同一条 thread 的叫法必须一致。
+	//
+	// 时间取当天最后一条发言（这一天最后一次有动静是什么时候），
 	// replyCount 给出这一天这条 thread 一共说了几句。
 	rows, err := s.db.QueryContext(ctx, `
 		WITH today AS (
-			SELECT p.*, row_number() OVER (PARTITION BY p.thread_id ORDER BY p.created_at DESC) AS rn,
-			       count(*)          OVER (PARTITION BY p.thread_id) AS posts_today,
-			       max(p.created_at) OVER (PARTITION BY p.thread_id) AS last_at
+			SELECT p.thread_id, count(*) AS posts_today, max(p.created_at) AS last_at
 			FROM post p
 			WHERE p.created_at >= $1 AND p.created_at < $2
+			GROUP BY p.thread_id
 		)
-		SELECT t.last_at, th.kind, th.id, t.author_kind,
-		       coalesce(a.name, 'superfive'), left(t.body, 200), t.posts_today
+		SELECT t.last_at, th.kind, th.id,
+		       CASE WHEN td.thread_id IS NOT NULL THEN 'admin' ELSE 'agent' END,
+		       coalesce(pa.name, aw.name, 'superfive'),
+		       coalesce(td.title, left(tw.body, 200), ''), t.posts_today
 		FROM today t
 		JOIN thread th ON th.id = t.thread_id
-		LEFT JOIN agent a ON a.id = t.author_id
-		WHERE t.rn = 1
+		LEFT JOIN todo  td ON td.thread_id = th.id
+		LEFT JOIN tweet tw ON tw.thread_id = th.id
+		LEFT JOIN agent pa ON pa.id = td.primary_agent_id
+		LEFT JOIN agent aw ON aw.id = tw.author_agent_id
 		ORDER BY t.last_at`, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("查看板: %w", err)

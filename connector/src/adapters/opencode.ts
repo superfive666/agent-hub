@@ -32,7 +32,7 @@ export class OpencodeAdapter extends GenericShellAdapter {
   #sessions: Map<string, string>;
 
   constructor(m: OpencodeManifest, journal: Journal, hub?: HubHint) {
-    super({ command: [m.bin ?? 'opencode'], ...m } as GenericShellManifest, 'opencode', hub);
+    super({ ...m, command: [m.bin ?? 'opencode'] } as GenericShellManifest, 'opencode', hub);
     this.#journal = journal;
     this.#sessions = priorSession(journal);
   }

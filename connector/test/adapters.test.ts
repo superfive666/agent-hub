@@ -7,6 +7,8 @@ import { openJournal } from '../src/core/journal.js';
 import { Queue } from '../src/core/queue.js';
 import { WakePayload } from '../src/core/types.js';
 import { tmpDir, cleanup } from './helpers.js';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const payload = (over: Partial<WakePayload> = {}): WakePayload => ({
   localId: 1, kind: 'todo.assigned', priority: 0, threadId: 't1',
@@ -101,3 +103,52 @@ describe('需求：node:sqlite 不可用时 JSONL 兜底语义一致', () => {
     }
   });
 });
+
+/**
+ * 这一组来自一次真实故障。journalctl 里只有这么一行：
+ *
+ *   [warn] 唤起失败(pending) { localId: 1, kind: undefined, detail: 'exit 2: sh: 0: Illegal option --\n' }
+ *
+ * 里面既没有 `claude` 也没有 PATH，没有任何东西指向真正的原因。
+ * 两个独立的坑都会走到这个报错上，下面各钉一条。
+ */
+describe('需求：命令跑不起来时，报错要指得出是哪个命令', () => {
+  test('配置里多一个 command 不该把 bin 顶掉', async () => {
+    // 坑一：`{ command: [bin], ...m }` 的展开顺序反了，配置里若有 command 就会赢。
+    // 于是 adapter.bin 写着 claude，实际执行的却是别的东西，
+    // 参数被 dash 当成自己的选项 —— 就是那句 `sh: 0: Illegal option --`。
+    const a = createAdapter(
+      { type: 'claude-code', bin: '/bin/echo', command: ['sh'] } as never,
+      openJournal(tmpDir(), 'jsonl'),
+    );
+    await a.start();
+    const r = await a.wake(payload());
+    assert.equal(r.ok, true, 'bin 必须赢过配置里残留的 command');
+  });
+
+  test('命令不在 PATH 里时，start() 就报错，并且把命令名和 PATH 都说出来', async () => {
+    // 坑二：systemd user service 的 PATH 比交互 shell 窄得多。
+    // execvp 找到同名但没有合法 shebang 的文件时会退回 /bin/sh 去跑，
+    // 于是错误里连命令名都没有 —— 必须在启动时就拦住。
+    const a = new GenericShellAdapter({ command: ['绝对不存在的命令-zzz'] });
+    await assert.rejects(() => a.start(), (e: Error) => {
+      assert.match(e.message, /绝对不存在的命令-zzz/, '报错里要有命令名');
+      assert.match(e.message, /PATH/, '报错里要有 PATH —— 否则看的人不知道去哪找');
+      assert.match(e.message, /systemd|绝对路径/, '要指出最常见的原因和怎么改');
+      return true;
+    });
+  });
+
+  test('找得到但没有执行位，同样在 start() 拦住', async () => {
+    const dir = tmpDir();
+    const f = join(dir, 'noexec');
+    writeFileSync(f, '#!/bin/sh\ntrue\n', { mode: 0o644 });
+    const a = new GenericShellAdapter({ command: [f] });
+    await assert.rejects(() => a.start(), /找不到可执行的/);
+  });
+
+  test('绝对路径的命令能通过检查', async () => {
+    const a = new GenericShellAdapter({ command: ['/bin/echo'] });
+    await a.start();
+  });
+})

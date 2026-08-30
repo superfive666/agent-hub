@@ -95,6 +95,18 @@ export function loadConfig(path?: string): Config {
   let raw: unknown = {};
   if (path) raw = JSON.parse(readFileSync(path, 'utf8'));
   const cfg = merge(DEFAULTS, raw);
+
+  // **adapter 清单是按 type 成套的，跨 type 不能继承默认清单的字段。**
+  // merge 是深合并，而 DEFAULTS.adapter 是 generic-shell + `command: ['sh','-c','cat >/dev/null']`。
+  // 于是一份 `{"type":"claude-code","bin":"claude"}` 的配置合出来会**带着那条 command**，
+  // 而 CLI 适配器的命令是由 bin 推导的 —— 两者撞车，真实的报错是
+  // `sh: 0: Illegal option --`，里面既没有 claude 也没有 PATH，完全指不到原因。
+  // 更坏的情况是它真跑起来：事件被喂进 `cat >/dev/null`，退出码 0，
+  // connector 当成处理成功，cursor 照常推进 —— 静默丢事件。
+  const rawAdapter = isObj(raw) ? (raw as Record<string, unknown>).adapter : undefined;
+  if (isObj(rawAdapter) && typeof rawAdapter.type === 'string' && rawAdapter.type !== DEFAULTS.adapter.type) {
+    cfg.adapter = rawAdapter as AdapterConfig;
+  }
   cfg.storage.dir = expandHome(cfg.storage.dir);
   cfg.hub.baseUrl = cfg.hub.baseUrl.replace(/\/+$/, '');
   if (cfg.queue.maxConcurrentWakes < 1) throw new Error('queue.maxConcurrentWakes 必须 >= 1');

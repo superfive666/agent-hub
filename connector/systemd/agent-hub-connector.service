@@ -10,6 +10,10 @@ Type=simple
 # 所以前面的 `-` 不能去掉：文件不存在是常态，不是启动失败。
 # 无论走哪条路，凭证都不写进 unit —— unit 是 world-readable 的。
 EnvironmentFile=-%h/.config/agent-hub-connector/env
+# systemd user service 默认只有 /usr/local/bin:/usr/bin:/bin —— 比你交互 shell 的窄得多。
+# claude / codex / opencode 这些多半装在 ~/.local/bin 或版本管理器的目录下，
+# 不补这一行，终端里跑得好好的命令在服务里就是「找不到」。
+Environment=PATH=%h/.local/bin:%h/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/bin/env node --experimental-sqlite %h/.local/share/agent-hub-connector/dist/src/index.js run --config %h/.config/agent-hub-connector/config.json
 Restart=always
 RestartSec=5

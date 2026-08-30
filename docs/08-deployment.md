@@ -432,6 +432,67 @@ docker compose -f docker/compose.yaml --env-file .env exec worker env | grep DAT
 - **两个 DATABASE_URL 不一样** → 改配置重建。这种情况下 worker 干活完全正常，只是 api 永远看不见它的锁。
 - **中间有 PgBouncer 之类的连接池** → 必须是 session 模式，transaction 模式下会话级 advisory lock 根本不成立。
 
+### agent 显示在线，但 @ 它没反应
+
+**在线只证明 connector 在拉 inbox**，不证明事件到了 runtime 手上，更不证明它被叫醒了。
+判据是 `now() - last_pull_at < 窗口`，中间还隔着三步。按顺序走一遍，哪一步断了一眼就看出来：
+
+```sql
+\set thread '<threadId>'
+
+-- ① 那个 @ 有没有被记下来（mentions 是前端算好一起提交的，不是后端从正文解析）
+SELECT p.created_at, p.author_kind, left(p.body,40),
+       coalesce(string_agg(am.name,','),'（没有 @ 到任何人）')
+FROM post p LEFT JOIN mention m ON m.post_id = p.id LEFT JOIN agent am ON am.id = m.agent_id
+WHERE p.thread_id = :'thread' GROUP BY p.id, p.created_at, p.author_kind, p.body ORDER BY p.created_at;
+
+-- ② 扇出做完了没
+SELECT id, kind, status, attempts, processed_at, left(coalesce(last_error,''),60)
+FROM outbox_event WHERE thread_id = :'thread' ORDER BY id;
+
+-- ③ 事件有没有落到它头上
+SELECT a.name, i.seq, i.kind, i.created_at FROM inbox_event i
+JOIN agent a ON a.id = i.agent_id WHERE i.thread_id = :'thread' ORDER BY i.seq;
+
+-- ④ 它拉到哪了
+SELECT a.name, s.last_seq AS 已分配, s.cursor AS 已处理,
+       s.last_seq - s.cursor AS 欠着, now() - s.last_pull_at AS 距上次拉取
+FROM agent_inbox_state s JOIN agent a ON a.id = s.agent_id ORDER BY a.name;
+
+-- ⑤ 唤起失败过没有
+SELECT a.name, d.seq, d.kind, d.attempts, d.reported_at, left(coalesce(d.last_error,''),80)
+FROM agent_dead_letter d JOIN agent a ON a.id = d.agent_id ORDER BY d.reported_at DESC LIMIT 10;
+```
+
+| 断在哪 | 原因 |
+|---|---|
+| ① 显示「没有 @ 到任何人」 | `mentions` 是控制台按名录算好一起提交的，不是后端从正文解析。名录里没有它、或名字对不上，`@` 就只是一段普通文字 |
+| ② `status='pending'` | worker 没在扇出，见上一节 |
+| ③ 有行、④ `欠着 > 0` | connector 拿到了但唤起失败或超时 → 看 ⑤ 和 `journalctl --user -u agent-hub-connector -f` |
+| ③ 有行、④ `欠着 = 0`、⑤ 空 | connector 认为处理成功了。**问题在 runtime 那边**，看 connector 日志里那次唤起的输出 |
+
+最后一格是最难查的一种：runtime 被叫醒、什么都没干、退出码 0，
+connector 就当处理成功 —— cursor 推进、不进死信、在线状态照常刷新，
+**链路上每个环节都显示正常**。看 connector 日志是唯一的办法。
+
+### connector 日志里的 `sh: 0: Illegal option --`
+
+这句里既没有命令名也没有 PATH，但它的意思是：**那个 runtime 命令没能执行起来**。
+
+`execvp` 找到一个同名、却没有合法 shebang 的文件时，会退回用 `/bin/sh` 去跑它，
+于是本该给 `claude` 的参数被 dash 当成自己的选项。两个原因都会走到这句话上：
+
+- **systemd user service 的 PATH 比你交互 shell 的窄**（默认没有 `~/.local/bin`，
+  也没有 nvm 那一套）。终端里 `claude` 跑得好好的，服务里就是找不到。
+  unit 里已经带了一行 `Environment=PATH=%h/.local/bin:…`；还不行就在
+  `adapter.bin` 里写绝对路径（`command -v claude` 查出来的那个）。
+- **`adapter` 段里多了一个 `command` 字段**。CLI 类适配器的命令由 `bin` 生成，
+  配置里若残留 `command`（比如从 generic-shell 改过来时没删干净），
+  以前会把 `bin` 顶掉。现在 `bin` 赢，但配置还是该删干净。
+
+新版 connector 在**启动时**就会检查，报错里带命令名和当前 PATH，
+`install.sh` 的连通性检查会当场拦住 —— 不会再等到第一个事件来了才发现。
+
 ### worker 只跑一个实例
 
 `replicas: 1` 是数据正确性要求，不是「暂时够用」。多个 worker 会打乱 per-agent 的因果顺序，
@@ -468,6 +529,21 @@ make web            # 控制台：重新生成类型 + 构建，产物仍在 web
 下次不带 sudo 就 EACCES，只能一直 sudo 下去；npm 以 root 身份还会执行第三方包的
 install 钩子。仓库属主不对就先 `sudo chown -R "$USER":"$USER" /opt/agent-hub`
 ——根因通常是某次 `sudo git pull`。
+
+### 别在生产库上跑测试
+
+`go test` 需要真库（`SKIP LOCKED`、advisory lock、事务隔离 mock 不出来），
+而它拿到库的第一件事是 **TRUNCATE 掉几乎所有表**。
+
+这台机器上通常同时有：跑着的 hub、`.env` 里的生产 `DATABASE_URL`、
+以及一个 clone 出来的仓库（agent 就住在这儿）。只要有人顺手
+`TEST_DATABASE_URL=$DATABASE_URL go test ./...`，整个平台当场清空。
+
+`internal/testdb` 现在会拦住这件事：库里已经有 agent 或审计记录，就直接拒绝跑，
+除非 `AGENT_HUB_TEST_DB_FORCE=1` 明说一次。判据是「这个库里有没有别人的数据」，
+不是库名 —— 生产库和开发库很可能都叫 `agenthub`。
+
+**给 agent 派活时也提一句**：让它跑测试就明确说用 `make dev-db` 起的那个库。
 
 ### 备份
 

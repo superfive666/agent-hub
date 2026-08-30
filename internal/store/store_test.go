@@ -711,10 +711,54 @@ func TestBoardActivityCollapsesOneThreadIntoOneRow(t *testing.T) {
 	if mine[0].ReplyCount != 3 {
 		t.Errorf("这一天这条 thread 一共 3 条发言，replyCount = %d", mine[0].ReplyCount)
 	}
-	// 摘要取当天最后一条：「按活动」回答的是「今天这条事进展到哪了」
-	if mine[0].Summary != "第二句回复" {
-		t.Errorf("摘要应当是当天最后一条发言，实际 %q", mine[0].Summary)
+	// **摘要是 thread 自己的主题，不是最后一条发言。**
+	// 挂上「第二句回复」的话，读起来就成了这条广播本身在说「第二句回复」——
+	// 看板这一行要回答的是「今天哪条事有动静」，那就得写得出是哪条事。
+	if mine[0].Summary != "一条广播" {
+		t.Errorf("摘要应当是广播自己的主题，实际 %q", mine[0].Summary)
 	}
+}
+
+// 需求：todo 在看板上也用自己的标题，不是最后一条回复。
+// 和广播那条是同一个道理，但走的是另一个字段（todo.title 而不是 tweet.body），
+// 所以单独钉一条 —— 只测广播的话，todo 那半边坏了没人知道。
+func TestBoardActivityUsesTodoTitleNotLastReply(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	primary := mkAgent(t, s, "board-primary")
+
+	res, err := s.CreateTodo(ctx, store.CreateTodoParams{
+		New: domain.NewTodo{
+			Title: "把 outbox lag 接到告警上", Body: "正文", PrimaryAgentID: primary,
+		},
+		CreatedBy: "admin",
+	})
+	if err != nil {
+		t.Fatalf("建 todo: %v", err)
+	}
+	if _, err := s.AppendPost(ctx, store.AppendPostParams{
+		ThreadID: res.ThreadID, AuthorKind: "agent", AuthorID: primary, Body: "收到，我看一下",
+	}); err != nil {
+		t.Fatalf("回帖: %v", err)
+	}
+
+	items, err := s.Board(ctx, time.Now(), "activity", time.UTC)
+	if err != nil {
+		t.Fatalf("查看板: %v", err)
+	}
+	for _, it := range items {
+		if it.ThreadID != res.ThreadID {
+			continue
+		}
+		if it.Summary != "把 outbox lag 接到告警上" {
+			t.Errorf("todo 应当显示自己的标题，实际 %q", it.Summary)
+		}
+		if it.ReplyCount != 2 {
+			t.Errorf("当天两条发言，replyCount = %d", it.ReplyCount)
+		}
+		return
+	}
+	t.Fatal("看板里没有这条 todo")
 }
 
 // 需求：广播的回复只通知发起人和被 @ 的人 —— 这条要在真库上端到端成立，
@@ -768,5 +812,52 @@ func TestTweetReplyOnlyNotifiesAuthorAndMentioned(t *testing.T) {
 	if n := got(chatter); n != 0 {
 		t.Errorf("老关注者不该再被叫醒（实际 %d 条）—— 否则一条广播底下每多一个人说话，"+
 			"后面每条回复就多吵醒一个人", n)
+	}
+}
+
+// 需求：**说过话的 agent 删不掉。**
+//
+// post.author_id 上没有外键（admin 发帖时它是 NULL，加不了 NOT NULL 的引用），
+// 所以删掉 agent 之后它的 post 会变成孤儿 —— 而读 thread 的查询是
+// `coalesce(a.name, 'superfive')`，那些帖子会**挂到人类头上**。
+// 设计语言 §1.1 的第一条就是「人和 agent 必须一眼分得开」，
+// 一条 agent 说过的话变成人说的，比留一条停用记录严重得多。
+//
+// 这条以前是漏的：计数查询抄了两份，一份数了 post 一份没数。
+func TestAgentThatSpokeCannotBeDeleted(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	author := mkAgent(t, s, "spoke-author")
+	replier := mkAgent(t, s, "spoke-replier")
+
+	threadID, err := s.CreateTweet(ctx, store.CreateTweetParams{Author: author, Body: "广播"})
+	if err != nil {
+		t.Fatalf("发广播: %v", err)
+	}
+	// replier 只是在别人的 thread 里回了一句：没有 todo、没有 tweet、没有 step。
+	if _, err := s.AppendPost(ctx, store.AppendPostParams{
+		ThreadID: threadID, AuthorKind: "agent", AuthorID: replier, Body: "我说一句",
+	}); err != nil {
+		t.Fatalf("回帖: %v", err)
+	}
+
+	refs, err := s.CountAgentRefs(ctx, replier)
+	if err != nil {
+		t.Fatalf("数留痕: %v", err)
+	}
+	if refs.Posts != 1 {
+		t.Errorf("它说过 1 句话，Posts = %d", refs.Posts)
+	}
+
+	// 关键：CountAgentRefs 说「有留痕」，DeleteAgent 就必须也拒绝。
+	// 两处判据不一致的话，界面说删不了、真去删却删成功了。
+	if _, err := s.DeleteAgent(ctx, replier); !errors.Is(err, store.ErrAgentInUse) {
+		t.Fatalf("说过话的 agent 应当删不掉（ErrAgentInUse），实际 %v", err)
+	}
+
+	// 一句话都没说过的才删得掉
+	silent := mkAgent(t, s, "spoke-silent")
+	if _, err := s.DeleteAgent(ctx, silent); err != nil {
+		t.Errorf("没有任何留痕的 agent 应当删得掉，实际 %v", err)
 	}
 }

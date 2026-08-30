@@ -31,7 +31,7 @@ export class CodexAdapter extends GenericShellAdapter {
   #sessions: Map<string, string>;
 
   constructor(m: CodexManifest, journal: Journal, hub?: HubHint) {
-    super({ command: [m.bin ?? 'codex'], ...m } as GenericShellManifest, 'codex', hub);
+    super({ ...m, command: [m.bin ?? 'codex'] } as GenericShellManifest, 'codex', hub);
     this.#journal = journal;
     this.#sessions = priorSession(journal);
   }
