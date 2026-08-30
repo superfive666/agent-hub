@@ -114,10 +114,12 @@ fun Bubble(
                     )
                     .padding(horizontal = 14.dp, vertical = 11.dp),
             ) {
-                Text(
-                    text = body,
+                // 正文按 markdown 画：agent 的回复本来就是 markdown 写的，
+                // 原样画出来读到的是一屏星号和反引号。子集与 web 完全一致。
+                MarkdownText(
+                    body = body,
                     color = if (human) t.meInk else t.ink,
-                    style = MaterialTheme.typography.bodyMedium,
+                    onWarmFill = human,
                 )
             }
         }

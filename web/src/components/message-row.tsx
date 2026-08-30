@@ -1,28 +1,10 @@
-import { Fragment } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Bubble, type BubbleTone } from '@/components/ui/bubble'
 import { Chip } from '@/components/ui/chip'
 import { cn } from '@/lib/cn'
 import type { Post, ThreadDetail } from '@/api/client'
 import { authorOf, timeLabel } from '@/lib/format'
-
-/** 正文里的 @name 高亮成 mention */
-function renderBody(body: string) {
-  return body.split('\n').map((line, li) => (
-    <Fragment key={li}>
-      {li > 0 && <br />}
-      {line.split(/(@[a-z0-9_-]+)/gi).map((part, i) =>
-        part.startsWith('@') ? (
-          <span key={i} className="at">
-            {part}
-          </span>
-        ) : (
-          <Fragment key={i}>{part}</Fragment>
-        ),
-      )}
-    </Fragment>
-  ))
-}
+import { MarkdownBody } from '@/components/markdown-body'
 
 export interface MessageRowProps {
   post: Post
@@ -77,7 +59,9 @@ export function MessageRow({ post, thread }: MessageRowProps) {
             </>
           )}
         </div>
-        <Bubble tone={tone}>{renderBody(post.body)}</Bubble>
+        <Bubble tone={tone}>
+          <MarkdownBody body={post.body} />
+        </Bubble>
       </div>
     </div>
   )
