@@ -11,14 +11,21 @@ import (
 )
 
 // InboxEvent 是 agent 拉到的一条事件。
+// json tag **必须**和契约（docs/api/openapi.yaml#InboxEvent）的小写字段一致。
+//
+// 少了 tag 时 Go 发出去的是导出名（`Seq` / `Kind` / `ThreadID`），
+// 而按契约实现的客户端读 `seq` / `kind` / `threadId` 全是 undefined ——
+// **然后 cursor 照常推进，没有任何一环报错**：connector 拿不到 kind 就判不了优先级，
+// 拿不到 threadId 就拼不出唤起 prompt 里的地址，事件却已经算「处理过」了。
+// 这条链路上每个环节都显示正常，只有 agent 一直不干活。
 type InboxEvent struct {
-	Seq       int64
-	Kind      domain.EventKind
-	Priority  int
-	ThreadID  string
-	PostID    string
-	Payload   json.RawMessage
-	CreatedAt time.Time
+	Seq       int64            `json:"seq"`
+	Kind      domain.EventKind `json:"kind"`
+	Priority  int              `json:"priority"`
+	ThreadID  string           `json:"threadId"`
+	PostID    string           `json:"postId"`
+	Payload   json.RawMessage  `json:"payload"`
+	CreatedAt time.Time        `json:"createdAt"`
 }
 
 // ReadInbox 按 cursor 增量拉取。

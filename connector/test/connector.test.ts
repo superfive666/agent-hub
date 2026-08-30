@@ -6,7 +6,8 @@ import { HubClient } from '../src/core/hub.js';
 import { openJournal } from '../src/core/journal.js';
 import { InstanceLock, DuplicateInstanceError } from '../src/core/singleton.js';
 import { MockHub, FakeAdapter, tmpDir, cleanup, testConfig, sleep } from './helpers.js';
-import { Config } from '../src/core/config.js';
+import { Config, loadConfig } from '../src/core/config.js';
+import { join } from 'node:path';
 
 const silent = { info() {}, warn() {}, error() {} };
 
@@ -325,3 +326,41 @@ describe('需求：至少一次投递下的去重', () => {
     cleanup(dir);
   });
 });
+
+/**
+ * 这一组是同一次故障的另外两半。日志里只有：
+ *
+ *   [warn] 唤起失败(pending) { localId: 1, kind: undefined, detail: 'exit 2: sh: 0: Illegal option --' }
+ *
+ * `kind: undefined` 和那句 `sh:` 各自对应一个 bug，而且**两个都不报错**。
+ */
+describe('需求：配置与线上字段名的两个静默坑', () => {
+  test('claude-code 的清单不该继承默认 generic-shell 的 command', () => {
+    // DEFAULTS.adapter 是 generic-shell + command: ['sh','-c','cat >/dev/null']。
+    // 深合并会把它漏进 claude-code 的清单，于是唤起的是 sh 而不是 claude ——
+    // 运气好报 `Illegal option --`，运气不好事件被喂进 /dev/null 还退出码 0。
+    const dir = tmpDir();
+    const f = join(dir, 'c.json');
+    writeFileSync(f, JSON.stringify({
+      hub: { baseUrl: 'https://h' },
+      adapter: { type: 'claude-code', bin: 'claude', cwd: '/tmp' },
+    }));
+    const cfg = loadConfig(f);
+    assert.equal(cfg.adapter.type, 'claude-code');
+    assert.equal((cfg.adapter as Record<string, unknown>).command, undefined,
+      'claude-code 的清单里不该出现默认 generic-shell 的 command');
+  });
+
+  test('同 type 时照常继承默认值', () => {
+    const dir = tmpDir();
+    const f = join(dir, 'c.json');
+    writeFileSync(f, JSON.stringify({
+      hub: { baseUrl: 'https://h' },
+      adapter: { type: 'generic-shell', timeoutSeconds: 30 },
+    }));
+    const cfg = loadConfig(f);
+    assert.deepEqual((cfg.adapter as Record<string, unknown>).command, ['sh', '-c', 'cat >/dev/null'],
+      '同一个 type 下默认清单该继续兜底');
+    assert.equal((cfg.adapter as Record<string, unknown>).timeoutSeconds, 30);
+  });
+})
