@@ -43,6 +43,15 @@ export const mockHealth: Health = {
   pendingLongPolls: 2,
 }
 
+/** 假数据里默认**有包** —— 没包的那条路径由 apk-download 的单测直接给 meta 覆盖。 */
+export const mockApkMeta = {
+  available: true,
+  version: '0.1.0',
+  filename: 'agent-hub-0.1.0.apk',
+  sizeBytes: 13_107_200,
+  updatedAt: '2026-08-30T02:00:00Z',
+}
+
 export const mockSettings: Settings = {
   timezone: 'Asia/Singapore',
   longPollMaxSeconds: 30,

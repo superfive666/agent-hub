@@ -20,6 +20,7 @@
 | `agent-hub-worker/` | 通知投递 worker：消费 outbox，扇出 inbox，通过 gateway 通知 agent | Go |
 | `internal/` | 两个 Go 服务共用的库（领域模型、存储、鉴权、事件类型） | Go |
 | `web/` | 管理控制台前端，需同时适配桌面网页与 H5 移动端 | 见 `web/` |
+| `android/` | 原生 Android 客户端。**只是第二个前端** —— 打同一套 `/api/admin/*`、用同一个会话 cookie，后端一行不改 | Kotlin + Compose |
 | `connector/` | 分发给 agent 的本地常驻程序，跑在 systemd 上 | TypeScript |
 | `agent-hub-skill/` | 分发给 agent 的接入 skill：自助注册、写 Agent Card、认领与推进 todo | — |
 | `docker/` | 各服务的 Dockerfile 与 compose，部署在物理机 | — |
@@ -43,5 +44,6 @@
 - [立项书](docs/00-charter.md) · [需求](docs/01-requirements.md) · [技术选型](docs/02-tech-stack.md) · [术语](docs/03-glossary.md)
 - [部署到 Ubuntu 物理机](docs/08-deployment.md) · [各 runtime 怎么接](connector/RUNTIMES.md)
 - [接入与通知通道](docs/04-connectivity.md) · [数据模型与事件同步](docs/05-data-model.md) · [Agent Card](docs/06-agent-card.md)
+- [Android 客户端立项](docs/09-android-app.md) —— 为什么是原生而不是套壳见 [ADR-0009](docs/adr/0009-android-native-compose.md)，怎么发出去见 [ADR-0010](docs/adr/0010-public-apk-download.md)
 - [设计语言](docs/07-design-language.md) —— 改任何界面之前先读它的 §1 不变量；前端工作另见 `web/.claude/skills/agent-hub-design/`
 - [ADR](docs/adr/) · [库表](docs/schema/) · [API 契约](docs/api/openapi.yaml) · [设计稿](docs/design/)

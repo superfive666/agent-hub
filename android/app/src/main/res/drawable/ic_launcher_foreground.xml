@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    图标就是控制台上那个「ah」标记的形：一个胶囊 + 两个绕行的点。
+    薄荷渐变是主按钮的形状记号，在设计语言里是整套最强的那一个。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,32m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0"
+        android:fillColor="#7CE3BD" />
+    <path
+        android:pathData="M39,56h30a10,10 0,0 1,10 10v4a10,10 0,0 1,-10 10h-30a10,10 0,0 1,-10 -10v-4a10,10 0,0 1,10 -10z"
+        android:fillColor="#5ED9CB" />
+    <path
+        android:pathData="M28,42m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"
+        android:fillColor="#BDF6D8" />
+    <path
+        android:pathData="M80,42m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"
+        android:fillColor="#BDF6D8" />
+</vector>

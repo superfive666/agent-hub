@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- hub 可能是任意一台自建实例，联网是这个 app 存在的前提 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:name=".AgentHubApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AgentHub"
+        android:usesCleartextTraffic="true">
+        <!--
+            allowBackup="false" 是刻意的：会话 cookie 存在应用私有目录里，
+            让它被云备份带走等于把一份管理员会话复制到别处。
+            这个 app 里没有任何值得备份的用户数据 —— 数据都在 hub 上。
+
+            usesCleartextTraffic="true" 也是刻意的，而且是这个平台的正常形态：
+            很多实例就跑在局域网的 http://192.168.x.x:8080 上。默认策略会把
+            这类请求**静默拦掉**，症状是"连不上"，而地址和网络都没问题。
+            公网 http 的风险由 core 的 normalizeHubUrl 标记出来，在登录页明说。
+        -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.AgentHub">
+            <!--
+                adjustResize 而不是默认值：对话页的输入框贴在底部，
+                键盘弹起时不 resize 的话它会被盖住，人看不见自己在打什么。
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -6,6 +6,7 @@ import { Pane } from '@/components/ui/pane'
 import { Chip } from '@/components/ui/chip'
 import { Seg } from '@/components/ui/seg'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { ApkDownload } from '@/components/apk-download'
 import { useLogin, useMe } from '@/api/queries'
 import { HttpError, OIDC_START_PATH, apiUrl } from '@/api/client'
 
@@ -239,6 +240,13 @@ export default function LoginRoute() {
               </Chip>
               <Chip size="sm">会话写在 HttpOnly Cookie</Chip>
             </div>
+
+            {/* Android 客户端入口。**必须在登录页上**：装 app 的那一刻用户手上
+                还没有会话，而他很可能正是想在手机上登录才来装的 —— 入口只放在
+                登录后的页面里，就成了「要先登录才能拿到用来登录的东西」。
+                端点本身也是公开的（ADR-0010），两边一致。 */}
+            <div className="sep" />
+            <ApkDownload variant="inline" />
           </form>
         </div>
       </Pane>

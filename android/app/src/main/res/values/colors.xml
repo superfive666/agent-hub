@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 舞台顶部那段深青蓝。启动窗口用它，第一帧过渡时不会闪一下白 -->
+    <color name="boot_background">#164A63</color>
+    <color name="launcher_background">#0E3A4F</color>
+</resources>

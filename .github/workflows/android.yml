@@ -1,0 +1,111 @@
+name: android
+
+# Android 客户端的构建。
+#
+# **为什么单独一个 workflow**：它要装 Android SDK（几 GB、几分钟），
+# 而改一行 Go 代码的 PR 不该为此等着。paths 过滤让它只在真正相关的改动上跑。
+#
+# 契约（docs/api/openapi.yaml）也在触发范围里：Android 侧的 DTO 是**手写的**
+# （web 那边是生成的），契约改了这边不会自动跟上 —— 至少让 CI 把 app 编一遍，
+# 字段名对不上时能在这儿发现。
+
+on:
+  push:
+    branches: [main]
+    # 发版：打一个 android-v* 的 tag。**tag 推送不走 paths 过滤**
+    # （GitHub 对 tag 事件不评估 paths），所以发版一定会构建。
+    tags: ['android-v*']
+    paths:
+      - 'android/**'
+      - 'docs/api/openapi.yaml'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'docs/api/openapi.yaml'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 纯逻辑测试**不装 SDK**。这是 core 拆成独立 Gradle 构建的直接回报：
+  # 领域规则的回归在几十秒内就有结论，不用等 SDK 下完。
+  core:
+    name: 领域逻辑测试（无需 Android SDK）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: core 单元测试
+        working-directory: android
+        run: ./gradlew -p core test
+      - name: 上传测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-report
+          path: android/core/build/reports/tests/test
+          if-no-files-found: ignore
+
+  app:
+    name: 构建 APK
+    runs-on: ubuntu-latest
+    needs: core
+    env:
+      # ⚠️ **secrets 上下文在 step 的 `if` 里读不到**（只有 env / github /
+      # needs 等少数几个可用）。所以先在 job 级别把它落到 env，
+      # 下面的 step 才判断得了「有没有配签名密钥」。
+      # 直接写 `if: secrets.X != ''` 的话条件恒为假，包永远是 debug 签名的，
+      # 而且不报任何错。
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: app 单元测试
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: lint
+        working-directory: android
+        run: ./gradlew :app:lintDebug
+
+      # 签名密钥走 secret。**没配 secret 时不失败**，退回 debug 签名 ——
+      # 外部贡献者的 PR 拿不到 secret，那时仍然应该能验证「代码编得过」，
+      # 只是产出的包不能覆盖安装正式版。
+      - name: 解出签名密钥（有 secret 时）
+        id: keystore
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
+
+      - name: 构建 release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease
+
+      # 产物挂在这次运行上，**不提交回仓库**：十几 MB 的二进制每发一版塞一份，
+      # 而 clone 代码的人并不需要它（ADR-0010）。
+      # 部署时把它放到 hub 的 ANDROID_APK_PATH 指向的路径，见 docs/08-deployment.md §5.5。
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-hub-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
