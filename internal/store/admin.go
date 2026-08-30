@@ -67,11 +67,29 @@ func (s *Store) ListAgents(ctx context.Context) ([]AgentRow, error) {
 		if lastPull.Valid {
 			t := lastPull.Time
 			r.LastPullAt = &t
-			r.Online = time.Since(t) < onlineWindow(r.Tier)
 		}
+		r.Online = agentOnline(r.Status, lastPull, r.Tier)
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// agentOnline 是「这个 agent 现在还接得住活吗」的唯一判据。
+//
+// **status 是判据的一部分，不是附加信息。** 停用之后凭证立刻失效
+// （AuthenticateCredential 查 `status = 'active'`），它再也拉不动 inbox，
+// 但 last_pull_at 停在最后一次成功拉取上 —— 只看时间的话，
+// 它会继续「在线」整整一个判定窗口（长轮询 2 分钟、cron 12 分钟）。
+// 刚点完停用的人盯着一个还亮着的绿点，只会以为停用没生效。
+//
+// 同理 pending_registration：它还没换过凭证，本来就不该算在线。
+// 以前这一条是**碰巧**成立的（没换凭证就没拉过，last_pull_at 是 NULL），
+// 碰巧成立的东西迟早会不成立。
+func agentOnline(status string, lastPull sql.NullTime, tier string) bool {
+	if status != "active" || !lastPull.Valid {
+		return false
+	}
+	return time.Since(lastPull.Time) < onlineWindow(tier)
 }
 
 // onlineWindow 按接入档位取不同的在线判定窗口。
@@ -113,7 +131,7 @@ type TodoRow struct {
 func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([]TodoRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT th.id, td.title, td.status, td.primary_agent_id, pa.name,
-		       st.last_pull_at, coalesce(c.tier,''),
+		       pa.status, st.last_pull_at, coalesce(c.tier,''),
 		       th.created_at, td.updated_at, td.due_at, td.confirmed_at,
 		       coalesce(pc.n, 0),
 		       coalesce(array_agg(wa.name) FILTER (WHERE wa.id IS NOT NULL AND wa.id <> td.primary_agent_id), '{}')
@@ -130,7 +148,7 @@ func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([
 		WHERE ($1 = '' OR td.status = $1)
 		  AND ($2 = '' OR td.primary_agent_id = $2::uuid)
 		GROUP BY th.id, td.title, td.status, td.primary_agent_id, pa.name,
-		         st.last_pull_at, c.tier, th.created_at, td.updated_at, td.due_at,
+		         pa.status, st.last_pull_at, c.tier, th.created_at, td.updated_at, td.due_at,
 		         td.confirmed_at, pc.n
 		ORDER BY td.updated_at DESC`, status, primaryAgentID)
 	if err != nil {
@@ -142,11 +160,11 @@ func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([
 	for rows.Next() {
 		var r TodoRow
 		var lastPull sql.NullTime
-		var tier string
+		var tier, primaryStatus string
 		var due, confirmed sql.NullTime
 		var watchers []byte
 		if err := rows.Scan(&r.ThreadID, &r.Title, &r.Status, &r.PrimaryAgentID, &r.PrimaryAgentName,
-			&lastPull, &tier, &r.StartedAt, &r.UpdatedAt, &due, &confirmed,
+			&primaryStatus, &lastPull, &tier, &r.StartedAt, &r.UpdatedAt, &due, &confirmed,
 			&r.ReplyCount, &watchers); err != nil {
 			return nil, err
 		}
@@ -154,9 +172,7 @@ func (s *Store) ListTodos(ctx context.Context, status, primaryAgentID string) ([
 			t := confirmed.Time
 			r.ConfirmedAt = &t
 		}
-		if lastPull.Valid {
-			r.PrimaryAgentOnline = time.Since(lastPull.Time) < onlineWindow(tier)
-		}
+		r.PrimaryAgentOnline = agentOnline(primaryStatus, lastPull, tier)
 		if due.Valid {
 			t := due.Time
 			r.DueAt = &t
@@ -540,7 +556,7 @@ func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetail
 	}
 
 	wrows, err := s.db.QueryContext(ctx, `
-		SELECT tw.agent_id::text, a.name, tw.reason, st.last_pull_at, coalesce(c.tier,'')
+		SELECT tw.agent_id::text, a.name, tw.reason, a.status, st.last_pull_at, coalesce(c.tier,'')
 		FROM thread_watcher tw
 		JOIN agent a ON a.id = tw.agent_id
 		LEFT JOIN agent_inbox_state st ON st.agent_id = a.id
@@ -557,13 +573,11 @@ func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetail
 	for wrows.Next() {
 		var wr WatcherRow
 		var lastPull sql.NullTime
-		var tier string
-		if err := wrows.Scan(&wr.AgentID, &wr.Name, &wr.Reason, &lastPull, &tier); err != nil {
+		var tier, wstatus string
+		if err := wrows.Scan(&wr.AgentID, &wr.Name, &wr.Reason, &wstatus, &lastPull, &tier); err != nil {
 			return d, err
 		}
-		if lastPull.Valid {
-			wr.Online = time.Since(lastPull.Time) < onlineWindow(tier)
-		}
+		wr.Online = agentOnline(wstatus, lastPull, tier)
 		d.Watchers = append(d.Watchers, wr)
 	}
 	return d, nil

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 
 	"github.com/superfive666/agent-hub/internal/domain"
@@ -147,14 +148,14 @@ func (s *Store) Directory(ctx context.Context, skill, tag string, onlineOnly boo
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT a.id, a.name, a.purpose,
 		       c.document, c.runtime, c.tier, c.typical_latency_seconds,
-		       coalesce(st.last_pull_at > now() - interval '10 minutes', false) AS online
+		       a.status, st.last_pull_at
 		FROM agent a
 		LEFT JOIN LATERAL (
 			SELECT * FROM agent_card WHERE agent_id = a.id ORDER BY version DESC LIMIT 1
 		) c ON true
 		LEFT JOIN agent_inbox_state st ON st.agent_id = a.id
 		WHERE a.status <> 'disabled'
-		ORDER BY online DESC, a.name`)
+		ORDER BY a.name`)
 	if err != nil {
 		return nil, fmt.Errorf("查名录: %w", err)
 	}
@@ -166,11 +167,17 @@ func (s *Store) Directory(ctx context.Context, skill, tag string, onlineOnly boo
 		var doc []byte
 		var runtime, tier sql.NullString
 		var latency sql.NullInt64
+		var status string
+		var lastPull sql.NullTime
 		if err := rows.Scan(&e.AgentID, &e.Name, &e.Description,
-			&doc, &runtime, &tier, &latency, &e.Online); err != nil {
+			&doc, &runtime, &tier, &latency, &status, &lastPull); err != nil {
 			return nil, err
 		}
 		e.Runtime, e.Tier = runtime.String, tier.String
+		// 在线判据只有 agentOnline 一处 —— 以前这里在 SQL 里写死 10 分钟，
+		// 和管理列表按档位取窗口（长轮询 2 分钟 / cron 12 分钟）对不上，
+		// 同一个 agent 在名录和列表里可以一个在线一个离线。
+		e.Online = agentOnline(status, lastPull, tier.String)
 		e.TypicalLatencySeconds = int(latency.Int64)
 		if len(doc) > 0 {
 			e.HasCard = true
@@ -202,7 +209,12 @@ func (s *Store) Directory(ctx context.Context, skill, tag string, onlineOnly boo
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// 在线的排前面。排序跟着判据一起搬到 Go 里，SQL 那边就不用再复述一遍「什么叫在线」。
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Online && !out[j].Online })
+	return out, nil
 }
 
 func containsSkill(raw json.RawMessage, needle string) bool {

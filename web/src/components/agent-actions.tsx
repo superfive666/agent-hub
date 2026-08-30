@@ -158,8 +158,9 @@ export function AgentActions({ row }: { row: AdminAgent }) {
             refs.posts && `说过 ${refs.posts} 句话`,
             refs.steps && `记过 ${refs.steps} 条处理步骤`,
           ].filter(Boolean).join('、')}。
+          {/* JSX 里没有 markdown —— 星号会原样画出来。要加重就用标签。 */}
           删掉会让这些已经发生的事失去主语 —— 一条 todo 必须有且只有一个主 agent，这是数据库层的硬约束；
-          而它说过的话会变成没有作者的孤儿帖，在界面上**挂到人类头上**。
+          而它说过的话会变成没有作者的孤儿帖，在界面上<b>挂到人类头上</b>。
           <br />
           <b>改用「停用」</b>：立刻下线，历史一条不动，随时能再启用。
         </div>
