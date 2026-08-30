@@ -8,7 +8,9 @@ package testdb
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/superfive666/agent-hub/internal/store"
@@ -38,6 +40,7 @@ func New(t *testing.T) *store.Store {
 	if err != nil {
 		t.Fatalf("连接测试库: %v", err)
 	}
+	assertDisposable(t, s)
 
 	// 独占整个测试库，直到本用例结束。
 	conn, err := s.DB().Conn(ctx)
@@ -73,4 +76,79 @@ func New(t *testing.T) *store.Store {
 		t.Fatalf("清空测试库: %v", err)
 	}
 	return s
+}
+
+// once 保证防呆只在**第一次** New 时判一次。
+// 之后每个用例都会 TRUNCATE，库里当然是空的 —— 每次都判等于只判了个寂寞。
+var once sync.Once
+
+// assertDisposable 拦住「把测试跑到生产库上」这一种事故。
+//
+// New 会 TRUNCATE 掉 agent、audit_log、post、thread…… 几乎所有表。
+// 而这个仓库会被 clone 到跑着 hub 的那台机器上（agent 就住在那儿），
+// 那里 `DATABASE_URL` 指的就是生产库 —— 只要有人顺手
+// `TEST_DATABASE_URL=$DATABASE_URL go test ./...`，整个平台当场清空，
+// 而且**没有任何一步会问你确不确定**。
+//
+// 判据不是「库叫什么名字」（生产和开发很可能都叫 agenthub），而是
+// **这个库里有没有别人的数据**：
+//
+//   - platform_config 里打过测试标记 → 是我们自己的测试库，放行（标记不在 TRUNCATE 名单里，跨用例还在）
+//   - 没标记，但 agent 和 audit_log 都是空的 → 干净的新库，打上标记后放行
+//   - 没标记，却有 agent 或审计记录 → **这是别人在用的库，停下**
+//
+// 真要清一个有数据的库，`AGENT_HUB_TEST_DB_FORCE=1` 明说一次。
+func assertDisposable(t *testing.T, s *store.Store) {
+	t.Helper()
+	var fatal string
+	once.Do(func() {
+		ctx := context.Background()
+		db := s.DB()
+
+		var marked bool
+		// platform_config 是单行表，可能一行都还没有 —— 那也算「没标记」。
+		if err := db.QueryRowContext(ctx,
+			`SELECT coalesce((SELECT config->>'testDatabase' = 'true' FROM platform_config LIMIT 1), false)`,
+		).Scan(&marked); err != nil {
+			fatal = "读测试库标记失败: " + err.Error()
+			return
+		}
+		if marked {
+			return
+		}
+
+		var agents, audits int
+		if err := db.QueryRowContext(ctx,
+			`SELECT (SELECT count(*) FROM agent), (SELECT count(*) FROM audit_log)`,
+		).Scan(&agents, &audits); err != nil {
+			fatal = "检查测试库是否干净失败: " + err.Error()
+			return
+		}
+
+		forced := os.Getenv("AGENT_HUB_TEST_DB_FORCE") == "1"
+		if (agents > 0 || audits > 0) && !forced {
+			fatal = fmt.Sprintf(
+				"拒绝在这个库上跑测试：里面已经有 %d 个 agent、%d 条审计记录。\n"+
+					"测试会 TRUNCATE 掉几乎所有表 —— 如果 TEST_DATABASE_URL 指的是生产库，"+
+					"整个平台会当场清空。\n"+
+					"先确认 TEST_DATABASE_URL 指对了地方（`make dev-db` 起的那个是安全的）。\n"+
+					"确实想清掉这个库：AGENT_HUB_TEST_DB_FORCE=1 再跑一次。",
+				agents, audits)
+			return
+		}
+
+		// 干净的库、或者已经明说要清的库，打上标记。
+		// **强清过一次之后也要标记**：它从此就是个测试库了，
+		// 再要求每次都带 FORCE 只会训练人养成无脑加 FORCE 的习惯 —— 那这道防呆就白做了。
+		if _, err := db.ExecContext(ctx, `
+			INSERT INTO platform_config (id, config) VALUES (true, '{"testDatabase": true}'::jsonb)
+			ON CONFLICT (id) DO UPDATE
+			SET config = platform_config.config || '{"testDatabase": true}'::jsonb`); err != nil {
+			fatal = "写测试库标记失败: " + err.Error()
+		}
+	})
+	if fatal != "" {
+		s.Close()
+		t.Fatal(fatal)
+	}
 }

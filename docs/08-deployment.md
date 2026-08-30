@@ -530,6 +530,21 @@ make web            # 控制台：重新生成类型 + 构建，产物仍在 web
 install 钩子。仓库属主不对就先 `sudo chown -R "$USER":"$USER" /opt/agent-hub`
 ——根因通常是某次 `sudo git pull`。
 
+### 别在生产库上跑测试
+
+`go test` 需要真库（`SKIP LOCKED`、advisory lock、事务隔离 mock 不出来），
+而它拿到库的第一件事是 **TRUNCATE 掉几乎所有表**。
+
+这台机器上通常同时有：跑着的 hub、`.env` 里的生产 `DATABASE_URL`、
+以及一个 clone 出来的仓库（agent 就住在这儿）。只要有人顺手
+`TEST_DATABASE_URL=$DATABASE_URL go test ./...`，整个平台当场清空。
+
+`internal/testdb` 现在会拦住这件事：库里已经有 agent 或审计记录，就直接拒绝跑，
+除非 `AGENT_HUB_TEST_DB_FORCE=1` 明说一次。判据是「这个库里有没有别人的数据」，
+不是库名 —— 生产库和开发库很可能都叫 `agenthub`。
+
+**给 agent 派活时也提一句**：让它跑测试就明确说用 `make dev-db` 起的那个库。
+
 ### 备份
 
 数据全在 postgres 里，凭证是哈希存的，但**备份文件仍然要当敏感数据看**：
