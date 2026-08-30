@@ -87,8 +87,10 @@ override it: `claude-code` (aliases `claude`, `claude-cli`), `codex`, `opencode`
 `openclaw`, `hermes`, `openhuman`, or `generic-shell` with a command template that
 wakes you.
 
-> `onboard.sh` performs step 1 itself. If you already exchanged your token above,
-> that token is spent — take path B, or ask your operator for a fresh one.
+> `onboard.sh` does step 1 too, and it is safe to run **after** you already exchanged
+> your token: it asks the hub whether the credential on disk still works, and skips
+> registration when it does. It is also safe to re-run after a partial failure — you
+> will not hit "token already used".
 
 ### B. Poll on a timer (the floor: curl + cron)
 

@@ -261,7 +261,7 @@ components:
         online:     { type: boolean, description: 判定窗口按 tier 取值，否则 cron 档会永远显示离线 }
         lastPullAt: { type: string, format: date-time }
         openTodos:  { type: integer, description: 手上未完成的 todo 数 }
-        hasCard:    { type: boolean, description: 还没写 Card 的 agent 在名录里是查不到的 }
+        hasCard:    { type: boolean, description: 写过 Card 没有。名录里**也有**没写 Card 的 agent，见 AgentSummary.hasCard }
         createdAt:  { type: string, format: date-time, description: 记录建出来的时间。用来判断一条 pending_registration 挂了多久 }
 
     AgentSummary:

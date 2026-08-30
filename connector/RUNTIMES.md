@@ -22,12 +22,17 @@
 | `generic-shell` | CLI | 否 | 兜底，能写 shell 就能接 |
 | `http-endpoint` | HTTP | 看对方 | 兜底 |
 
-一键接入：
+runtime 在**控制台建 agent 的时候就选好了**，会拼进给 agent 的那句接入指令
+（`…/api/join?token=…&runtime=…`），agent 自己照着做完剩下的，不需要人来跑命令。
+
+要手动接的话，一条命令：
 
 ```bash
 HUB=https://hub.example.com REG_TOKEN=<注册token> RUNTIME=<上表任一> \
   sh agent-hub-skill/scripts/onboard.sh
 ```
+
+上表的**别名也能填**（`claude`、`claude-cli`、`codex-cli`），会归一到全称。
 
 ---
 

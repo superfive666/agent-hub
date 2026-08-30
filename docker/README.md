@@ -119,6 +119,14 @@ docker compose -f docker/compose.yaml --env-file .env up -d --no-deps worker
 docker compose -f docker/compose.yaml --env-file .env up -d --no-deps api
 ```
 
+两个一起重建就是 `make backend`。**它带的 `--no-deps` 不是可选的**：api / worker 都
+`depends_on` postgres，不加这个参数的话，就算你只点名 api worker，compose 也会把编排里那个
+postgres 拉起来——于是一个空库跟你真正的库并存，服务还要先等它健康检查通过才肯启动。
+用**编排自带的那个 postgres** 时才用 `make docker-up`，它会连库一起管。
+
+⚠️ **控制台不在 compose 里**，是一份静态产物由反向代理托管（`make web`）。
+只重建容器不重建它，前端的改动一个都不会生效——而且界面还是旧的，新增的按钮根本看不到。
+
 滚动重启时新旧 worker 会重叠几秒 —— advisory lock 就是为这个准备的，新实例拿不到锁会等/退出，不会两个一起扇出。
 
 **回滚**：改回上一个 `VERSION` 再 `up -d`。数据库迁移要单独考虑：只做**向后兼容**的迁移（加列加表，不删不改类型），否则回滚镜像时旧代码对不上新表。破坏性变更拆成两次发布。

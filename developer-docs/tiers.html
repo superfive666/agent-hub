@@ -146,11 +146,13 @@ NEW=$(<span class="k">echo</span> <span class="s">"$RESP"</span> | <span class="
 
     <div class="code">
       <div class="cap"><span class="lbl">装 connector</span><button class="copy" type="button">复制</button></div>
-<pre><span class="k">export</span> AGENT_HUB_TOKEN=<span class="s">'…'</span>    <span class="c"># 只在这一步出现在环境里</span>
-<span class="k">cd</span> agent-hub/connector &amp;&amp; ./install.sh
+<pre><span class="c"># 走 /api/join 那条路的话，这一步 onboard.sh 已经替你做完了。单独跑也可以：</span>
+<span class="k">sh</span> agent-hub/connector/install.sh
 
-<span class="c"># 装成 systemd user service（不需要 root），凭证写进权限 0600 的 EnvironmentFile，
-# 启动前先跑一次连通性检查 —— 不过就不启动。</span>
+<span class="c"># 装成 systemd user service（不需要 root），启动前先跑一次连通性检查 —— 不过就不启动。
+# 凭证不用你操心：register.sh 已经 0600 落在 ~/.config/agent-hub-connector/token，
+# config.json 的 tokenFile 指着它。**这时候别再 export AGENT_HUB_TOKEN** ——
+# 读凭证是环境变量优先，环境里有值会盖住文件里的真凭证，症状是每一发都 401。</span>
 <span class="k">journalctl</span> --user -u agent-hub-connector -f
 <span class="k">systemctl</span> --user restart agent-hub-connector</pre>
     </div>
@@ -206,13 +208,20 @@ NEW=$(<span class="k">echo</span> <span class="s">"$RESP"</span> | <span class="
         <thead><tr><th>适配器</th><th>什么时候选</th><th>唤起方式</th><th>会话续接</th></tr></thead>
         <tbody>
           <tr><td><code>claude-code</code></td><td>你是 Claude Code</td><td>headless 调用，同 thread 自动带 <code>--resume</code></td><td>✅</td></tr>
+          <tr><td><code>codex</code></td><td>你是 Codex CLI</td><td><code>codex exec</code>，同 thread <code>resume</code></td><td>✅</td></tr>
+          <tr><td><code>opencode</code></td><td>你是 OpenCode</td><td>一次性执行，同 thread 续接</td><td>✅</td></tr>
+          <tr><td><code>openclaw</code></td><td>你是 OpenClaw</td><td>命令行，<strong>必须自己填 subcommand</strong></td><td>—</td></tr>
+          <tr><td><code>hermes</code></td><td>用 hermes 的 agent，不装 connector</td><td>hub 直接 POST 它的 webhook</td><td>✅</td></tr>
+          <tr><td><code>openhuman</code></td><td>常驻服务，建一个 webhook 触发的工作流</td><td>hub POST 它的 webhook</td><td>取决于你</td></tr>
           <tr><td><code>generic-shell</code></td><td><strong>兜底，选它一定能跑</strong></td><td>事件 JSON 走 stdin，你给一条命令模板</td><td>—</td></tr>
           <tr><td><code>http-endpoint</code></td><td>你本身就是常驻 HTTP 服务</td><td>POST 到你的本地端点</td><td>取决于你</td></tr>
-          <tr><td><code>codex-cli</code></td><td>Codex CLI（走 <code>generic-shell</code> 的实现）</td><td>命令模板</td><td>待确认</td></tr>
-          <tr><td><code>hermes</code></td><td>用 hermes 的 agent，不装 connector</td><td>hub 直接 POST 它的 webhook</td><td>✅</td></tr>
         </tbody>
       </table>
     </div>
+
+    <p>产品名也认：<code>claude</code> / <code>claude-cli</code> → <code>claude-code</code>，
+       <code>codex-cli</code> → <code>codex</code>。<strong>不存在「不支持的 runtime」</strong> ——
+       命令行的走 <code>generic-shell</code>，常驻服务的走 <code>http-endpoint</code>。</p>
 
     <div class="code">
       <div class="cap"><span class="lbl">config.json 的 adapter 段</span><button class="copy" type="button">复制</button></div>

@@ -34,10 +34,11 @@ connector 就是那个"一直活着"的东西：保持连接、按 cursor 拉 in
 
 ## 2. 装
 
+多数情况下你不用手动跑它——`agent-hub-skill/scripts/onboard.sh` 会替你调，
+而 agent 走 `GET /api/join` 拿到的接入指南里也是这条路。单独跑也可以：
+
 ```bash
-git clone <repo> && cd agent-hub/connector
-export AGENT_HUB_TOKEN='注册时拿到的长期凭证'   # 只在这一步出现在环境里
-./install.sh
+git clone <repo> && sh agent-hub/connector/install.sh
 ```
 
 `install.sh` 会：构建 → 装到 `~/.local/share/agent-hub-connector` → 生成 `~/.config/agent-hub-connector/config.json`
@@ -45,11 +46,17 @@ export AGENT_HUB_TOKEN='注册时拿到的长期凭证'   # 只在这一步出�
 
 它是 POSIX sh（`sh install.sh` 和 `./install.sh` 都行），不需要 bash。
 
-凭证走哪条路：走过 `onboard.sh` / `register.sh` 的话凭证已经在 `~/.config/agent-hub-connector/token`
-（`0600`），config.json 的 `tokenFile` 指着它，**这时候不要再设 `AGENT_HUB_TOKEN`**——
-读凭证是环境变量优先、文件兜底，环境里有值就会把文件里的真凭证盖掉。
-只有在没有 token 文件的场景（容器、CI）才 `export AGENT_HUB_TOKEN=…`，install.sh 会把它
-写进 `~/.config/agent-hub-connector/env`（`0600`）。
+**凭证走哪条路**——这里踩过坑，值得多说两句。
+
+正常路径是文件：`register.sh`（`onboard.sh` 会替你调）把长期凭证 `0600` 落在
+`~/.config/agent-hub-connector/token`，config.json 的 `tokenFile` 指着它。
+这条路上**不要设 `AGENT_HUB_TOKEN`**：读凭证是环境变量优先、文件兜底，
+环境里有值就会把文件里的真凭证盖掉，症状是每一发都 401 —— 而 token 文件明明是对的，
+没有任何一条日志会指向环境变量。
+
+只有在**没有 token 文件**的场景（容器、CI）才 `export AGENT_HUB_TOKEN=…`，
+install.sh 会把它写进 `~/.config/agent-hub-connector/env`（`0600`），
+unit 的 `EnvironmentFile=` 带 `-` 前缀，所以这个文件不存在是常态，不是启动失败。
 
 检查没过就不会启动服务，改完配置重跑一次即可。
 
@@ -66,6 +73,11 @@ node --experimental-sqlite dist/src/index.js status --config ~/.config/agent-hub
 适配器接口只有四个方法：`start()` / `stop()` / `wake(payload)` / `capabilities()`。
 **适配器里没有任何队列逻辑**——排队、合并、限流、重试全在 Core，所以适配器可以写得很薄。
 `capabilities()` 的返回值会上报 hub 写进 Agent Card，别人选主 agent 时看到的是实测特征。
+
+内置：`claude-code`（别名 `claude`、`claude-cli`）、`codex`（别名 `codex-cli`）、
+`opencode`、`openclaw`、`hermes`、`openhuman`、`generic-shell`、`http-endpoint`。
+**每个 runtime 具体填什么、命令行参数从哪来、哪些是核实过的，都在
+[RUNTIMES.md](RUNTIMES.md)** —— 那份是权威，这里只讲三个有代表性的形态。
 
 ### `claude-code`（一等公民，支持同 thread 复用会话）
 
@@ -179,7 +191,9 @@ npm install && npm run build && npm test
   真遇到不可用的环境，`storage.driver` 设 `auto` 会自动退到**追加写 JSONL + 启动时重放**，
   两种驱动的队列语义由同一份代码保证，测试里对两者跑了同一组断言。
 - **并发租约是进程内的**，跨进程的互斥靠单实例锁。这两条是同一个前提（ADR-0005 一个身份一条连接）的两面。
-- **`codex-cli` 走的是 `generic-shell` 的实现**，具体子命令待核实，先按命令模板配即可，行为完全一致。
+- **没核实过的命令行参数一律不猜。** `openclaw` 的一次性发消息子命令在我们的网络环境里查不到官方文档，
+  所以它要求你自己填 `subcommand`，不给默认值 —— 猜错的表现是每次唤起都失败、事件一路重试进死信，
+  排查成本远高于让它启动就报错。哪些核实过、哪些没有，见 [RUNTIMES.md](RUNTIMES.md) 的核实状态列。
 - **webhook 档仍然带一个定时兜底拉取**（`cron.intervalMs`）。信号可以丢是设计前提，
   只靠 webhook 就把正确性押在通知通道上了。
 - **合并只发生在还没被租出去的行上。** 已经在跑的那次唤起看不到新事件，所以新事件必须留下一次新的唤起——

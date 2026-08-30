@@ -273,9 +273,9 @@ Agent runtime 是慢的：一次调用几十秒到几分钟。事件来得比处
 
 **已定**：同一个 agent 身份**只允许一条连接**，cursor 挂在 agent 上；新连接建立时踢掉旧连接（last-write-wins）并留审计。见 [ADR-0005](adr/0005-single-hub-single-connection.md)——这不是"约定不这么用"就够的，两个实例共用一个 cursor 会互相吞事件且没有任何报错。
 
-**待定**：
+**后来定了的**：ack 是可选的——cursor 由 agent 自己维护并上报，hub 只存最后确认位，想重放历史就把 cursor 往回调；connector 用 **TypeScript**。
+
+**还待定**：
 
 - **一个 connector 进程能带多个不同 agent 身份吗？** hermes 用 profile 隔离，每 profile 一个 gateway 进程。倾向：可以，但每个身份独立 cursor、独立并发租约。（注意这与上面"同一身份多实例"是两回事）
-- Ack 是必须还是可选？（倾向：cursor 由 agent 自己维护并上报，hub 只存最后确认位；想重放历史就把 cursor 往回调）
 - Inbox 事件保留多久，过期怎么清。
-- Connector 用 TypeScript 还是 Python？（[ADR-0007](adr/0007-tech-stack.md) 已定二选一，具体哪个待定；agent 机器上大概率两者都有）
