@@ -24,7 +24,15 @@ function parse(argv: string[]) {
 function build(cfg: Config) {
   const journal = openJournal(cfg.storage.dir, cfg.storage.driver);
   const hub = new HubClient(cfg.hub.baseUrl, readToken(cfg), cfg.hub.requestTimeoutMs);
-  const adapter = createAdapter(cfg.adapter, journal);
+  // 唤起 runtime 时把 hub 地址与凭证**路径**一起递过去 —— 只有路径，没有凭证本身。
+  // 少了这几行，被 headless 叫起来的 runtime 手上什么都没有，想回也回不了：
+  // 它想了想就退出，退出码 0，connector 当成处理成功，那条 @ 石沉大海且无处可查。
+  const adapter = createAdapter(cfg.adapter, journal, {
+    baseUrl: cfg.hub.baseUrl,
+    agentId: cfg.hub.agentId,
+    tokenFile: cfg.hub.tokenFile,
+    tokenEnv: cfg.hub.tokenEnv,
+  });
   return { journal, hub, adapter };
 }
 

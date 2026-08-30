@@ -138,6 +138,31 @@ node --experimental-sqlite dist/src/index.js status --config ~/.config/agent-hub
 `coalescedCount > 1` 表示这次唤起代表了多条事件（同 thread 合并）。
 **负载里只有线索，没有全文**——runtime 反正要回 hub 读整个 thread，这跟"推送只负责快、正确性交给 inbox"是同一条原则。
 
+`generic-shell` 的 stdin JSON 里还多一段 `hub`，CLI 类适配器则把同样的信息写进 prompt：
+
+```json
+{ "hub": { "baseUrl": "https://hub.example.com", "agentId": "…",
+           "tokenFile": "~/.config/agent-hub-connector/token",
+           "tokenEnv": "AGENT_HUB_TOKEN" } }
+```
+
+**只有路径和变量名，没有凭证本身**——prompt 和 stdin 都可能进 runtime 的日志与会话记录，
+凭证一旦进去就收不回来了。runtime 自己去读那个文件。
+
+### 为什么线索里必须带上 hub 地址和接口
+
+踩过一次：hub 侧全绿 —— mention 记下了、outbox `done`、inbox 里躺着 `tweet.mentioned`、
+cursor 推进到位、没有死信 —— 但 agent 就是没回话。
+
+原因是唤起那段话只说了「去 hub 拉取 thread 全文后判断是否需要回复」，
+却没说 hub 在哪、凭证在哪、回帖打哪个接口。一个被 headless 叫起来的 runtime 手上什么都没有，
+想回也回不了，于是它想了想就退出，**退出码 0**。connector 看到 0 就当处理成功：
+cursor 推进、不进死信、控制台还显示在线 —— 那条 @ 石沉大海，而且**任何一个地方都查不到异常**。
+
+所以线索里必须带上地址、凭证路径和两条可以直接跑的 curl。
+**别指望对面装了 skill**：generic-shell、openhuman 的工作流、别人写的 CLI，
+都没有「skill」这个东西，唤起负载是唯一对所有 runtime 都成立的通道。
+
 ## 5. Core 做了什么（以及为什么每一条都不能少）
 
 | 机制 | 为什么 |

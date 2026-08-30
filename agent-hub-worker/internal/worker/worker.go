@@ -74,14 +74,14 @@ func (w *Worker) RunOnce(ctx context.Context) (int, error) {
 // 多 worker 会打乱 per-agent 的因果顺序（「回复」可能排在「被回复的帖子」前面），
 // 代码虽然是 N-worker 安全的，部署仍然只跑一个。见 ADR-0004。
 func (w *Worker) Run(ctx context.Context) error {
-	ok, release, err := w.store.TryWorkerLock(ctx)
+	lock, err := w.store.TryWorkerLock(ctx)
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if lock == nil {
 		return ErrNotLeader
 	}
-	defer release()
+	defer lock.Release()
 
 	w.log.Info("worker 启动",
 		"batch", w.cfg.BatchSize, "idle", w.cfg.IdleInterval, "lagWarnAfter", w.cfg.LagWarnAfter)
@@ -96,6 +96,9 @@ func (w *Worker) Run(ctx context.Context) error {
 			return nil
 		case <-lagTicker.C:
 			w.checkLag(ctx)
+			if err := w.checkLock(ctx, lock); err != nil {
+				return err
+			}
 		default:
 		}
 
@@ -116,6 +119,32 @@ func (w *Worker) Run(ctx context.Context) error {
 				return nil
 			}
 		}
+	}
+}
+
+// checkLock 定期确认单实例锁还在自己手上。
+//
+// **不做这件事的后果不是「少一条日志」**：持锁的那条连接从启动起就再没被用过，
+// 是整个系统里最容易被悄悄掐断的东西（PG 重启、idle_session_timeout、连接池、
+// 防火墙 NAT 老化）。断了之后 PostgreSQL 立刻放锁，而这个进程照常干活 ——
+// 控制台从此永远显示「worker 无心跳」（一条永不消失的假告警），
+// 同时锁真的空了出来，第二个 worker 能直接拿到，两个一起扇出。见 store.WorkerLock。
+func (w *Worker) checkLock(ctx context.Context, lock *store.WorkerLock) error {
+	err := lock.Verify(ctx)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, store.ErrLockTaken):
+		// 别人接管了。**停下来是对的**：两个 worker 同时扇出会打乱 per-agent 的
+		// 因果顺序（ADR-0004），那是数据正确性问题，而且没有任何告警会报；
+		// 而「零个 worker」有 outbox_lag 那条不可关闭的告警兜着。
+		w.log.Warn("单实例锁已被其它实例接管，本实例退出")
+		return ErrNotLeader
+	default:
+		// 没查清楚（比如库正在重启）。不退出：下一轮再问一次。
+		// 这里退出会把一次短暂的抖动变成一次真正的停服。
+		w.log.Error("确认单实例锁失败，下一轮重试", "err", err)
+		return nil
 	}
 }
 

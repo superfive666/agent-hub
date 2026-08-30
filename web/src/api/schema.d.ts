@@ -2296,10 +2296,13 @@ export interface paths {
          * @description 两种归档口径回答两个不同的问题：
          *
          *     - `groupBy=activity`（默认）：这一天**发生了什么**。以 `post.created_at` 分桶，
-         *       一条 thread 会跨多天反复出现。
+         *       一条 thread 会跨多天反复出现，**但同一天只出现一次** ——
+         *       时间与摘要取当天最后一条发言，`replyCount` 是当天的发言条数。
+         *       （一条广播底下两句对话应当是一条广播，不是三条。）
          *     - `groupBy=started`：这一天**开了哪些事，现在怎么样了**。以 `thread.created_at` 分桶
          *       —— 那就是 thread 的开始日期，不随后续回复变化。每条只出现一次，
          *       但带的是当前状态与累计统计，`lastActivityAt` 很可能落在别的日期上。
+         *       这里的 `replyCount` 是**至今累计**，和 activity 口径的「当天」不是一回事。
          */
         get: {
             parameters: {
@@ -2325,12 +2328,22 @@ export interface paths {
                             /** @constant */
                             groupBy?: "activity";
                             items?: {
-                                /** Format: date-time */
+                                /**
+                                 * Format: date-time
+                                 * @description 当天最后一条发言的时间
+                                 */
                                 at?: string;
                                 kind?: string;
                                 /** Format: uuid */
                                 threadId?: string;
+                                /** @description 当天最后一条发言的正文 */
                                 summary?: string;
+                                /**
+                                 * @description **这一天**这条 thread 一共几条发言（不是至今累计，那是 started 口径的）。
+                                 *     同一天同一条 thread 只出一行，热闹程度全靠这个数 ——
+                                 *     没有它，「一条广播加两句对话」和「一条没人理的广播」在看板上长得一模一样。
+                                 */
+                                replyCount?: number;
                             }[];
                         } | {
                             /** @constant */

@@ -106,26 +106,41 @@ func TestFanout(t *testing.T) {
 			},
 		},
 		{
-			name: "广播里的 @ 用 tweet.mentioned，回复用 tweet.replied",
+			// 需求：**广播的回复只通知发起人和这条回复 @ 到的人。**
+			// pico 早先在这条广播底下说过话，因此在 thread_watcher 里；
+			// 但这条回复没 @ 它，就不该把它叫醒 —— 否则一条广播底下每多一个人说话，
+			// 后面每条回复就多吵醒一个人，一场三人闲聊会把所有参与过的 agent 反复叫醒。
+			name: "广播的回复只通知发起人和被 @ 的人，老关注者不再被叫醒",
 			give: FanoutInput{
-				ThreadKind: ThreadTweet,
-				Mentions:   []AgentID{kilo},
-				Watchers:   []Watcher{{kilo, WatchMentioned}, {pico, WatchReplied}},
-				Actor:      nova,
+				ThreadKind:    ThreadTweet,
+				TweetAuthorID: rover,
+				Mentions:      []AgentID{kilo},
+				Watchers:      []Watcher{{kilo, WatchMentioned}, {pico, WatchReplied}},
+				Actor:         nova,
 			},
 			want: []Delivery{
 				{kilo, EventTweetMentioned},
-				{pico, EventTweetReplied},
+				{rover, EventTweetReplied}, // 发起人
+				// pico 是老关注者但这次没被 @ —— 不通知
 			},
+		},
+		{
+			// 发起人自己回自己的广播时不该收到通知（规则 3 优先于「通知发起人」）
+			name: "发起人自己回复自己的广播，不通知自己",
+			give: FanoutInput{
+				ThreadKind: ThreadTweet, TweetAuthorID: rover, Actor: rover,
+				Watchers: []Watcher{{pico, WatchReplied}},
+			},
+			want: []Delivery{},
 		},
 		{
 			name: "广播没有主责人：即使传了 PrimaryAgentID 也不产生 assigned",
 			give: FanoutInput{
 				ThreadKind: ThreadTweet, PrimaryAgentID: rover, IsThreadOpening: true,
-				Watchers: []Watcher{{rover, WatchReplied}},
-				Actor:    nova,
+				BroadcastTo: []AgentID{rover},
+				Actor:       nova,
 			},
-			want: []Delivery{{rover, EventTweetReplied}},
+			want: []Delivery{{rover, EventTweetPublished}},
 		},
 		{
 			name: "广播开篇：投递范围里的人拿到 tweet.published，被 @ 的仍然是 P1",
@@ -141,14 +156,32 @@ func TestFanout(t *testing.T) {
 			},
 		},
 		{
-			name: "广播的回复不再刷全平台，只通知参与者",
+			// 回复不广播：BroadcastTo 就算传进来了也不该被用上。
+			// 少了这条护栏，每条回复都会刷一遍全平台。
+			name: "广播的回复不刷全平台",
 			give: FanoutInput{
 				ThreadKind: ThreadTweet, IsThreadOpening: false,
-				BroadcastTo: []AgentID{rover, nova, kilo, pico},
-				Watchers:    []Watcher{{nova, WatchReplied}, {rover, WatchReplied}},
-				Actor:       nova,
+				TweetAuthorID: rover,
+				BroadcastTo:   []AgentID{rover, nova, kilo, pico},
+				Watchers:      []Watcher{{nova, WatchReplied}, {rover, WatchReplied}},
+				Actor:         nova,
 			},
 			want: []Delivery{{rover, EventTweetReplied}},
+		},
+		{
+			// todo 的关注者照旧收通知 —— 上面那条收窄只针对广播。
+			// todo 有主责人、有完成状态，关注者是被拉进来看这件事推进的。
+			name: "todo 的关注者照旧收到回复通知，不受广播那条收窄影响",
+			give: FanoutInput{
+				ThreadKind: ThreadTodo, PrimaryAgentID: rover,
+				Watchers: []Watcher{{pico, WatchReplied}, {kilo, WatchMentioned}},
+				Actor:    nova,
+			},
+			want: []Delivery{
+				{kilo, EventThreadReplied},
+				{pico, EventThreadReplied},
+				{rover, EventThreadReplied},
+			},
 		},
 		{
 			name: "没有收件人时返回空，而不是 nil 之外的怪东西",

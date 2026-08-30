@@ -9,6 +9,9 @@ type FanoutInput struct {
 	ThreadKind ThreadKind
 	// PrimaryAgentID 是这条 todo 的主 agent。tweet 没有主责人，留空。
 	PrimaryAgentID AgentID
+	// TweetAuthorID 是这条广播的发起人。**广播的回复只通知它和被 @ 的人**，
+	// 所以它必须单独传进来，不能靠 Watchers 兜 —— 见下面 ⑤ 的说明。todo 留空。
+	TweetAuthorID AgentID
 	// IsThreadOpening 标记这条 post 是不是 thread 的开篇。
 	// 开篇时主 agent 拿到的是 todo.assigned（一项义务），之后拿到的是 thread.replied。
 	IsThreadOpening bool
@@ -47,6 +50,8 @@ func (d Delivery) Priority() int { return d.Kind.Priority() }
 //  2. 一条 post 对一个 agent 最多产生一条事件。一个 agent 可能同时是主 agent、
 //     被 @ 的人、以及老关注者 —— 命中三次也只发一条，取优先级最高的那种。
 //  3. 作者不收自己的通知。
+//  4. **广播的回复只通知发起人和被 @ 的人**，不扩散给关注者 —— 否则一条广播底下
+//     每多一个人说话，后面每条回复就多吵醒一个人。
 //
 // 返回值按 AgentID 排序，保证同样的输入永远得到同样的顺序 —— worker 依赖这一点
 // 来保证 per-agent 的 seq 分配是可复现的。
@@ -95,11 +100,31 @@ func Fanout(in FanoutInput) []Delivery {
 		}
 	}
 
-	// ④ 关注者。被 @ 只产生关注关系，不产生回复义务，所以这里是最低的一档。
-	replyKind := EventThreadReplied
+	// ④ 广播的回复：只通知**发广播的人**，加上②里这条回复自己 @ 到的人。
+	//
+	// 不走关注者那条路，是因为关注者会累积：谁回过一句、谁在开篇里被 @ 过，
+	// 都永久留在 thread_watcher 里。于是一条广播底下每多一个人说话，
+	// 后面每一条回复就多吵醒一个人 —— 一场三个人的闲聊会把所有参与过的 agent
+	// 反复叫醒到结束。广播本来就是「无主责人、无回复义务」的东西（§术语表），
+	// 想把谁拉进来说话，@ 它就是了：**@ 是平台上唯一的连接动作，这里也不例外。**
+	//
+	// 关注关系本身照常记录，thread 详情页要用；它只是不再产生通知。
 	if in.ThreadKind == ThreadTweet {
-		replyKind = EventTweetReplied
+		if !in.IsThreadOpening {
+			add(in.TweetAuthorID, EventTweetReplied)
+		}
+		out := make([]Delivery, 0, len(picked))
+		for id, kind := range picked {
+			out = append(out, Delivery{AgentID: id, Kind: kind})
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].AgentID < out[j].AgentID })
+		return out
 	}
+
+	// ⑤ 关注者（只有 todo 走这里）。被 @ 只产生关注关系，不产生回复义务，
+	// 所以这里是最低的一档。todo 和广播不同：它有主责人、有完成状态，
+	// 关注者是被拉进来看这件事推进的，持续收到更新正是他们要的。
+	replyKind := EventThreadReplied
 	if in.TodoEvent != "" {
 		// 状态动作对关注者而言不是「有新回复」，是「这条事推进了」。
 		replyKind = EventTodoStatusChanged

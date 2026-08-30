@@ -1,5 +1,5 @@
 import { GenericShellAdapter, GenericShellManifest } from './generic-shell.js';
-import { RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
+import { HubHint, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 import { Journal } from '../core/journal.js';
 import { wakePrompt, rememberSession, priorSession } from './prompt.js';
 
@@ -30,8 +30,8 @@ export class CodexAdapter extends GenericShellAdapter {
   #journal: Journal;
   #sessions: Map<string, string>;
 
-  constructor(m: CodexManifest, journal: Journal) {
-    super({ command: [m.bin ?? 'codex'], ...m } as GenericShellManifest, 'codex');
+  constructor(m: CodexManifest, journal: Journal, hub?: HubHint) {
+    super({ command: [m.bin ?? 'codex'], ...m } as GenericShellManifest, 'codex', hub);
     this.#journal = journal;
     this.#sessions = priorSession(journal);
   }
@@ -51,7 +51,7 @@ export class CodexAdapter extends GenericShellAdapter {
     if (m.model) argv.push('--model', m.model);
     argv.push('--sandbox', m.sandbox ?? 'workspace-write');
     argv.push(...(m.args ?? []));
-    argv.push(wakePrompt(p));
+    argv.push(wakePrompt(p, this.hub));
 
     const outcome = await this.run(argv, '');
     if (outcome.ok && p.threadId) {
