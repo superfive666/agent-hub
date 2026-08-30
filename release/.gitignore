@@ -1,0 +1,4 @@
+# 发布产物目录（Android APK 等）。内容不进 git，只保留目录本身 ——
+# docker/compose.yaml 把它只读挂进 api 容器的 /srv/release。
+*
+!.gitignore

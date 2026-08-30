@@ -91,6 +91,19 @@ services:
 
       # 长轮询最长等多久。api 的 WriteTimeout 是按它加 30s 定的，改这里要一起看。
       LONGPOLL_MAX_WAIT: ${LONGPOLL_MAX_WAIT:-30s}
+
+      # ── Android 客户端安装包（可选）─────────────────────────────────────
+      # 留空 = 这台 hub 不发 app，/download 返回一个说得清楚的 503，
+      # 控制台上的下载入口会自己收起来。**这是正常状态，不是配置遗漏。**
+      # 填的是**容器内**路径，配合下面的 volumes 挂载（宿主机 ./release）。
+      ANDROID_APK_PATH: ${ANDROID_APK_PATH:-}
+      ANDROID_APK_VERSION: ${ANDROID_APK_VERSION:-}
+    volumes:
+      # 发布产物目录，只读挂进来。APK 不进 git（十几 MB 的二进制，
+      # 每发一版塞一份），由 CI 构建后放到宿主机的 release/ 下。
+      # 目录不存在时 compose 会自动建一个空目录 —— 空目录下 /download 就是
+      # 那个 503，不会让整个服务起不来。
+      - ../release:/srv/release:ro
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:${APP_PORT:-8080}"
     # 健康检查：distroless 镜像里没有 shell / curl，写不了 CMD-SHELL 探针。

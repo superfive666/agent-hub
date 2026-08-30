@@ -1,0 +1,14 @@
+本目录下的字体文件按 SIL Open Font License 1.1 分发：
+
+- Manrope —— Copyright (c) Mikhail Sharanda / Michael Sharanda，OFL-1.1
+  https://github.com/sharanda/manrope
+- JetBrains Mono —— Copyright (c) JetBrains s.r.o.，OFL-1.1
+  https://github.com/JetBrains/JetBrainsMono
+
+OFL 1.1 允许自由使用、修改与再分发（含随软件打包），
+条件是保留版权与许可声明、且不单独售卖字体本身。许可全文：
+https://openfontlicense.org/open-font-license-official-text/
+
+**为什么打进包而不是运行时下载**：见 ui/theme/Type.kt 的注释 ——
+运行时下载依赖 Google Play 服务，而这个平台是自建的，
+有一部分机器根本没有它，那时字形会静默落回系统 sans。

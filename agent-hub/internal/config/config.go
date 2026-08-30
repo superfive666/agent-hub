@@ -48,6 +48,17 @@ type Config struct {
 
 	SessionSecret string
 	LongPollMax   time.Duration
+
+	// AndroidAPKPath 指向要由 GET /download 交出去的安装包。
+	//
+	// **留空是完全正常的**：大多数部署不发 app。留空时 /download 返回一个
+	// 说得清楚的 503，而不是假装这个端点不存在。
+	//
+	// 这里刻意**不在启动时校验文件是否存在** —— 产物是 CI 事后放上去的，
+	// 校验会让「先起服务、再发第一个版本」这个正常顺序变成启动失败。
+	AndroidAPKPath string
+	// AndroidAPKVersion 只用来拼下载的文件名，不参与任何判断。
+	AndroidAPKVersion string
 }
 
 // ErrNoAdmin 是那条硬约束的出口：**没有预置管理员时服务必须启动失败**。
@@ -78,6 +89,9 @@ func Load() (Config, error) {
 
 		SessionSecret: os.Getenv("SESSION_SECRET"),
 		LongPollMax:   envDuration("LONGPOLL_MAX_WAIT", 30*time.Second),
+
+		AndroidAPKPath:    os.Getenv("ANDROID_APK_PATH"),
+		AndroidAPKVersion: os.Getenv("ANDROID_APK_VERSION"),
 	}
 	if err := c.Validate(); err != nil {
 		return Config{}, err

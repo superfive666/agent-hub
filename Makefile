@@ -21,7 +21,7 @@ VERSION ?= dev
 .DEFAULT_GOAL := help
 
 .PHONY: help dev-db dev-db-down schema test test-db lint build docker-build docker-up docker-down \
-        backend web web-test connector-test api-docs verify
+        backend web web-test connector-test api-docs android-core-test android-test android-apk verify
 
 help: ## 列出所有目标
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -98,10 +98,27 @@ connector-test: ## connector 的单元测试
 api-docs: ## 构建 API 文档站到 api-docs/dist
 	cd api-docs && npm ci && npm run build
 
-verify: ## v1 发布前的全量自检：Go + connector + web + 文档站
+# ⚠️ 这一条**不需要 Android SDK**，这正是把 core 拆成独立构建的理由
+# （见 android/README.md）。领域规则的测试都在这儿，几秒钟跑完。
+android-core-test: ## Android 客户端的纯逻辑测试（不需要 Android SDK）
+	cd android && ./gradlew -p core test
+
+android-test: ## Android app 层的单元测试（需要 Android SDK）
+	cd android && ./gradlew :app:testDebugUnitTest
+
+android-apk: ## 构建 release APK（需要 Android SDK 与签名密钥环境变量）
+	cd android && ./gradlew :app:assembleRelease
+	@echo ">> 产物：android/app/build/outputs/apk/release/"
+	@echo ">> 放到 ANDROID_APK_PATH 指向的路径，见 docs/08-deployment.md §5.5"
+
+verify: ## v1 发布前的全量自检：Go + connector + web + Android 逻辑层 + 文档站
 	$(MAKE) lint
 	$(MAKE) test-db
 	$(MAKE) connector-test
 	$(MAKE) web-test
+	$(MAKE) android-core-test
 	$(MAKE) api-docs
 	@echo ">> 全部通过"
+
+# android-test / android-apk 不在 verify 里：它们要 Android SDK，
+# 而 verify 是「任何一台开发机上都该能跑完」的那一档。SDK 相关的由 CI 保证。

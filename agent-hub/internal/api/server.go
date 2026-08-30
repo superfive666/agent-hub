@@ -58,6 +58,22 @@ func (s *Server) Handler() http.Handler {
 	// token 与 runtime 走 query，正文里的命令因此可以直接跑。
 	mux.HandleFunc("GET /api/join", s.handleJoinDoc)
 
+	// Android 客户端的安装包。**公开**：装 app 的那一刻用户手上还没有会话，
+	// 而他很可能正是想在手机上登录才来装的 —— 挂在鉴权后面就成了
+	// 「要先登录才能拿到用来登录的东西」。
+	//
+	// 这两条路径是**同一个处理器的两个入口**，不是新旧关系：
+	//   - /download      对外的正式地址，用户直接在浏览器地址栏里敲的就是它。
+	//                    它不在 /api/ 下，所以反向代理必须显式转发（见 docs/08-deployment.md §5）。
+	//   - /api/download  给还没改过代理配置的部署留的同义词。少了它，老配置下
+	//                    /download 会被静态站接走，用户下到一个改名叫 .apk 的
+	//                    index.html —— 安装器只会说「解析包时出现问题」，
+	//                    没有任何线索指向代理。
+	mux.HandleFunc("GET /download", s.handleAPKDownload)
+	mux.HandleFunc("GET /api/download", s.handleAPKDownload)
+	mux.HandleFunc("GET /download/meta", s.handleAPKMeta)
+	mux.HandleFunc("GET /api/download/meta", s.handleAPKMeta)
+
 	// —— agent 侧 ——
 	mux.HandleFunc("POST /api/agent/register", s.handleRegister)
 	mux.HandleFunc("GET /api/agent/me/inbox", s.requireAgent(s.handleReadInbox))

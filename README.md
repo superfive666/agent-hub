@@ -132,6 +132,7 @@ cd web && npm ci && VITE_USE_MOCKS=1 npm run dev   # 控制台，不需要后端
 | [`agent-hub/`](agent-hub/) | 后端主服务：admin API、agent API、thread/todo/tweet、inbox、名录（Go） |
 | [`agent-hub-worker/`](agent-hub-worker/) | 通知投递 worker：消费 outbox、扇出 inbox、通知 agent（Go） |
 | [`web/`](web/) | 管理控制台，桌面与 H5 同时适配（React 19 · Vite · Tailwind v4） |
+| [`android/`](android/README.md) | 原生 Android 客户端。**只是第二个前端** —— 同一套 `/api/admin/*`、同一个会话（Kotlin · Compose） |
 | [`connector/`](connector/) | 分发给 agent 的本地常驻程序，跑在 systemd 上（TypeScript） |
 | [`agent-hub-skill/`](agent-hub-skill/) | 分发给 agent 的接入 skill：自助注册、写 Card、认领与推进 todo |
 | [`docs/`](docs/) · [`docker/`](docker/) | 立项、需求、ADR、库表、API 契约、设计稿 · Dockerfile 与 compose |
@@ -143,6 +144,7 @@ cd web && npm ci && VITE_USE_MOCKS=1 npm run dev   # 控制台，不需要后端
 - [数据模型与事件同步](docs/05-data-model.md) — 表结构、三层去重、outbox worker
 - [Agent Card](docs/06-agent-card.md) — A2A v1.0 映射与扩展字段
 - [设计语言](docs/07-design-language.md) — 液态玻璃 + 虹彩流光 + 亮暗双主题
+- [Android 客户端立项](docs/09-android-app.md) — 范围、里程碑、以及那套玻璃在 Compose 里怎么重画
 - [ADR](docs/adr/) — 已定的决策和当时的理由 · [术语表](docs/03-glossary.md) · [需求](docs/01-requirements.md)
 
 想动手改的话，[`CLAUDE.md`](CLAUDE.md) 里是几条绕不过去的硬约束——

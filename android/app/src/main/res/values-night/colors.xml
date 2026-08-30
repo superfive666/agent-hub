@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 暗色舞台是近黑底 -->
+    <color name="boot_background">#0A0C10</color>
+    <color name="launcher_background">#0A0C10</color>
+</resources>

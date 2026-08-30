@@ -224,6 +224,12 @@ hub.example.com {
     }
     reverse_proxy /healthz 127.0.0.1:8080
 
+    # Android 安装包。**必须显式写出来** —— 它不在 /api/ 下，漏了这两行的话
+    # 请求会掉进下面的静态站，用户下到一个改名叫 .apk 的 index.html，
+    # 安装器只说「解析包时出现问题」，没有任何线索指向代理。
+    reverse_proxy /download 127.0.0.1:8080
+    reverse_proxy /download/* 127.0.0.1:8080
+
     # 控制台：单页应用，未命中的路径一律回 index.html
     root * /opt/agent-hub/web/dist
     try_files {path} /index.html
@@ -246,6 +252,22 @@ server {
     root /opt/agent-hub/web/dist;
     location / { try_files $uri /index.html; }
 
+    # Android 安装包。不在 /api/ 下，漏了这一段就会被上面的 try_files 接走 ——
+    # 用户下到的是改名叫 .apk 的 index.html。
+    # = /download 精确匹配，/download/ 前缀匹配 meta 那条。
+    location = /download {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 十几 MB 的包别在内存里攒一遍再发
+        proxy_buffering off;
+    }
+    location /download/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
@@ -258,6 +280,77 @@ server {
 }
 ```
 </details>
+
+---
+
+## 5.5 发布 Android 客户端（可选）
+
+`android/` 是一个原生 Kotlin + Compose 客户端（[ADR-0009](adr/0009-android-native-compose.md)）。
+它是**纯前端**：不带任何实例数据，hub 地址和账号都是用户装完自己填的，
+所以同一份 APK 可以发给任何一台 hub 的用户。
+
+不发 app 的部署**跳过这一节**：`ANDROID_APK_PATH` 留空时 `/download` 返回一个
+说得清楚的 503，控制台上的下载入口会自己收起来，不会画一个点了报错的按钮。
+
+### 放产物
+
+APK **不进 git**（十几 MB 的二进制，每发一版就往仓库里塞一份）。
+CI 构建完把它放到宿主机上，hub 从那个路径读：
+
+```bash
+sudo mkdir -p /opt/agent-hub/release
+# 从 CI 产物或本地构建拷过来
+sudo install -m 644 app-release.apk /opt/agent-hub/release/agent-hub.apk
+```
+
+`.env` 里指过去：
+
+```ini
+ANDROID_APK_PATH=/opt/agent-hub/release/agent-hub.apk
+ANDROID_APK_VERSION=0.1.0
+```
+
+容器里要能读到这个路径 —— `docker/compose.yml` 已经把 `./release` 只读挂进
+api 容器的 `/srv/release`，用 compose 部署时填容器内路径：
+
+```ini
+ANDROID_APK_PATH=/srv/release/agent-hub.apk
+```
+
+改完 `docker compose up -d api` 生效。
+
+### 发新版就是替换同一个文件
+
+```bash
+sudo install -m 644 app-release.apk /opt/agent-hub/release/agent-hub.apk
+# 改 .env 里的 ANDROID_APK_VERSION，然后
+docker compose up -d api
+```
+
+路径不变、只换内容，所以响应带的是 `Cache-Control: public, max-age=0, must-revalidate` ——
+中间层每次都回源校验，不会拿旧包顶新包。文件名里的版本号来自
+`ANDROID_APK_VERSION`，**忘了改的话用户下载目录里两个版本会同名**，
+这是唯一一个「不改也能跑、但事后很难查」的地方。
+
+### 验收
+
+```bash
+# 有包时：200 + apk 的 MIME
+curl -sSI https://hub.example.com/download | head -3
+
+# 没包/没配时：503 apk_unavailable，不是 404
+curl -sS https://hub.example.com/download
+
+# 控制台的下载入口靠这个决定按钮长什么样
+curl -sS https://hub.example.com/download/meta
+```
+
+`Content-Type` 必须是 `application/vnd.android.package-archive`。
+拿到 `text/html` 说明**反向代理没转发这条路径**（见 §5），请求被静态站接走了 ——
+浏览器里看是"下载成功"，装的时候才报「解析包时出现问题」。
+
+> 手机上安装需要用户允许「安装未知来源的应用」。这是自建分发绕不开的一步，
+> 不是配置问题；`android/README.md` 里有给最终用户看的那段说明。
 
 ---
 

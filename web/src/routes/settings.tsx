@@ -4,6 +4,7 @@ import { Chip } from '@/components/ui/chip'
 import { Inset } from '@/components/ui/inset'
 import { AppShell, PageHeader } from '@/components/app-shell'
 import { OutboxBanner } from '@/components/outbox-banner'
+import { ApkDownload } from '@/components/apk-download'
 import { useHealth, useMe, useSettings } from '@/api/queries'
 import { maskEmail } from '@/lib/format'
 
@@ -196,6 +197,11 @@ export default function SettingsRoute() {
               </p>
             </CardBody>
           </Card>
+
+          {/* Android 客户端。排在最后一张：它是「拿走一个东西」，不是这台 hub 的
+              运行状态 —— 挪到 outbox 告警上面会把 §1.4 那条挤出首屏。
+              登录页上还有一份同样的入口，那份才是主入口（下载不需要登录）。 */}
+          <ApkDownload />
         </Inset>
       </div>
     </AppShell>
