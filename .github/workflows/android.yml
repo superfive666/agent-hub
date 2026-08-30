@@ -1,6 +1,6 @@
 name: android
 
-# Android 客户端的构建。
+# Android 客户端的构建与发版。
 #
 # **为什么单独一个 workflow**：它要装 Android SDK（几 GB、几分钟），
 # 而改一行 Go 代码的 PR 不该为此等着。paths 过滤让它只在真正相关的改动上跑。
@@ -8,6 +8,22 @@ name: android
 # 契约（docs/api/openapi.yaml）也在触发范围里：Android 侧的 DTO 是**手写的**
 # （web 那边是生成的），契约改了这边不会自动跟上 —— 至少让 CI 把 app 编一遍，
 # 字段名对不上时能在这儿发现。
+#
+# ## 发版
+#
+# 打一个 `android-v<版本>` 的 tag（版本要和 app/build.gradle.kts 里的
+# versionName 一字不差，下面会校验）。tag 构建比日常构建多三道闸：
+#
+#   1. **没有签名 secret 就直接失败**。日常构建退回 debug 签名是对的
+#      （外部 PR 拿不到 secret，那时仍然该能验证代码编得过），但**发版不行** ——
+#      debug 签名的包一旦发到用户手上，等你配好正式密钥再发新版，
+#      所有人都得卸载重装才能升级。这个错误不可逆，所以挡在构建之前。
+#   2. **产出的包会被验签**，签名主体是 `CN=Android Debug` 就当场失败 ——
+#      secret 配错、密钥解不出来的情况下第 1 道闸放行了、包却还是 debug 签的。
+#   3. **建 GitHub Release 并把 APK 挂上去**。这只是归档：artifact 90 天就过期，
+#      而且要登录 GitHub 才下得到。对外的正式下载地址仍然是 hub 自己的
+#      `/download`（ADR-0010 —— 内网部署上 GitHub 根本不可达，所以 hub 不能
+#      把下载重定向过去）。Release 是给管理员取包用的，不是给最终用户的。
 
 on:
   push:
@@ -64,14 +80,61 @@ jobs:
       # 直接写 `if: secrets.X != ''` 的话条件恒为假，包永远是 debug 签名的，
       # 而且不报任何错。
       KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      # 这次是不是发版。tag 构建多三道闸，见文件头。
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/android-v') }}
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      apk: ${{ steps.apk.outputs.name }}
+      sha256: ${{ steps.apk.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v4
+
+      # 挡在最前面，不是构建之后 —— 让"发版却没有签名密钥"在 10 秒内失败，
+      # 而不是等五分钟构建完再发现产出的包不能用。
+      - name: 发版必须有签名密钥
+        if: env.IS_RELEASE == 'true' && env.KEYSTORE_B64 == ''
+        run: |
+          echo "::error::这是一次发版（${GITHUB_REF_NAME}），但 ANDROID_KEYSTORE_BASE64 是空的。"
+          echo "::error::没有它构建出来的是 debug 签名的包 —— 发出去之后所有用户都要卸载重装才能升级。"
+          echo "::error::先配好四个 secret（见 docs/08-deployment.md §5.5「一次性准备」）再重打 tag。"
+          exit 1
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
+
+      # 版本号的唯一来源是 app/build.gradle.kts，tag 只是指向它的一个记号。
+      # 让 Gradle 自己把值打出来，而不是 CI 去 grep 那个文件 —— 正则会在
+      # 有人给那行加注释、换个写法的那天静默匹配不到，任务给的是编译器的答案。
+      - name: 读出版本号
+        id: ver
+        working-directory: android
+        run: |
+          out=$(./gradlew -q :app:printVersion)
+          version=$(echo "$out" | sed -n 's/^versionName=//p')
+          code=$(echo "$out" | sed -n 's/^versionCode=//p')
+          if [ -z "$version" ]; then
+            echo "::error::没能从 :app:printVersion 读出版本号，输出是：$out"
+            exit 1
+          fi
+          echo "versionName=$version versionCode=$code"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # tag 和 versionName 对不上时**停下来**。放行的话产物名、Release 名、
+      # 用户手机上「设置→应用」里显示的版本号会是三个不同的值，
+      # 而这种错要等到有人来问"我装的到底是哪一版"才会被发现。
+      - name: tag 必须与 versionName 一致
+        if: env.IS_RELEASE == 'true'
+        run: |
+          want="android-v${{ steps.ver.outputs.version }}"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "::error::tag 是 $GITHUB_REF_NAME，但 app/build.gradle.kts 里的 versionName 对应 $want。"
+            echo "::error::改 versionName（记得同时 +1 versionCode）后重打 tag，或者把 tag 改成 $want。"
+            exit 1
+          fi
 
       - name: app 单元测试
         working-directory: android
@@ -83,7 +146,7 @@ jobs:
 
       # 签名密钥走 secret。**没配 secret 时不失败**，退回 debug 签名 ——
       # 外部贡献者的 PR 拿不到 secret，那时仍然应该能验证「代码编得过」，
-      # 只是产出的包不能覆盖安装正式版。
+      # 只是产出的包不能覆盖安装正式版。发版路径上这已经被上面那道闸挡住了。
       - name: 解出签名密钥（有 secret 时）
         id: keystore
         if: env.KEYSTORE_B64 != ''
@@ -100,6 +163,45 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease
 
+      # 产物按版本定名，和 hub 交出去的 Content-Disposition 文件名
+      # （agent-hub-<版本>.apk，见 internal/api/download.go 的 apkFilename）
+      # 保持一致 —— 管理员拷到服务器上不用再想该叫什么，用户下载目录里
+      # 也不会躺着两个同名的不同版本。
+      - name: 按版本号给产物定名
+        id: apk
+        run: |
+          dir=android/app/build/outputs/apk/release
+          src=$(find "$dir" -name '*.apk' | head -1)
+          if [ -z "$src" ]; then
+            echo "::error::$dir 下没有 apk"
+            exit 1
+          fi
+          name="agent-hub-${{ steps.ver.outputs.version }}.apk"
+          [ "$src" = "$dir/$name" ] || mv "$src" "$dir/$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$dir/$name" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      # 第 1 道闸只保证「secret 非空」，这一道保证「真的用它签上了」。
+      # 口令错、alias 写错、base64 解出来是坏文件，这些情况下 Gradle 那边
+      # 会安静地退回 debug 签名（build.gradle.kts 里 storeFile 为空就降级），
+      # 构建照样成功 —— 唯一能戳穿它的就是看产物里的签名主体。
+      - name: 确认产物是正式签名（发版时）
+        if: env.IS_RELEASE == 'true'
+        run: |
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          apksigner=$(find "$sdk/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -1)
+          if [ -z "$apksigner" ]; then
+            echo "::error::找不到 apksigner，没法确认这个包是谁签的 —— 发版不靠猜。"
+            exit 1
+          fi
+          apk="android/app/build/outputs/apk/release/${{ steps.apk.outputs.name }}"
+          "$apksigner" verify --print-certs "$apk" | tee "$RUNNER_TEMP/certs.txt"
+          if grep -q 'CN=Android Debug' "$RUNNER_TEMP/certs.txt"; then
+            echo "::error::这个包是 debug 签名的：secret 配了但没生效（口令/alias 对不上？）。"
+            echo "::error::发出去的话，等密钥修好再发新版时所有用户都要卸载重装。"
+            exit 1
+          fi
+
       # 产物挂在这次运行上，**不提交回仓库**：十几 MB 的二进制每发一版塞一份，
       # 而 clone 代码的人并不需要它（ADR-0010）。
       # 部署时把它放到 hub 的 ANDROID_APK_PATH 指向的路径，见 docs/08-deployment.md §5.5。
@@ -109,3 +211,75 @@ jobs:
           name: agent-hub-apk
           path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+  # 只在 android-v* tag 上跑。**它不是分发渠道**，是给管理员取包的归档：
+  # artifact 90 天过期、要登录才下得到，而发一次版之后总有人半年后要回去
+  # 找"上一版到底是哪个包"。对外的正式地址永远是 hub 的 /download（ADR-0010）。
+  release:
+    name: 发 GitHub Release
+    runs-on: ubuntu-latest
+    needs: app
+    if: startsWith(github.ref, 'refs/tags/android-v')
+    # 写权限只给这一个 job。顶上的 permissions 是 contents: read，
+    # 构建 job 不需要能写仓库。
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: agent-hub-apk
+          path: dist
+
+      - name: 建 Release 并挂上 APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.app.outputs.version }}
+          APK: ${{ needs.app.outputs.apk }}
+          SHA256: ${{ needs.app.outputs.sha256 }}
+        run: |
+          cat > notes.md <<EOF
+          Android 客户端 v$VERSION。
+
+          ## 最终用户请不要从这里下载
+
+          装 app 请打开**你自己那台 hub** 的 \`/download\`（控制台的登录页和设置页
+          上也有这个入口），不需要登录。这里的附件是给管理员发布用的原始产物。
+
+          ## 管理员：发布到 hub 上
+
+          \`\`\`bash
+          # 1) 取包并核对校验和
+          sha256sum $APK   # 应为 $SHA256
+
+          # 2) 放到宿主机，按版本存盘、软链指向当前版
+          sudo install -m 644 $APK /opt/agent-hub/release/$APK
+          sudo ln -sfn $APK /opt/agent-hub/release/agent-hub.apk
+
+          # 3) .env
+          #    ANDROID_APK_PATH=/opt/agent-hub/release/agent-hub.apk   # compose 部署填 /srv/release/agent-hub.apk
+          #    ANDROID_APK_VERSION=$VERSION
+          docker compose up -d api
+
+          # 4) 验收：200 + apk 的 MIME，拿到 text/html 说明反代没转发 /download
+          curl -sSI https://hub.example.com/download | head -5
+          curl -sS  https://hub.example.com/download/meta
+          \`\`\`
+
+          完整流程见 [docs/08-deployment.md §5.5](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/08-deployment.md)。
+
+          \`sha256: $SHA256\`
+          EOF
+
+          apk="dist/$APK"
+          # 重跑同一个 tag 时不该失败：已有 Release 就换掉附件、更新说明。
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$apk" --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            # --latest=false：仓库的 vX.Y.Z 是整个平台的版本，
+            # Android 单独发版不该把"最新发布"从平台版本上抢过来。
+            gh release create "$GITHUB_REF_NAME" "$apk" \
+              --title "Android 客户端 v$VERSION" \
+              --notes-file notes.md \
+              --latest=false
+          fi

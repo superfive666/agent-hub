@@ -55,17 +55,17 @@ android/
 
 ---
 
-## ⚠️ 当前状态：`app` 模块还没被编译过
+## ⚠️ 当前状态：编得过，但没在真机上看过
 
-立项时的开发环境访问不到 `dl.google.com`（Android SDK 与 AGP 插件都在那儿），
-所以 `:app` 连 Gradle 配置阶段都进不去。
+`:app` 现在 CI 里编译、单测、lint、出 release 包都是绿的（`.github/workflows/android.yml`），
+`core/` 的用例也一直全绿。
 
-- `core/` 的 48 个用例**已经跑过、全绿** —— 这正是把它拆成不依赖 Android 的
-  独立构建的回报。
-- `app/` 做过跨文件引用和泛型的静态核对，**但编译错误一定还有**。
-  第一次 `./gradlew :app:assembleDebug`（本地或 CI）会给出那份清单。
+**但界面的观感、玻璃质感、棱镜边这些还没有被真机验证过。** 改这几处的时候
+别只信 CI 绿 —— 编得过和看着对是两件事。
 
-修完编译之前，界面的观感、玻璃质感、棱镜边这些都**没有被真机验证过**。
+> 开发环境访问不到 `dl.google.com` 时（Android SDK 与 AGP 插件都在那儿），
+> `:app` 连 Gradle 配置阶段都进不去，本地只能跑 `./gradlew -p core test`。
+> 这正是把 `core/` 拆成不依赖 Android 的独立构建的回报。
 
 ---
 
@@ -107,8 +107,11 @@ sdk.dir=/path/to/Android/sdk
   降级路径保证可读性，不是保证像。
 - **棱镜描边靠 `saveLayer` 隔离**。直接用 `BlendMode.DstOut` 会挖穿整块玻璃板
   （屏幕中间一个跟着动的透明洞，不报任何错）。`ui/glass/Prism.kt` 里写了细节。
-- **字体走 Google Fonts 运行时下载**，仓库里没有字体文件。拿不到时落回系统字体，
-  中文由系统栈接手 —— 字形变了，排版不变。
+- **字体是打进包里的**（`res/font/` 下的 Manrope 与 JetBrains Mono，约 600 KB）。
+  第一版走 Google Fonts 运行时下载，被"它依赖 Play 服务"挡回来 —— 没有 Play 服务的
+  机器上字体会**静默**落回系统 sans，而这个平台的用户里就有那种机器。
+  理由写在 `ui/theme/Type.kt` 的注释里；许可在 `android/FONTS-LICENSE.txt`，
+  **不能放 res/font/ 下**（AAPT2 会把那个目录里的每个文件都当字体编译）。
 
 ### 改了 API 契约之后
 
@@ -120,15 +123,30 @@ sdk.dir=/path/to/Android/sdk
 
 ## 发版
 
+**完整流程在 [部署 §5.5](../docs/08-deployment.md)**（含签名密钥怎么生成、
+四个 GitHub Secret 叫什么、验收和回滚）。这里只记住三步：
+
 ```bash
-# CI 里做，需要签名密钥（走 secret，不进 git）
+# 1) app/build.gradle.kts：versionCode +1，versionName 改成新版本
+# 2) 打 tag，版本要和 versionName 一字不差
+git tag android-v0.1.1 && git push -u origin android-v0.1.1
+# 3) CI 出包并建 GitHub Release；把 apk 放到 hub 的 ANDROID_APK_PATH，
+#    改 ANDROID_APK_VERSION，重启 api
+```
+
+发版（`android-v*` tag）比日常构建多三道闸：没有签名 secret 直接失败、
+tag 与 `versionName` 对不上失败、产物是 debug 签名失败。三条挡的是同一件事 ——
+**debug 签名的包一旦发出去，等密钥修好再发新版时所有用户都要卸载重装**。
+
+本地也能出包（需要 Android SDK 和签名密钥）：
+
+```bash
 ANDROID_KEYSTORE_PATH=... ANDROID_KEYSTORE_PASSWORD=... \
 ANDROID_KEY_ALIAS=... ANDROID_KEY_PASSWORD=... \
   ./gradlew :app:assembleRelease
 ```
 
-产物放到 hub 的 `ANDROID_APK_PATH` 指向的路径，改 `ANDROID_APK_VERSION`，
-重启 api 就生效 —— 详见 [部署 §5.5](../docs/08-deployment.md)。
-
-**APK 不进 git。** 签名密钥丢了的话，所有已安装的用户必须卸载重装才能升级 ——
-备份责任写在立项书的风险表里。
+**APK 不进 git**，GitHub Release 上的附件只是归档 —— 对外的正式下载地址是
+hub 自己的 `/download`（[ADR-0010](../docs/adr/0010-public-apk-download.md)：
+内网部署上 GitHub 不可达）。**签名密钥丢了的话，所有已安装的用户必须卸载重装
+才能升级** —— 备份责任写在立项书的风险表里。

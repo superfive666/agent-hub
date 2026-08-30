@@ -82,6 +82,23 @@ android {
     }
 }
 
+// 发版时 CI 要拿到这两个值。**版本号的唯一来源是上面的 defaultConfig**，
+// tag 只是指向它的一个记号 —— workflow 会校验 `android-v<versionName>` 和
+// 实际 tag 一致，对不上就停下来，不会发出一个自己都说不清是哪一版的包。
+//
+// 为什么是一个任务而不是让 CI 去 grep 这个文件：正则会在有人给那行加注释、
+// 换个引号写法的那天**静默匹配不到**，然后产物名里的版本就空了。
+// 任务打印的是 Gradle 自己读到的值。
+val appVersionName = android.defaultConfig.versionName
+val appVersionCode = android.defaultConfig.versionCode
+tasks.register("printVersion") {
+    description = "打印 versionName / versionCode，给发版流水线用"
+    doLast {
+        println("versionName=$appVersionName")
+        println("versionCode=$appVersionCode")
+    }
+}
+
 dependencies {
     implementation(libs.agenthub.core)
 

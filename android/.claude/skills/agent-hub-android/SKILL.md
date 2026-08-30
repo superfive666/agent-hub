@@ -106,8 +106,13 @@ outbox 何时必须出声。它们都有需求可依，而且都在没有模拟�
 
 ## 7. 发版
 
-APK **不进 git**（ADR-0010）。CI 构建 → 放到 hub 的 `ANDROID_APK_PATH` →
+APK **不进 git**（ADR-0010）。发版是打一个 `android-v<versionName>` 的 tag：
+CI 构建并建 GitHub Release → 管理员把包放到 hub 的 `ANDROID_APK_PATH` →
 控制台和 `/download` 就能下到。详见 [部署 §5.5](../../../docs/08-deployment.md)。
+
+tag 上有三道闸，都会当场失败：没有签名 secret、tag 与 `versionName` 对不上、
+产物是 debug 签名的。GitHub Release 只是归档 —— 对外的正式地址是 hub 的
+`/download`，内网部署上 GitHub 根本不可达。
 
 **签名密钥丢了 = 所有已安装用户必须卸载重装。** keystore 走 CI secret，
 备份责任写在立项书的风险表里。
