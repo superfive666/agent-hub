@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        只做启动窗口的底色，界面本身全在 Compose 里。
+        写死一个中性色而不是跟随系统：舞台背景由 Compose 在第一帧画出来，
+        这层只负责不闪白/不闪黑。
+    -->
+    <style name="Theme.AgentHub" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/boot_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

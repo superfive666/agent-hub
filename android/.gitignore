@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 构建产物。**APK 不进 git** —— 十几 MB 的二进制，每发一版塞一份，
+# 而 clone 代码的人并不需要它。发布走 hub 的 /download（ADR-0010）。
+*.apk
+*.aab
+*.aar
+
+# 签名密钥。**丢了等于所有已安装的用户必须卸载重装**，
+# 但它更不能进仓库 —— 走 CI secret。
+*.jks
+*.keystore
+keystore.properties
+
+# Kotlin 编译器的本地日志
+.kotlin/
