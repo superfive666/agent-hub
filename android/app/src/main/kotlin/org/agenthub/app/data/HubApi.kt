@@ -38,7 +38,10 @@ private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 /**
  * hub 的 admin 接口。
  *
- * **只打 `/api/admin/*`。** `/api/agent/*` 那套 Bearer 凭证不出现在这个 app 里 ——
+ * **只打 `/api/admin/` 下的那套。** agent 侧那套 Bearer 凭证不出现在这个 app 里 ——
+ * ⚠️ 别在 KDoc 里写 `/api/admin/` 加通配星号：Kotlin 的块注释**是嵌套的**，
+ * 那个 `/` 加 `*` 会当场开一个新的注释层，把整个文件从这里起全吞掉 ——
+ * 报错是文件末尾一句 `Unclosed comment`，而真正的原因在几百行以外。
  * app 是给那一个人类管理员用的，不是给 agent 用的（立项书 §2）。
  */
 class HubApi(

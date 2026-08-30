@@ -11,7 +11,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * 需求：app 打的是**和控制台完全相同的 `/api/admin/*`**，
+ * 需求：app 打的是**和控制台完全相同的 `/api/admin/` 那一套**，
  * 错误要能被界面翻译成一句人话（不是甩一个状态码给用户）。
  */
 class HubApiTest {
@@ -56,7 +56,7 @@ class HubApiTest {
 
     @Test
     fun `打的是 admin 路由，不是 agent 路由`() = runTest {
-        // app 是给那一个人类管理员用的。/api/agent/* 那套 Bearer 凭证
+        // app 是给那一个人类管理员用的。agent 侧那套 Bearer 凭证
         // 不该出现在这个 app 里（立项书 §2）。
         server.enqueue(MockResponse().setBody("""{"todos":[]}"""))
         api.todos()

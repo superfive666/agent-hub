@@ -5,8 +5,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
+import org.agenthub.app.R
 
 /**
  * 字体。
@@ -14,37 +14,42 @@ import androidx.compose.ui.unit.sp
  * - **Manrope**：UI 与全部正文。圆润、字腔开放 —— **不是 Inter**，
  *   那是两种完全不同的气质，换掉之后整套的"软"就没了。
  * - **JetBrains Mono**：只用于真正的机器内容（agent id、seq、token、
- *   runtime 名、代码）。**不拿它当风格用** —— 等宽字在这里是"这串东西
- *   是给机器看的"这个语义，滥用之后就不再意味着任何东西。
+ *   runtime 名、代码）。**不拿它当风格用** —— 等宽字在这里是「这串东西
+ *   是给机器看的」这个语义，滥用之后就不再意味着任何东西。
  *
- * 走 Google Fonts 的运行时下载，所以字体文件**不进仓库**（省掉 ~200 KB，
- * 也免掉字重不全时的假粗体）。拿不到时（没有 Play 服务、离线首启）
- * 自动落回系统默认字体 —— 那时中文栈由系统给（PingFang / Noto Sans SC），
- * 拉丁字母会变成系统 sans。**这是可接受的降级：字形变了，排版不变。**
+ * ## 为什么字体文件是打进包里的，不走 Google Fonts 运行时下载
+ *
+ * 第一版用的是 `androidx.compose.ui.text.googlefonts`，被两件事挡回来：
+ *
+ * 1. 那条路要一份 Google Play 服务的签名证书清单。它**不在 androidx.core 里**
+ *    （`androidx.core.R.array.com_google_android_gms_fonts_certs` 是不存在的），
+ *    要么自己把 Google 的证书哈希抄进仓库，要么另引一个依赖。
+ * 2. 更要紧的是**它依赖 Play 服务**。这个平台是自建的，用户里有一部分机器
+ *    根本没有 Play 服务 —— 那时字体静默落回系统 sans，整套排版的字形记号就没了，
+ *    而且没有任何地方会报错。
+ *
+ * 打进包里换来的是：确定的字形、离线可用、不依赖任何外部服务。
+ * 代价是约 600 KB 的 APK 体积，对一个十几 MB 的包是划算的。
+ *
+ * 中文由系统栈接手（PingFang SC / Noto Sans SC）—— Manrope 本来就没有汉字，
+ * 这一点和 web 上完全一致。
+ *
+ * 字体是 SIL Open Font License 1.1，见 `android/FONTS-LICENSE.txt`。
+ *
+ * ⚠️ `res/font/` 下**只能放字体文件** —— AAPT2 会把这个目录里的每个文件
+ * 都当字体去编译，放个 .txt 进去 build 直接失败。
  */
-private val provider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    // **写全限定名**：gradle.properties 里开了 android.nonTransitiveRClass，
-    // 本模块的 R 不再包含依赖库的资源，写成 R.array.… 会直接编不过。
-    // 这份证书清单由 androidx.core 提供，不用自己抄那几串 base64。
-    certificates = androidx.core.R.array.com_google_android_gms_fonts_certs,
-)
-
-private val manrope = GoogleFont("Manrope")
-private val jetbrainsMono = GoogleFont("JetBrains Mono")
-
 val UiFont = FontFamily(
-    Font(googleFont = manrope, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = manrope, fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = manrope, fontProvider = provider, weight = FontWeight.Bold),
-    Font(googleFont = manrope, fontProvider = provider, weight = FontWeight.ExtraBold),
+    Font(R.font.manrope_medium, FontWeight.Medium),
+    Font(R.font.manrope_semibold, FontWeight.SemiBold),
+    Font(R.font.manrope_bold, FontWeight.Bold),
+    Font(R.font.manrope_extrabold, FontWeight.ExtraBold),
 )
 
 /** 只给机器内容用。见上面那段说明。 */
 val MonoFont = FontFamily(
-    Font(googleFont = jetbrainsMono, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = jetbrainsMono, fontProvider = provider, weight = FontWeight.Bold),
+    Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
+    Font(R.font.jetbrains_mono_bold, FontWeight.Bold),
 )
 
 /**
