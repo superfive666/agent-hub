@@ -4,6 +4,252 @@
  */
 
 export interface paths {
+    "/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载 Android 客户端安装包（公开，无需登录）
+         * @description 把这台 hub 上配置的 APK 交出去。**不需要任何凭证。**
+         *
+         *     挂在鉴权后面就成了「要先登录才能拿到用来登录的东西」——
+         *     装 app 的那一刻用户手上还没有会话，而他很可能正是想在手机上登录才来装的。
+         *
+         *     `/api/download` 是**同一个处理器的同义词**，不是新旧关系：`/download`
+         *     不在 `/api/` 下，而 docs/08-deployment.md §5 的反向代理只转发 `/api/*`
+         *     与 `/healthz`。没改过代理配置的部署上，`/download` 会被静态站接走，
+         *     用户下到一个改名叫 `.apk` 的 `index.html` —— 安装器只说
+         *     「解析包时出现问题」，没有任何线索指向代理。
+         *
+         *     产物由 CI 构建后放到 `ANDROID_APK_PATH` 指向的路径，**不进 git**。
+         *     支持 `Range`：手机上下十几 MB 的包，断一次不该从头再来。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description 断点续传。命中时返回 206 与 `Content-Range` */
+                    Range?: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /**
+                 * @description 安装包本体。`Content-Type` 必须是 apk 的 MIME —— 给成
+                 *     `application/octet-stream` 的话文件下来了，但 Android 下完不会弹
+                 *     「安装」，用户拿到的是一个点了没反应的东西。
+                 */
+                200: {
+                    headers: {
+                        /** @description `attachment; filename="agent-hub-<version>.apk"`。带版本号，否则下载目录里几个包分不清哪个新 */
+                        "Content-Disposition"?: string;
+                        /** @description `public, max-age=0, must-revalidate`。发版是原地替换同一路径，不能让中间层拿旧包顶新包 */
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/vnd.android.package-archive": string;
+                    };
+                };
+                /** @description 带 `Range` 时的部分内容 */
+                206: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/vnd.android.package-archive": string;
+                    };
+                };
+                /**
+                 * @description 这台 hub 现在拿不出包：没配 `ANDROID_APK_PATH`，或者配了但产物还没放上来。
+                 *
+                 *     **是 503 不是 404。** 404 的意思是「没有这个端点」，会把运维引去查代码；
+                 *     真实情况是端点在、只是部署没做完。`retryable: true` 且带 `Retry-After`。
+                 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        /**
+                         * @example {
+                         *       "code": "apk_unavailable",
+                         *       "message": "这台 hub 还没有可下载的 Android 包：需要配置 ANDROID_APK_PATH 并把构建产物放到该路径",
+                         *       "retryable": true,
+                         *       "retryAfter": 300
+                         *     }
+                         */
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/download/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 这台 hub 现在有没有包、是哪个版本（公开）
+         * @description 控制台的下载入口靠它决定按钮长什么样。没有这个端点，页面只能画一个
+         *     不知道会发生什么的按钮 —— 没包时用户点下去拿到一段 JSON 错误。
+         *
+         *     **没包不是错误**，是一个确定的答案：`200` + `available: false`。
+         *     回 503 的话前端得把「暂时没包」和「hub 挂了」当成同一件事处理。
+         *
+         *     `/api/download/meta` 是同义词，理由同 `/download`。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 当前产物的元信息 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description false 时其余字段一律不出现 */
+                            available: boolean;
+                            /** @description 来自 ANDROID_APK_VERSION，只用来拼文件名，不参与判断 */
+                            version?: string;
+                            filename?: string;
+                            /** Format: int64 */
+                            sizeBytes?: number;
+                            /**
+                             * Format: date-time
+                             * @description 产物文件的 mtime。发版就是替换这个文件，所以它就是发版时间
+                             */
+                            updatedAt?: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * /download 的同义词（给还没改过反向代理的部署）
+         * @description 与 `/download` 完全相同，见那一条。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 同 `/download` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/vnd.android.package-archive": string;
+                    };
+                };
+                /** @description 同 `/download` */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/download/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * /download/meta 的同义词
+         * @description 与 `/download/meta` 完全相同，见那一条。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 同 `/download/meta` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            available: boolean;
+                            version?: string;
+                            filename?: string;
+                            /** Format: int64 */
+                            sizeBytes?: number;
+                            /** Format: date-time */
+                            updatedAt?: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/join": {
         parameters: {
             query?: never;
@@ -2427,7 +2673,7 @@ export interface components {
             lastPullAt?: string;
             /** @description 手上未完成的 todo 数 */
             openTodos?: number;
-            /** @description 还没写 Card 的 agent 在名录里是查不到的 */
+            /** @description 写过 Card 没有。名录里**也有**没写 Card 的 agent，见 AgentSummary.hasCard */
             hasCard?: boolean;
             /**
              * Format: date-time

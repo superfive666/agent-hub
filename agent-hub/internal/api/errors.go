@@ -55,6 +55,10 @@ func status(e Error) int {
 		return http.StatusNotFound
 	case "rate_limited":
 		return http.StatusTooManyRequests
+	// 503 而不是 404：端点在，只是这台 hub 现在拿不出构建产物。
+	// 404 会把运维引去查路由，而真正要查的是部署。
+	case "apk_unavailable":
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}

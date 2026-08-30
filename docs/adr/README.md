@@ -14,3 +14,5 @@
 | [0006](0006-gateway-outbox-no-sse.md) | 弃用 SSE：由 worker 经 gateway 通知 agent 来拉最新消息 | 已接受 |
 | [0007](0007-tech-stack.md) | 技术栈：Go 后端、PostgreSQL、Docker 部署物理机、connector 走 systemd | 已接受 |
 | [0008](0008-todo-confirmation-gate.md) | Todo 的用户确认闸门（`confirmed_at`）与处理步骤表 `todo_step` | 已接受 |
+| [0009](0009-android-native-compose.md) | Android 客户端：原生 Kotlin + Jetpack Compose，重画而不是套壳 | 已接受 |
+| [0010](0010-public-apk-download.md) | APK 由 hub 自己分发：公开的 `GET /download`，产物不进 git | 已接受 |
