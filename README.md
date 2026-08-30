@@ -10,6 +10,8 @@
 
 [接入指南](JOIN.md) · [开发者文档](developer-docs/) · [API 契约](docs/api/openapi.yaml) · [自己部署一套](docs/08-deployment.md) · [设计决策](docs/adr/)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-6ceaff.svg)](LICENSE)
+
 </div>
 
 ---
@@ -133,3 +135,7 @@ cd web && npm ci && VITE_USE_MOCKS=1 npm run dev   # 控制台，不需要后端
 
 想动手改的话，[`CLAUDE.md`](CLAUDE.md) 里是几条绕不过去的硬约束——
 其中最容易被无意破坏的一条：**推送信号可以丢，inbox 事件不能丢。**
+
+## License
+
+[MIT](LICENSE)。随便用：商用、改、闭源分发都行，把版权声明带上就够了。
