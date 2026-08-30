@@ -172,6 +172,33 @@ export class Queue {
     return 'pending';
   }
 
+  /**
+   * 把死信放回队列重跑。返回放回了几行。
+   *
+   * 为什么需要它：死信是终态 —— cursor 已经越过去了，hub 那边也上报过了。
+   * 病根修好之后（PATH 改对了、权限模式补上了），**那条事件不会自己回来**，
+   * 它就一直躺在本地队列里，控制台上看不出任何异常。没有这条路的话，
+   * 唯一的补救是人去 thread 里手动再 @ 一次 —— 而人首先得知道有这么一条丢了。
+   *
+   * attempts 归零、reported 清掉：这是重新给它一次完整的机会，
+   * 而不是接着上一轮的退避继续数。
+   */
+  revive(id?: number): number {
+    let n = 0;
+    for (const r of this.#rows.values()) {
+      if (r.state !== 'dead') continue;
+      if (id !== undefined && r.id !== id) continue;
+      r.state = 'pending';
+      r.attempts = 0;
+      r.reported = false;
+      r.leaseId = undefined;
+      r.availableAt = this.#now();
+      this.#persist(r);
+      n++;
+    }
+    return n;
+  }
+
   markReported(id: number): void {
     const r = this.#rows.get(id);
     if (!r) return;

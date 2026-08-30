@@ -3,6 +3,16 @@ import { accessSync, constants, statSync } from 'node:fs';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { HubHint, RuntimeAdapter, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 
+/** 子进程跑完之后的原始结果。要自己判定成败、或者要解析完整输出的适配器用它。 */
+export interface RunResult {
+  /** 被信号杀掉时是 null。 */
+  code: number | null;
+  out: string;
+  err: string;
+  /** 压根没起来（execvp 失败）。这类重试没有意义，配置不改它永远起不来。 */
+  spawnFailed?: boolean;
+}
+
 export interface GenericShellManifest {
   /** 命令模板，argv 数组。支持 {{kind}} {{threadId}} {{seq}} {{coalescedCount}} 占位符。 */
   command: string[];
@@ -66,6 +76,39 @@ export class GenericShellAdapter implements RuntimeAdapter {
   }
 
   protected run(argv: string[], stdin: string): Promise<Outcome> {
+    return this.runRaw(argv, stdin).then((r) => this.judge(r));
+  }
+
+  /**
+   * 退出码 → 成败。**留成 protected 是给子类覆盖的。**
+   *
+   * 退出码只能证明「进程正常结束」，证明不了「它真的干了活」。一个被 headless 叫起来的
+   * runtime 撞上权限确认、或者想了想决定不做，照样 exit 0 —— 在这里「什么都没干」和
+   * 「干完了」长得一模一样：队列行删掉、cursor 推进、不进死信，而成功路径不打日志，
+   * 于是那条 @ 石沉大海，四处都查不出异常。
+   *
+   * 所以**凡是能结构化输出的 runtime，都应该覆盖这个方法去读它自己的输出**，
+   * 而不是接受退出码这个最弱的证据（claude-code 就是这么做的）。
+   * generic-shell 只能停在这里 —— 一条任意的 shell 命令没有可依赖的成功语义。
+   */
+  protected judge(r: RunResult): Outcome {
+    if (r.spawnFailed) return { ok: false, detail: r.err, retryable: false };
+    if (r.code === 0) {
+      // exit 0 但一路往 stderr 上抱怨的命令，是排查时最需要看见的那种。
+      const detail = r.err ? `${r.out}\n[stderr] ${r.err}` : r.out;
+      return { ok: true, detail: detail.slice(0, 2000) };
+    }
+    return { ok: false, detail: `exit ${r.code}: ${(r.err || r.out).slice(0, 2000)}` };
+  }
+
+  /**
+   * 跑一次子进程，把原始输出原样交出来。
+   *
+   * **不截断**：session id 这类东西可能出现在很后面，而 Outcome.detail 只留 2000 字。
+   * 从截断过的 detail 里找 session id，长输出时会静默地找不到 —— 表现是「会话不接上了」，
+   * 功能还在，没有任何报错。
+   */
+  protected runRaw(argv: string[], stdin: string): Promise<RunResult> {
     return new Promise((resolve) => {
       const child = spawn(argv[0], argv.slice(1), {
         cwd: this.m.cwd, env: this.env(), stdio: ['pipe', 'pipe', 'pipe'],
@@ -74,14 +117,11 @@ export class GenericShellAdapter implements RuntimeAdapter {
       const timer = this.m.timeoutSeconds
         ? setTimeout(() => { child.kill('SIGKILL'); }, this.m.timeoutSeconds * 1000)
         : null;
-      const done = (o: Outcome) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); resolve(o); };
+      const done = (r: RunResult) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); resolve(r); };
       child.stdout.on('data', (d) => { out += d; });
       child.stderr.on('data', (d) => { err += d; });
-      child.on('error', (e) => done({ ok: false, detail: String(e), retryable: false }));
-      child.on('close', (code) =>
-        done(code === 0
-          ? { ok: true, detail: out.slice(0, 2000) }
-          : { ok: false, detail: `exit ${code}: ${(err || out).slice(0, 2000)}` }));
+      child.on('error', (e) => done({ code: null, out, err: String(e), spawnFailed: true }));
+      child.on('close', (code) => done({ code, out, err }));
       child.stdin.on('error', () => undefined);
       child.stdin.end(stdin);
     });

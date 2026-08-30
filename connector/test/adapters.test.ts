@@ -7,7 +7,7 @@ import { openJournal } from '../src/core/journal.js';
 import { Queue } from '../src/core/queue.js';
 import { WakePayload } from '../src/core/types.js';
 import { tmpDir, cleanup } from './helpers.js';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 
 const payload = (over: Partial<WakePayload> = {}): WakePayload => ({
@@ -123,7 +123,11 @@ describe('需求：命令跑不起来时，报错要指得出是哪个命令', (
     );
     await a.start();
     const r = await a.wake(payload());
-    assert.equal(r.ok, true, 'bin 必须赢过配置里残留的 command');
+    // 判据是「跑的是不是 echo」：echo 会把 claude 的参数原样打回来。
+    // 不能再用 ok 当判据 —— echo 不吐 `--output-format json` 的结果信封，
+    // 而 claude-code 现在会读那份信封，所以这里的 ok 本来就该是 false。
+    assert.match(r.detail!, /--output-format json/, 'bin 必须赢过配置里残留的 command');
+    assert.doesNotMatch(r.detail!, /Illegal option/, '走到 dash 上就说明 bin 被顶掉了');
   });
 
   test('命令不在 PATH 里时，start() 就报错，并且把命令名和 PATH 都说出来', async () => {
@@ -152,3 +156,140 @@ describe('需求：命令跑不起来时，报错要指得出是哪个命令', (
     await a.start();
   });
 })
+
+/**
+ * 这一组也来自一次真实故障，而且是更难查的那一类：**成功路径上的静默**。
+ *
+ * 04:19 的那条 todo.assigned 一直没人回。查下来是 PATH 太窄找不到 claude，
+ * 四次重试后进了死信 —— 那次还算幸运，至少有死信可查。真正危险的是它的近亲：
+ * headless 的 claude 撞上权限确认、或者跑到 max turns，**照样 exit 0**。
+ * 只看退出码的话，「什么都没干」和「干完了」一模一样：队列行删掉、cursor 推进、
+ * 不进死信，而成功路径不打日志 —— 那条 @ 石沉大海，任何一个地方都查不出异常。
+ */
+describe('需求：退出码不是成功的证据 —— 能结构化输出的 runtime 要读它自己的输出', () => {
+  /** 造一个假的 claude：把给定内容打到 stdout，然后按给定退出码退出。 */
+  function fakeClaude(dir: string, stdout: string, code = 0): string {
+    const p = join(dir, 'claude');
+    writeFileSync(p, `#!/bin/sh\ncat > /dev/null\nprintf '%s' '${stdout}'\nexit ${code}\n`);
+    chmodSync(p, 0o755);
+    return p;
+  }
+
+  const mk = (bin: string) =>
+    createAdapter({ type: 'claude-code', bin } as never, openJournal(tmpDir(), 'jsonl'));
+
+  test('信封里 is_error=true 就是失败，哪怕 exit 0', async () => {
+    const bin = fakeClaude(tmpDir(),
+      '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"boom"}');
+    const r = await mk(bin).wake(payload());
+    assert.equal(r.ok, false, 'runtime 自己说失败了，不能当成功');
+    assert.match(r.detail!, /error_during_execution/, '报错里要带上 subtype，否则查的人只知道「失败了」');
+  });
+
+  test('subtype 不是 success 也是失败 —— max turns 是最常见的那个', async () => {
+    const bin = fakeClaude(tmpDir(),
+      '{"type":"result","subtype":"error_max_turns","is_error":false,"result":""}');
+    const r = await mk(bin).wake(payload());
+    assert.equal(r.ok, false);
+    assert.match(r.detail!, /error_max_turns/);
+  });
+
+  test('要了 JSON 却没拿到信封：exit 0 也不算成功', async () => {
+    // 进程被杀、参数不对、装的根本不是我们以为的那个 claude，都长这样。
+    // 当成功处理等于把这条事件丢掉，而且不留痕迹。
+    const bin = fakeClaude(tmpDir(), 'Usage: claude [options]');
+    const r = await mk(bin).wake(payload());
+    assert.equal(r.ok, false);
+    assert.equal(r.retryable, true, '这类值得重试 —— 可能只是这一次没起来');
+    assert.match(r.detail!, /Usage: claude/, '把它到底输出了什么带上，否则无从下手');
+  });
+
+  test('正常成功仍然是成功，session id 照常记下来', async () => {
+    const dir = tmpDir();
+    const bin = fakeClaude(dir,
+      '{"type":"result","subtype":"success","is_error":false,"result":"回好了","session_id":"s-42"}');
+    const j = openJournal(tmpDir(), 'jsonl');
+    const a = createAdapter({ type: 'claude-code', bin } as never, j);
+    const r = await a.wake(payload());
+    assert.equal(r.ok, true);
+    assert.equal(j.loadMeta()['session:t1'], 's-42', '同 thread 的下一次唤起要能 --resume');
+  });
+
+  test('输出很长时 session id 仍然找得到 —— 不能从截断过的 detail 里找', async () => {
+    // detail 只留 2000 字。从截断过的 detail 里找 session id，长输出时会静默地
+    // 找不到：功能还在，只是会话不再续接，而且没有任何报错。
+    const pad = 'x'.repeat(4000);
+    const bin = fakeClaude(tmpDir(),
+      `{"type":"result","subtype":"success","is_error":false,"result":"${pad}","session_id":"s-long"}`);
+    const j = openJournal(tmpDir(), 'jsonl');
+    const a = createAdapter({ type: 'claude-code', bin } as never, j);
+    const r = await a.wake(payload());
+    assert.equal(r.ok, true);
+    assert.equal(j.loadMeta()['session:t1'], 's-long');
+  });
+
+  test('generic-shell 只能停在退出码上，但 exit 0 时的 stderr 要留下来', async () => {
+    // 一条任意的 shell 命令没有可依赖的成功语义，我们没有立场判它失败；
+    // 但它一路往 stderr 上抱怨的内容，是排查时最需要看见的那种。
+    const a = new GenericShellAdapter({ command: ['sh', '-c', 'echo 出事了 >&2; exit 0'] });
+    const r = await a.wake(payload());
+    assert.equal(r.ok, true);
+    assert.match(r.detail!, /出事了/);
+  });
+});
+
+describe('需求：病根修好之后，进了死信的那条事件要能重放', () => {
+  test('revive 把死信放回 pending，attempts 归零', () => {
+    const dir = tmpDir();
+    const j = openJournal(dir, 'jsonl');
+    const q = new Queue(j, {
+      maxConcurrentWakes: 1, coalesceWindowMs: 0, coalesceKinds: [],
+      maxAttempts: 2, backoffBaseMs: 0, backoffMaxMs: 0,
+    });
+    q.enqueue({ seq: 1, kind: 'todo.assigned', threadId: 't1' });
+    const row = q.acquire()!;
+    q.fail(row.id, 'sh: 0: Illegal option --');
+    const again = q.acquire()!;
+    assert.equal(q.fail(again.id, 'sh: 0: Illegal option --'), 'dead');
+    assert.equal(q.deadLetters().length, 1);
+
+    assert.equal(q.revive(), 1, '放回一条');
+    assert.equal(q.deadLetters().length, 0);
+    const back = q.acquire();
+    assert.ok(back, '放回之后要能重新出队 —— 否则「重放」只是改了个状态字');
+    assert.equal(back!.attempts, 0, '重新给一次完整的机会，不是接着上一轮的退避数');
+    assert.deepEqual(back!.seqs, [1], '事件本身不能丢');
+    j.close(); cleanup(dir);
+  });
+
+  test('没有死信时 revive 返回 0 —— 调用方要能区分「放回了」和「什么都没有」', () => {
+    const dir = tmpDir();
+    const j = openJournal(dir, 'jsonl');
+    const q = new Queue(j, {
+      maxConcurrentWakes: 1, coalesceWindowMs: 0, coalesceKinds: [],
+      maxAttempts: 4, backoffBaseMs: 0, backoffMaxMs: 0,
+    });
+    assert.equal(q.revive(), 0);
+    assert.equal(q.revive(99), 0, '指定一个不存在的 id 也是 0，不能报成放回了');
+    j.close(); cleanup(dir);
+  });
+});
+
+describe('需求：两个 journal 驱动的语义必须一致', () => {
+  test('jsonl：setMeta 之后，同一个进程里就能读到', () => {
+    // 只追加文件、不改内存那份的话，要等下次开进程重放才读得到 ——
+    // sqlite 版没有这个时间差。session id 正是走这条路存的。
+    for (const driver of ['jsonl', 'sqlite'] as const) {
+      const dir = tmpDir();
+      const j = openJournal(dir, driver);
+      j.setMeta('session:t1', 's-1');
+      assert.equal(j.loadMeta()['session:t1'], 's-1', `${driver}: 写完立刻要读得到`);
+      j.close();
+      // 重开一次：落盘的那份也得在。
+      const again = openJournal(dir, driver);
+      assert.equal(again.loadMeta()['session:t1'], 's-1', `${driver}: 重启后还要在`);
+      again.close();
+      cleanup(dir);
+    }
+  });
+});

@@ -53,9 +53,12 @@ export class OpencodeAdapter extends GenericShellAdapter {
     argv.push(...(m.args ?? []));
     argv.push(wakePrompt(p, this.hub));
 
-    const outcome = await this.run(argv, '');
+    // runRaw 而不是 run：session id 要从**完整**的 stdout 里找，
+    // 截断过的 detail 在长输出时会静默地找不到（表现是会话不再续接，且不报错）。
+    const r = await this.runRaw(argv, '');
+    const outcome = this.judge(r);
     if (outcome.ok && p.threadId) {
-      const sid = sessionFromJson(outcome.detail ?? '');
+      const sid = sessionFromJson(r.out);
       if (sid) rememberSession(this.#journal, this.#sessions, p.threadId, sid);
     }
     return outcome;

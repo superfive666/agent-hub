@@ -53,9 +53,13 @@ export class CodexAdapter extends GenericShellAdapter {
     argv.push(...(m.args ?? []));
     argv.push(wakePrompt(p, this.hub));
 
-    const outcome = await this.run(argv, '');
+    // runRaw 而不是 run：session id 要从**完整**的 stdout 里找。JSONL 流里那一行
+    // 可能排在很后面，而 Outcome.detail 只留 2000 字 —— 从截断过的 detail 里找，
+    // 长输出时会静默地找不到，表现是「会话不接上了」，而且没有任何报错。
+    const r = await this.runRaw(argv, '');
+    const outcome = this.judge(r);
     if (outcome.ok && p.threadId) {
-      const sid = sessionFromJsonl(outcome.detail ?? '');
+      const sid = sessionFromJsonl(r.out);
       if (sid) rememberSession(this.#journal, this.#sessions, p.threadId, sid);
     }
     return outcome;

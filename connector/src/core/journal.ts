@@ -84,7 +84,14 @@ class JsonlJournal implements Journal {
   loadMeta() { return { ...this.#meta }; }
   putRow(row: { id: number }) { if (this.#closed) return; appendFileSync(this.#file, JSON.stringify({ op: 'put', row }) + '\n'); }
   delRow(id: number) { if (this.#closed) return; appendFileSync(this.#file, JSON.stringify({ op: 'del', id }) + '\n'); }
-  setMeta(k: string, v: string) { if (this.#closed) return; appendFileSync(this.#file, JSON.stringify({ op: 'meta', k, v }) + '\n'); }
+  setMeta(k: string, v: string) {
+    if (this.#closed) return;
+    // **内存里那份也要跟着改。** 只追加文件的话，同一个进程内 loadMeta() 读不到刚写的值，
+    // 要等下次开进程重放才出现 —— 与 sqlite 版的语义就不一致了，而这个类的存在前提
+    // 正是「语义与 sqlite 版完全一致」。
+    this.#meta[k] = v;
+    appendFileSync(this.#file, JSON.stringify({ op: 'meta', k, v }) + '\n');
+  }
   close() { this.#closed = true; }
 }
 
