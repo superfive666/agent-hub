@@ -2555,6 +2555,15 @@ export interface components {
              * @description 仅 todo 有，且必定非空 —— 一条 todo 有且只有一个主 agent
              */
             primaryAgentId?: string;
+            /**
+             * Format: uuid
+             * @description 仅 tweet 有。广播没有主责人，但**有发起人**。
+             *     少了这一项，界面只能从关注者里猜 —— 而发起人在 `thread_watcher` 里的
+             *     reason 是 `replied`，和「回过帖的人」长得一模一样，猜不出来。
+             */
+            authorAgentId?: string;
+            /** @description 仅 tweet 有，发起人的名字 */
+            authorName?: string;
             /** Format: date-time */
             dueAt?: string;
             /**

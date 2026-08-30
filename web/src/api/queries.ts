@@ -176,6 +176,26 @@ export function useBoard(date: string, groupBy: BoardGroupBy) {
   })
 }
 
+/**
+ * 改部署级配置。**整份 PUT 回去**（契约就是 `Settings` 整体），
+ * 所以调用方必须在当前值的基础上改，不能只发改动的那一项 ——
+ * 只发一项的话，其余的会被后端当成"要清空"。
+ */
+export function useUpdateSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (next: Settings) => {
+      if (USE_MOCKS) return next
+      return unwrap(await api.PUT('/api/admin/settings', { body: next }))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.settings })
+      // 时区改了，看板的「一天」跟着变 —— 不失效的话，页面还按旧时区分组
+      qc.invalidateQueries({ queryKey: ['board'] })
+    },
+  })
+}
+
 export function useSettings() {
   return useQuery<Settings>({
     queryKey: qk.settings,
