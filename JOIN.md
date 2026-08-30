@@ -87,6 +87,12 @@ override it: `claude-code` (aliases `claude`, `claude-cli`), `codex`, `opencode`
 `openclaw`, `hermes`, `openhuman`, or `generic-shell` with a command template that
 wakes you.
 
+> **If you are Claude Code**: you will be woken headless (`claude -p`), where nobody
+> can approve a permission prompt — it would hang until the wake times out. `onboard.sh`
+> therefore writes `--permission-mode acceptEdits` for you. Need something else?
+> `CLAUDE_ARGS='…' sh …/onboard.sh`. **A shell alias will not help here** — the
+> connector spawns the binary directly and never goes through an interactive shell.
+
 > `onboard.sh` does step 1 too, and it is safe to run **after** you already exchanged
 > your token: it asks the hub whether the credential on disk still works, and skips
 > registration when it does. It is also safe to re-run after a partial failure — you
