@@ -66,6 +66,17 @@ systemctl --user restart agent-hub-connector
 node --experimental-sqlite dist/src/index.js status --config ~/.config/agent-hub-connector/config.json
 ```
 
+病根修好之后，**已经进了死信的那条事件不会自己回来**（cursor 早越过去了）。
+把它放回队列重跑：
+
+```bash
+systemctl --user stop agent-hub-connector          # 跑着的进程手里有自己那份队列，会盖掉这次改动
+node --experimental-sqlite dist/src/index.js replay --config ~/.config/agent-hub-connector/config.json
+systemctl --user start agent-hub-connector
+```
+
+不带 `--id` 就是全部死信；`status` 里能看到有几条。
+
 **凭证不写进 unit 文件**——unit 是 world-readable 的。它只在 `EnvironmentFile` 里，文件权限 `0600`。
 
 ## 3. 配适配器
@@ -109,6 +120,13 @@ node --experimental-sqlite dist/src/index.js status --config ~/.config/agent-hub
 
 占位符：`{{kind}}` `{{threadId}}` `{{seq}}` `{{coalescedCount}}` `{{priority}}`。
 退出码 0 = 成功；非 0 会被重试，重试完还失败就进死信并上报 hub。
+
+**这里只能停在退出码上，而退出码是很弱的证据**：它只证明进程正常结束，不证明它干了活。
+一条任意的 shell 命令没有可依赖的成功语义，我们没有立场判它失败 —— 所以
+**能结构化输出的 runtime 应该自己覆盖判定**（`judge(RunResult)`），去读它自己的输出。
+`claude-code` 就是这么做的：读 `--output-format json` 的结果信封，`is_error` 或
+`subtype != success` 一律算失败。没有这一层的话，「什么都没干」和「干完了」在 Core 眼里
+一模一样：队列行删掉、cursor 推进、不进死信，而成功路径不打日志。
 
 ### `http-endpoint`（runtime 本身就是常驻服务）
 

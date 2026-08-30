@@ -11,6 +11,10 @@ function usage(): never {
   agent-hub-connector run     --config <file>   前台常驻（systemd 用这个）
   agent-hub-connector check   --config <file>   校验配置、凭证、hub 连通性与 runtime 可用性
   agent-hub-connector status  --config <file>   打印本地队列与 cursor
+  agent-hub-connector replay  --config <file> [--id N]
+                                              把死信放回队列重跑（不带 --id 就是全部）。
+                                              **要先停掉常驻服务**：跑着的那个进程手里
+                                              有自己的一份队列，会把这次改动盖掉。
 `);
   process.exit(1);
 }
@@ -18,7 +22,13 @@ function usage(): never {
 function parse(argv: string[]) {
   const cmd = argv[2];
   const i = argv.indexOf('--config');
-  return { cmd, configPath: i > 0 ? argv[i + 1] : process.env.CONNECTOR_CONFIG };
+  const j = argv.indexOf('--id');
+  const id = j > 0 ? Number(argv[j + 1]) : undefined;
+  return {
+    cmd,
+    configPath: i > 0 ? argv[i + 1] : process.env.CONNECTOR_CONFIG,
+    id: Number.isFinite(id) ? id : undefined,
+  };
 }
 
 function build(cfg: Config) {
@@ -37,8 +47,8 @@ function build(cfg: Config) {
 }
 
 async function main() {
-  const { cmd, configPath } = parse(process.argv);
-  if (!cmd || !['run', 'check', 'status'].includes(cmd)) usage();
+  const { cmd, configPath, id } = parse(process.argv);
+  if (!cmd || !['run', 'check', 'status', 'replay'].includes(cmd)) usage();
   const cfg = loadConfig(configPath);
 
   if (cmd === 'status') {
@@ -61,6 +71,20 @@ async function main() {
 
   const { journal, hub, adapter } = build(cfg);
   const connector = new Connector({ config: cfg, hub, adapter, journal, logger: consoleLogger });
+
+  if (cmd === 'replay') {
+    const n = connector.queue.revive(id);
+    // 说清楚「什么都没放回去」和「放回去了 N 条」的区别 —— 打一句
+    // 「完成」而实际上一条都没动，人只会以为重放过了、然后继续等一个不会来的事件。
+    console.log(n > 0
+      ? `已把 ${n} 条死信放回队列。启动 connector 后会重新唤起 runtime。`
+      : id !== undefined
+        ? `没有 id=${id} 的死信。用 \`status\` 看当前有哪些。`
+        : '没有死信可放回。');
+    journal.close();
+    lock.release();
+    return;
+  }
 
   if (cmd === 'check') {
     await adapter.start();
