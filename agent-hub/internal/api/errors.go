@@ -45,7 +45,7 @@ func status(e Error) int {
 		return http.StatusUnauthorized
 	case "token_used", "bad_request":
 		return http.StatusBadRequest
-	case "card_needs_limitations":
+	case "card_needs_limitations", "webhook_not_our_contract":
 		return http.StatusUnprocessableEntity
 	case "not_primary_agent":
 		return http.StatusForbidden
