@@ -252,7 +252,9 @@ type BoardItem struct {
 	AuthorName string    `json:"authorName"`
 	Summary    string    `json:"summary"`
 	// 「按开始」口径独有：显示的是**当前**状态与累计统计，不是当天快照
-	Status         string     `json:"status,omitempty"`
+	Status string `json:"status,omitempty"`
+	// 两种口径含义不同：「按开始」是这条 thread 至今一共几条发言；
+	// 「按活动」是**这一天**说了几句 —— 后者才回答得了「今天这条广播底下热闹不热闹」。
 	ReplyCount     int        `json:"replyCount,omitempty"`
 	LastActivityAt *time.Time `json:"lastActivityAt,omitempty"`
 }
@@ -269,14 +271,26 @@ func (s *Store) Board(ctx context.Context, day time.Time, groupBy string, loc *t
 	if groupBy == "started" {
 		return s.boardByStart(ctx, start, end)
 	}
+	// **一条 thread 这一天只出一行，不是一条 post 一行。**
+	// 一条广播底下你回一句、它回一句，看板上就冒出三条「广播」——
+	// 看的人会以为今天发了三条广播，而实际上是一条广播加两句对话。
+	// 所以按 thread 收敛：时间和摘要取这一天**最后**那条发言（「最新进展是什么」），
+	// replyCount 给出这一天这条 thread 一共说了几句。
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT p.created_at, th.kind, th.id, p.author_kind,
-		       coalesce(a.name, 'superfive'), left(p.body, 200)
-		FROM post p
-		JOIN thread th ON th.id = p.thread_id
-		LEFT JOIN agent a ON a.id = p.author_id
-		WHERE p.created_at >= $1 AND p.created_at < $2
-		ORDER BY p.created_at`, start, end)
+		WITH today AS (
+			SELECT p.*, row_number() OVER (PARTITION BY p.thread_id ORDER BY p.created_at DESC) AS rn,
+			       count(*)          OVER (PARTITION BY p.thread_id) AS posts_today,
+			       max(p.created_at) OVER (PARTITION BY p.thread_id) AS last_at
+			FROM post p
+			WHERE p.created_at >= $1 AND p.created_at < $2
+		)
+		SELECT t.last_at, th.kind, th.id, t.author_kind,
+		       coalesce(a.name, 'superfive'), left(t.body, 200), t.posts_today
+		FROM today t
+		JOIN thread th ON th.id = t.thread_id
+		LEFT JOIN agent a ON a.id = t.author_id
+		WHERE t.rn = 1
+		ORDER BY t.last_at`, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("查看板: %w", err)
 	}
@@ -286,7 +300,7 @@ func (s *Store) Board(ctx context.Context, day time.Time, groupBy string, loc *t
 	for rows.Next() {
 		var it BoardItem
 		if err := rows.Scan(&it.At, &it.ThreadKind, &it.ThreadID,
-			&it.AuthorKind, &it.AuthorName, &it.Summary); err != nil {
+			&it.AuthorKind, &it.AuthorName, &it.Summary, &it.ReplyCount); err != nil {
 			return nil, err
 		}
 		it.Kind = it.ThreadKind

@@ -169,6 +169,18 @@ export default function BoardRoute() {
                         <Chip size="sm" tone={it.kind === 'todo' ? 'agent' : 'default'}>
                           {it.kind === 'todo' ? 'TODO' : it.kind === 'tweet' ? '广播' : '系统'}
                         </Chip>
+                        {/* 一条 thread 这一天只出一行，热闹程度靠这个数说话 ——
+                            没有它的话，「一条广播加两句对话」和「一条没人理的广播」
+                            在看板上长得一模一样。1 条不显示：那是「就发了一条」，不是信息。 */}
+                        {(it.replyCount ?? 0) > 1 && (
+                          <span
+                            className="mono text-[10.5px] font-semibold"
+                            style={{ color: 'var(--ink3)' }}
+                            data-testid="activity-count"
+                          >
+                            {it.replyCount} 条发言
+                          </span>
+                        )}
                       </div>
                       <div className="text-[12.5px] font-medium leading-[1.55]">{it.summary}</div>
                       {it.threadId && (

@@ -147,12 +147,24 @@ func loadFanoutInput(
 		}
 	}
 
-	if in.ThreadKind == domain.ThreadTweet && in.IsThreadOpening {
-		audience, err := broadcastAudience(ctx, tx, threadID)
-		if err != nil {
-			return domain.FanoutInput{}, err
+	if in.ThreadKind == domain.ThreadTweet {
+		// 发起人：广播的回复只通知它和被 @ 的人，所以每一条都要读，不只开篇。
+		var author sql.NullString
+		err := tx.QueryRowContext(ctx,
+			`SELECT author_agent_id FROM tweet WHERE thread_id = $1`, threadID).Scan(&author)
+		if err != nil && err != sql.ErrNoRows {
+			return domain.FanoutInput{}, fmt.Errorf("读广播发起人: %w", err)
 		}
-		in.BroadcastTo = audience
+		if author.Valid {
+			in.TweetAuthorID = domain.AgentID(author.String)
+		}
+		if in.IsThreadOpening {
+			audience, err := broadcastAudience(ctx, tx, threadID)
+			if err != nil {
+				return domain.FanoutInput{}, err
+			}
+			in.BroadcastTo = audience
+		}
 	}
 
 	if postID.Valid {

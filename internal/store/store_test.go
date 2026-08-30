@@ -671,3 +671,102 @@ func TestEmptyTagsBecomeEmptyArray(t *testing.T) {
 		t.Errorf("空标签长度 = %d, want 0", n)
 	}
 }
+
+// 需求：**「按活动」口径下，一条 thread 这一天只出一行。**
+//
+// 来自实际使用中的反馈：一条广播底下你回一句、它回一句，看板上就冒出三条「广播」，
+// 看的人会以为今天发了三条广播，而实际上是一条广播加两句对话。
+func TestBoardActivityCollapsesOneThreadIntoOneRow(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	author := mkAgent(t, s, "board-author")
+	other := mkAgent(t, s, "board-other")
+
+	threadID, err := s.CreateTweet(ctx, store.CreateTweetParams{Author: author, Body: "一条广播"})
+	if err != nil {
+		t.Fatalf("发广播: %v", err)
+	}
+	for _, body := range []string{"第一句回复", "第二句回复"} {
+		if _, err := s.AppendPost(ctx, store.AppendPostParams{
+			ThreadID: threadID, AuthorKind: "agent", AuthorID: other, Body: body,
+		}); err != nil {
+			t.Fatalf("回帖: %v", err)
+		}
+	}
+
+	items, err := s.Board(ctx, time.Now(), "activity", time.UTC)
+	if err != nil {
+		t.Fatalf("查看板: %v", err)
+	}
+	var mine []store.BoardItem
+	for _, it := range items {
+		if it.ThreadID == threadID {
+			mine = append(mine, it)
+		}
+	}
+	if len(mine) != 1 {
+		t.Fatalf("一条广播加两句回复应当只出 1 行，实际 %d 行 —— 看的人会以为今天发了 %d 条广播",
+			len(mine), len(mine))
+	}
+	if mine[0].ReplyCount != 3 {
+		t.Errorf("这一天这条 thread 一共 3 条发言，replyCount = %d", mine[0].ReplyCount)
+	}
+	// 摘要取当天最后一条：「按活动」回答的是「今天这条事进展到哪了」
+	if mine[0].Summary != "第二句回复" {
+		t.Errorf("摘要应当是当天最后一条发言，实际 %q", mine[0].Summary)
+	}
+}
+
+// 需求：广播的回复只通知发起人和被 @ 的人 —— 这条要在真库上端到端成立，
+// 不只是 domain.Fanout 的单元测试。老关注者留在 thread_watcher 里，但不再收到通知。
+func TestTweetReplyOnlyNotifiesAuthorAndMentioned(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	author := mkAgent(t, s, "tw-author")
+	chatter := mkAgent(t, s, "tw-chatter") // 早先说过话，是老关注者
+	pulled := mkAgent(t, s, "tw-pulled")   // 这条回复 @ 到的人
+	replier := mkAgent(t, s, "tw-replier")
+
+	threadID, err := s.CreateTweet(ctx, store.CreateTweetParams{Author: author, Body: "广播正文"})
+	if err != nil {
+		t.Fatalf("发广播: %v", err)
+	}
+	if _, err := s.AppendPost(ctx, store.AppendPostParams{
+		ThreadID: threadID, AuthorKind: "agent", AuthorID: chatter, Body: "我先说一句",
+	}); err != nil {
+		t.Fatalf("chatter 回帖: %v", err)
+	}
+	if _, err := s.AppendPost(ctx, store.AppendPostParams{
+		ThreadID: threadID, AuthorKind: "agent", AuthorID: replier,
+		Body: "@tw-pulled 你看下", Mentions: []domain.AgentID{pulled},
+	}); err != nil {
+		t.Fatalf("replier 回帖: %v", err)
+	}
+
+	// chatter 确实是关注者 —— 关注关系照常记录，只是不再产生通知
+	if n := countRows(t, s,
+		`SELECT count(*) FROM thread_watcher WHERE thread_id = $1 AND agent_id = $2`,
+		threadID, string(chatter)); n != 1 {
+		t.Fatalf("chatter 应当在关注者里（详情页要用），实际 %d 行", n)
+	}
+
+	if _, err := s.ProcessOutboxBatch(ctx, 100, nil); err != nil {
+		t.Fatalf("扇出: %v", err)
+	}
+
+	got := func(id domain.AgentID) int {
+		return countRows(t, s,
+			`SELECT count(*) FROM inbox_event WHERE thread_id = $1 AND agent_id = $2
+			   AND kind IN ('tweet.replied','tweet.mentioned')`, threadID, string(id))
+	}
+	if got(author) == 0 {
+		t.Error("发起人应当收到回复通知 —— 这是它自己的广播")
+	}
+	if got(pulled) == 0 {
+		t.Error("被 @ 的人应当收到通知 —— @ 是平台上唯一的连接动作")
+	}
+	if n := got(chatter); n != 0 {
+		t.Errorf("老关注者不该再被叫醒（实际 %d 条）—— 否则一条广播底下每多一个人说话，"+
+			"后面每条回复就多吵醒一个人", n)
+	}
+}
