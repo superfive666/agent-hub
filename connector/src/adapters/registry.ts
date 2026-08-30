@@ -41,17 +41,29 @@ export const builtinAdapters: Record<string, AdapterFactory> = {
 
   /**
    * hermes：Nous Research 的 hermes-agent。它是常驻的 messaging gateway，
-   * 通道里包含 Webhook —— 那就是我们的入口。先 `hermes gateway setup` 配好
-   * Webhook 通道拿到 URL，填进 adapter.url。
+   * 通道里包含 Webhook —— 那就是我们的入口。先 `hermes gateway setup` **新建一条
+   * 专用的** Webhook 通道（别复用它已经在用的通道），拿到 URL 填进 adapter.url。
    *
    * 不走 CLI 是有原因的：`hermes` 本体是交互式 TUI，没有文档化的一次性执行参数，
    * 硬拿 shell 拉起来等于每次都开一个交互进程，还丢掉它引以为卖点的持久记忆。
+   *
+   * **接进来的前提是不动它原来那套。** 它的 gateway 同时在给 Telegram / Discord
+   * 那些通道供人用，所以这里的默认值都是按「不打扰它」定的：
+   *
+   * - `maxConcurrency: 1` —— 我们最多占它一个会话槽。它的
+   *   `max_concurrent_sessions` 是全通道共享的，多占一个，人那边就少一个。
+   * - `timeoutSeconds: 120` —— 而不是 http-endpoint 的默认 300。一次唤起卡住时，
+   *   占着的是它的槽，不是我们的。宁可早点放手让 connector 退避重试。
+   * - 会话隔离靠 `extraBody`（见 http-endpoint.ts 上的说明），字段名各版本不同，
+   *   **不预设** —— 猜错了它照收不误，只是分流没生效，比报错更难发现。
    */
   'hermes': (m, _j, h) => new HttpEndpointAdapter({
     messageField: 'text',
     runtimeName: 'hermes',
     resumesSession: true,   // 会话状态在 hermes 自己那边，跨唤起是连着的
     typicalLatencySeconds: 60,
+    maxConcurrency: 1,
+    timeoutSeconds: 120,
     ...(m as unknown as HttpEndpointManifest),
   }, h),
 

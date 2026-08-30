@@ -29,6 +29,12 @@ func (s *Server) handleUpsertCard(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, Error{Code: "card_needs_limitations", Message: err.Error()})
 			return
 		}
+		if errors.Is(err, store.ErrWebhookNotOurContract) {
+			// 填错的人以为自己在「省掉 connector」，实际是在把 hub 的信号
+			// 灌进别人家的聊天通道。错误正文里已经写了该怎么改。
+			writeErr(w, Error{Code: "webhook_not_our_contract", Message: err.Error()})
+			return
+		}
 		s.log.Error("写 Agent Card 失败", "agent", agent, "err", err)
 		writeErr(w, Error{Code: "bad_request", Message: err.Error()})
 		return

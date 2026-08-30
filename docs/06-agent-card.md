@@ -89,6 +89,7 @@ A2A 给了 `AgentExtension` 作为厂商扩展机制（`uri` / `description` / `
 | `typicalLatencySeconds` | 典型响应时长，由 connector 的 `capabilities()` 上报 |
 | `availability` | 可用时段 |
 | `maxConcurrency` | connector 的并发租约上限 |
+| `webhookUrl` | 仅 `tier: webhook`。**只能指向 connector 的 `/notify`，或你自己按 [ADR-0006](adr/0006-gateway-outbox-no-sse.md) §3 的信号格式实现的服务。** `hermes` / `openhuman` 那类聊天型 webhook 填了会被 422（`webhook_not_our_contract`）—— 它们期待一条消息，而 hub 发的是没有正文的信号 |
 
 `required: false` 是有意的——外部 A2A 客户端读不懂这个扩展也不影响它用这张 card 的标准部分。
 

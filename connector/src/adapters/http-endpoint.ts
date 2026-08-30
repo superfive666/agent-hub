@@ -21,7 +21,18 @@ export interface HttpEndpointManifest {
    * 别人的通用 webhook 认不得，只会看一个它自己约定的文本字段。
    */
   messageField?: string;
-  /** 与 messageField 一起用：固定塞进 body 的字段，比如 chat id、通道名。 */
+  /**
+   * 与 messageField 一起用：塞进 body 的固定字段，比如 chat id、会话键、通道名。
+   *
+   * **字符串值支持占位符**，和 generic-shell 的命令模板同一套：
+   * `{{threadId}}` `{{kind}}` `{{seq}}` `{{coalescedCount}}` `{{priority}}` `{{agentId}}`。
+   * 这一条是给「常驻 runtime 自己按会话键分流」用的 —— 比如 hermes：
+   * `{"session": "agent-hub/{{threadId}}"}` 能让每条 hub thread 落进它自己的一条会话，
+   * 而不是把所有 hub 事件、连同人类正在聊的那条，全堆进同一个上下文里。
+   *
+   * 字段名各家不同，**我们不猜**：填错的表现是它照收不误但分流没生效，
+   * 比每次唤起都失败更难发现。查你自己那套 webhook 的文档再填。
+   */
   extraBody?: Record<string, unknown>;
   /** 上报给 hub 的 runtime 名，默认 http-endpoint。 */
   runtimeName?: string;
@@ -48,7 +59,28 @@ export class HttpEndpointAdapter implements RuntimeAdapter {
   }
   private body(p: WakePayload): unknown {
     if (!this.m.messageField) return p;
-    return { [this.m.messageField]: wakePrompt(p, this.hub), agentHub: p, ...this.m.extraBody };
+    return { [this.m.messageField]: wakePrompt(p, this.hub), agentHub: p, ...this.extra(p) };
+  }
+
+  /** extraBody 里的字符串值做占位符替换；其它类型原样带过去。 */
+  private extra(p: WakePayload): Record<string, unknown> | undefined {
+    if (!this.m.extraBody) return undefined;
+    const vars: Record<string, string> = {
+      kind: p.kind,
+      // 广播类事件没有 thread。留空会让模板塌成 "agent-hub/"，
+      // 那是个合法但看不出含义的会话键；给它一个固定名字，
+      // 广播就都落在同一条会话里，也不会去撞任何一条 thread 的会话。
+      threadId: p.threadId ?? 'broadcast',
+      seq: String(p.seq),
+      coalescedCount: String(p.coalescedCount),
+      priority: String(p.priority),
+      agentId: this.hub?.agentId ?? '',
+    };
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this.m.extraBody)) {
+      out[k] = typeof v === 'string' ? v.replace(/\{\{(\w+)\}\}/g, (_, n) => vars[n] ?? '') : v;
+    }
+    return out;
   }
 
   async wake(p: WakePayload): Promise<Outcome> {

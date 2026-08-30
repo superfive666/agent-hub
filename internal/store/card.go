@@ -23,6 +23,45 @@ const ProfileExtURI = "https://agent-hub/ext/agent-profile"
 // 而选主 agent 时真正有用的是「它做不了什么」。
 var ErrCardNeedsLimitations = errors.New("Agent Card 必须写明能力边界（不能做什么）")
 
+// ErrWebhookNotOurContract 拦住「把别人家聊天通道的地址填进 webhookUrl」。
+//
+// hub 直连 webhook 时发的是**信号**：`{"agentId":…,"seq":…}`，没有正文，
+// 因为正确性归 inbox（ADR-0006）。对端必须认得这份契约 —— connector 的
+// /notify 端点，或你自己按契约写的服务。
+//
+// 而 hermes / openhuman 那类地址是**聊天型 webhook**：它期待的是一条消息，
+// 拿到我们这份信号只会当成一条没有正文的怪消息，塞进 agent 的会话和记忆里。
+// 对 hermes 尤其要命 —— 那个 gateway 同时在给 Telegram、Discord 那些通道供人用，
+// 我们的信号会落进人家正在用的上下文里。这类 runtime 走 connector 接入：
+// connector 在本机把信号翻译成它认得的消息，hub 全程不需要知道它的地址。
+//
+// 拦在写 Card 的时候而不是投递的时候：投递时跳过是静默的，
+// 填的人会一直以为自己接好了。
+var ErrWebhookNotOurContract = errors.New(
+	"这个 runtime 的 webhook 是聊天通道，不认得 hub 的信号格式：" +
+		"请去掉 webhookUrl，用 connector 接入（tier=longpoll），" +
+		"由 connector 在本机把信号翻译成它认得的消息")
+
+// chatWebhookRuntimes 是「webhook 地址属于别人家聊天通道」的 runtime。
+// 它们的 URL 只能给同机的 connector 用，不能交给 hub。
+var chatWebhookRuntimes = map[string]bool{"hermes": true, "openhuman": true}
+
+// IsChatWebhookRuntime 供投递侧复用同一份名单 —— 两边各写一份迟早会漂。
+func IsChatWebhookRuntime(runtime string) bool { return chatWebhookRuntimes[runtime] }
+
+// ValidateProfile 在写库之前把 Card 里我们认的那部分过一遍。
+//
+// 纯函数：这几条规则跟库没关系，值得在没有库的地方就能测。
+func ValidateProfile(p CardProfile) error {
+	if len(p.Limitations) == 0 {
+		return ErrCardNeedsLimitations
+	}
+	if p.WebhookURL != "" && chatWebhookRuntimes[p.Runtime] {
+		return fmt.Errorf("runtime=%s：%w", p.Runtime, ErrWebhookNotOurContract)
+	}
+	return nil
+}
+
 // CardProfile 是我们塞在 A2A 扩展里的那部分。
 type CardProfile struct {
 	Limitations           []string `json:"limitations"`
@@ -71,8 +110,8 @@ func (s *Store) UpsertCard(ctx context.Context, agent domain.AgentID, doc []byte
 	if err != nil {
 		return 0, err
 	}
-	if len(prof.Limitations) == 0 {
-		return 0, ErrCardNeedsLimitations
+	if err := ValidateProfile(prof); err != nil {
+		return 0, err
 	}
 
 	err = s.inTx(ctx, func(tx *sql.Tx) error {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
+	"strings"
 	"testing"
 	"time"
 
@@ -185,6 +186,38 @@ func TestCardRejectedWithoutLimitations(t *testing.T) {
 	_ = json.Unmarshal(body, &e)
 	if e.Code != "card_needs_limitations" {
 		t.Errorf("错误码 = %q, want card_needs_limitations（要让 agent 知道该补什么）", e.Code)
+	}
+}
+
+// 需求：hermes / openhuman 的 webhook 是**它们自己的**聊天通道 —— hub 直连过去，
+// 那条没有正文的信号会变成一条怪消息，落进 agent 正在跟人用的会话里。
+// 所以写 Card 的时候就当场拒掉，而不是投递时静默跳过：静默跳过的话，
+// 填的人会一直以为自己接好了，而事件一条都不会到。
+func TestChatRuntimeCardRejectsWebhookURL(t *testing.T) {
+	srv, st := newServer(t)
+	_, cred := register(t, srv, st, "herm")
+
+	card := map[string]any{
+		"name": "herm", "description": "跑在 hermes 上的 agent",
+		"capabilities": map[string]any{"extensions": []any{
+			map[string]any{"uri": store.ProfileExtURI + "/v1", "params": map[string]any{
+				"runtime": "hermes", "tier": "webhook",
+				"webhookUrl":  "http://127.0.0.1:8080/webhook/xxx",
+				"limitations": []string{"不碰生产写操作"},
+			}},
+		}},
+	}
+	resp, body := putJSON(t, srv.URL+"/api/agent/me/card", cred, card)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("hermes 声明 webhookUrl 应当 422，实得 %d %s", resp.StatusCode, body)
+	}
+	var e struct{ Code, Message string }
+	_ = json.Unmarshal(body, &e)
+	if e.Code != "webhook_not_our_contract" {
+		t.Errorf("错误码 = %q, want webhook_not_our_contract", e.Code)
+	}
+	if !strings.Contains(e.Message, "connector") {
+		t.Errorf("报错没指出出路（走 connector）: %q", e.Message)
 	}
 }
 

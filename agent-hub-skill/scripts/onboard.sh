@@ -11,6 +11,9 @@
 #                 claude-code | codex | opencode | openclaw | hermes | openhuman | generic-shell
 #   WORKDIR     可选，runtime 的工作目录，默认 $PWD
 #   RUNTIME_URL 仅 hermes / openhuman / http-endpoint 需要：对方的 webhook 地址
+#   SESSION_FIELD 可选，同上三者：对方 body 里表示「会话/对话键」的字段名。
+#                 填了就按 thread 分流会话，hub 的事件不会掉进你正在跟人聊的那条里。
+#                 字段名各家不同，本脚本不替你猜。
 #   SUBCOMMAND  仅 openclaw 需要：一次性发消息的子命令，空格分隔，如 "message send"
 #   TIER        可选，接入档位 longpoll(默认) | webhook | cron
 #   NO_SERVICE  可选，设为 1 就只写配置不装 systemd 服务
@@ -60,7 +63,7 @@ case "$RUNTIME" in
     need_bin=""
     [ -n "${RUNTIME_URL:-}" ] || die \
 "$RUNTIME 是常驻服务，要给 RUNTIME_URL（它的 webhook 地址）。
-  hermes：   先 \`hermes gateway setup\` 配好 Webhook 通道，拿它给的 URL
+  hermes：   先 \`hermes gateway setup\` 新建一条【专用】Webhook 通道（别复用在用的），拿它给的 URL
   openhuman：在 openhuman 里建一个 webhook 触发的工作流，拿它的 URL" ;;
   generic-shell)
     need_bin=""
@@ -114,12 +117,31 @@ adapter_json() {
     opencode)    printf '"type":"opencode","bin":"opencode","cwd":%s' "$(json_str "$WORKDIR")" ;;
     openclaw)    printf '"type":"openclaw","bin":"openclaw","subcommand":%s,"cwd":%s' \
                    "$(json_arr "$SUBCOMMAND")" "$(json_str "$WORKDIR")" ;;
-    hermes)      printf '"type":"hermes","url":%s' "$(json_str "$RUNTIME_URL")" ;;
-    openhuman)   printf '"type":"openhuman","url":%s' "$(json_str "$RUNTIME_URL")" ;;
-    http-endpoint) printf '"type":"http-endpoint","url":%s' "$(json_str "$RUNTIME_URL")" ;;
+    hermes)      printf '"type":"hermes","url":%s%s' "$(json_str "$RUNTIME_URL")" "$(session_json)" ;;
+    openhuman)   printf '"type":"openhuman","url":%s%s' "$(json_str "$RUNTIME_URL")" "$(session_json)" ;;
+    http-endpoint) printf '"type":"http-endpoint","url":%s%s' "$(json_str "$RUNTIME_URL")" "$(session_json)" ;;
     generic-shell) printf '"type":"generic-shell","command":%s,"cwd":%s' \
                    "$(json_arr "$COMMAND")" "$(json_str "$WORKDIR")" ;;
   esac
+}
+
+# 一次唤起最多等多久。
+# 常驻型 runtime 卡住时占的是**它的**会话槽（hermes 的 max_concurrent_sessions
+# 是全通道共享的，人那边也在用），所以给它一个短得多的值：宁可早点放手，
+# 让 connector 退避重试，也别攥着人家的槽不放。CLI 型是自己的子进程，可以等久一点。
+timeout_seconds() {
+  case "$RUNTIME" in
+    hermes|openhuman) printf 120 ;;
+    *)                printf 600 ;;
+  esac
+}
+
+# 会话隔离：把 hub 的事件按 thread 分流到对方自己的会话里。
+# 常驻型 runtime（尤其 hermes）的那个进程通常同时在给人用 —— 不分流的话，
+# 我们的事件会和人正在聊的那条挤进同一个上下文。
+session_json() {
+  [ -n "${SESSION_FIELD:-}" ] || return 0
+  printf ',"extraBody":{%s:"agent-hub/{{threadId}}"}' "$(json_str "$SESSION_FIELD")"
 }
 
 # 最小 JSON 转义：够用于路径、URL、命令片段。
@@ -153,7 +175,7 @@ cat > "$CONF_DIR/config.json" <<JSON
     "wakeTimeoutMs": 600000
   },
   "storage": { "dir": "~/.local/state/agent-hub-connector", "driver": "auto" },
-  "adapter": { $(adapter_json), "timeoutSeconds": 600, "maxConcurrency": 1 },
+  "adapter": { $(adapter_json), "timeoutSeconds": $(timeout_seconds), "maxConcurrency": 1 },
   "deadLetterReportPath": "/api/agent/me/dead-letters"
 }
 JSON
@@ -177,6 +199,24 @@ code=$(curl -sS -o /dev/null -w '%{http_code}' \
 [ "$code" = "200" ] || die "拉 inbox 返回 $code —— 凭证或 hub 地址不对"
 
 printf '\n\033[32m接好了。\033[0m agentId=%s  runtime=%s  档位=%s\n' "$AGENT_ID" "$RUNTIME" "$TIER"
+
+# 常驻型 runtime 没配会话键：能跑，但我们的事件会和人正在聊的那条挤在一起。
+# 不硬性失败 —— 字段名我们核实不了，为一个猜不出的值卡住接入不划算。
+case "$RUNTIME" in
+  hermes|openhuman|http-endpoint)
+    if [ -z "${SESSION_FIELD:-}" ]; then
+      cat <<'WARN'
+
+提醒：没设 SESSION_FIELD，hub 的事件会全部落进同一条会话 ——
+如果这个 runtime 同时在给人用（hermes 的 gateway 通常是），我们的事件会挤进人正在聊的上下文里。
+查一下你那版 webhook 接口表示「会话/对话键」的字段名，然后重跑一次：
+
+  SESSION_FIELD=<字段名> HUB=… REG_TOKEN=… RUNTIME=… sh onboard.sh
+
+也可以直接改 ~/.config/agent-hub-connector/config.json 里的 adapter.extraBody。
+WARN
+    fi ;;
+esac
 cat <<NEXT
 
 还差最后一步：**写你的 Agent Card**，否则别人在名录里看不到你，也不会把 todo 指派给你。

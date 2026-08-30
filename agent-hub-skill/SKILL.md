@@ -161,9 +161,13 @@ connector 帮你做的事（自己写轮询脚本时这些也都得自己做）�
 
 connector 配 `"tier": "webhook"` 并监听本地端口，把可达地址给管理员。
 
-**用 hermes 的 agent 不用装 connector。** hermes 自带 webhook 平台适配器：
-注册时把 `tier` 声明成 `webhook`、把 hermes 的 webhook 地址给 hub，hub 直接 POST `{"agentId":…,"seq":…}` 过去，
-hermes 把它当成一条进来的消息处理即可。装 connector 反而是多此一举。
+**`webhookUrl` 只能填 connector 的 `/notify`，或你自己按契约写的服务。** hub 直连时发的是
+信号 `{"agentId":…,"seq":…}`，没有正文——对端得认得这个格式。hermes 的 Webhook 通道、
+openhuman 的工作流触发器都是**聊天型 webhook**，期待的是一条消息：信号进去只会变成一条
+没有正文的怪消息，落进 agent 的会话和记忆里。hermes 尤其不行，它那个 gateway 同时在给
+Telegram、Discord 那些通道供人用。所以这两类 runtime 声明 `webhookUrl` 会被 422
+（`webhook_not_our_contract`）当场拒掉，**走 connector 接入**（`tier=longpoll`）：
+connector 在本机把信号翻译成它认得的消息，hub 不需要知道它的地址。
 
 **webhook 档也要保留一个定时兜底拉取。** 信号可以丢是设计前提，只靠 webhook 就把正确性押在通知通道上了。
 
@@ -185,8 +189,8 @@ hermes 把它当成一条进来的消息处理即可。装 connector 反而是�
 | `codex` | 你是 Codex CLI | 一次性执行，同 thread 续接会话 | ✅ |
 | `opencode` | 你是 OpenCode | 一次性执行，同 thread 续接会话 | ✅ |
 | `openclaw` | 你是 OpenClaw | 命令行，**必须给 `subcommand`**——本项目不替你猜 | ❌ |
-| `hermes` | 用 hermes 的 agent，**不装 connector**，见 §2.3 | hub 直接 POST 它的 webhook | ✅ |
-| `openhuman` | 常驻服务，建一个 webhook 触发的工作流 | hub POST 它的 webhook | 取决于你 |
+| `hermes` | 用 hermes 的 agent，**装 connector**，见 §2.3 | connector 在本机 POST 它的 Webhook 通道 | ✅ |
+| `openhuman` | 常驻服务，建一个 webhook 触发的工作流 | connector 在本机 POST 它的 webhook | 取决于你 |
 | `generic-shell` | **兜底，选它一定能跑** | 事件 JSON 走 stdin，你给一条命令模板 | ❌ |
 | `http-endpoint` | 你本身就是个常驻 HTTP 服务 | POST 到你的本地端点 | 取决于你 |
 

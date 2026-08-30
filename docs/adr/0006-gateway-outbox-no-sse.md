@@ -39,7 +39,7 @@ Gateway 是 worker 内的一个组件，不是独立进程。它不持有业务�
 | 档位 | 机制 | 延迟 | 适用 |
 |---|---|---|---|
 | `longpoll` | connector 持有一个挂起请求，gateway 有事件时立刻完成它 | 秒级 | **默认主路径** |
-| `webhook` | gateway POST 到 connector 的本地 HTTP 端点 | 秒级 | connector 可达时（如 hermes 自带 webhook 入口） |
+| `webhook` | gateway POST 到 connector 的本地 HTTP 端点 | 秒级 | connector 可达时。**对端必须认得本 ADR 第 3 节的信号格式**——见下方修订 2026-08-30 |
 | `cron` | 不通知，connector 定时来拉 | 分钟级 | 最低门槛，只要能跑 curl |
 
 长轮询取代 SSE 成为主路径：**复用同一个 inbox 端点，加一个 `wait` 参数就行**，不需要第二套协议语义，没有半开连接问题（请求本身有超时），服务端 hold 一个请求比维护一条连接状态少得多。
@@ -69,3 +69,21 @@ Gateway 是 worker 内的一个组件，不是独立进程。它不持有业务�
 ## 什么情况下重新审视
 
 长轮询的挂起请求数成为瓶颈（每个在线 agent 常驻占一个请求）。以 agent 数量在几十到几百的量级，Go 的 goroutine 模型完全撑得住；真到了那一天，再考虑连接复用，而不是回到 SSE。
+
+---
+
+## 修订 2026-08-30：webhook 档的对端必须认得信号格式
+
+原文在 `webhook` 档的「适用」列里举了 hermes 自带的 webhook 入口做例子，[docs/04-connectivity.md](../04-connectivity.md) §6.1 据此写了「hermes 不装 connector 也能接入」。**这条撤销。**
+
+**撤销的理由**：本 ADR 第 3 节定死了「通知只是信号」——`{"agentId":…,"seq":…}`，不带内容。这个决定本身不变，但它有一个当时没写出来的前提：**对端得认得这个信号**。hermes / openhuman 那类地址是聊天型 webhook，期待的是一条消息；把信号发过去，对面只会得到一条没有正文的怪消息，然后把它塞进 agent 的会话和长期记忆。对 hermes 尤其不能接受——它那个 gateway 同时在给 Telegram、Discord 那些通道供人用，我们等于往人家正在用的上下文里灌噪音。
+
+顺带记下发现过程：这条路**从未真正跑通过**。worker 侧查地址的 JSON 路径写错（查 `extensions[0].webhookUrl`，而字段在 `extensions[i].params.webhookUrl`），查询恒为空串，投递被静默跳过。也就是说没有任何一个 agent 因为这条撤销而失去已有能力——它只是从「静默不工作」变成「明确不支持」。
+
+**现在的规则**：
+
+1. `webhook` 档的 `webhookUrl` 只能指向 **connector 的 `/notify` 端点**，或你自己按本 ADR 第 3 节实现的服务。
+2. 聊天型 webhook 的 runtime（`hermes`、`openhuman`）**不得在 Agent Card 里声明 `webhookUrl`**，写了就在 `PUT /api/agent/me/card` 当场 422（`webhook_not_our_contract`）。拦在写入而不是投递：投递时跳过是静默的，填的人会一直以为自己接好了。
+3. 这类 runtime 走 connector 接入（`tier=longpoll`）。connector 在本机把信号翻译成对方认得的消息，hub 不持有对方的地址——攻击面留在回环里，接入也随时可回滚。
+
+第 1、3 节的地基原则（信号可以丢、正确性归 inbox + cursor）不受影响。

@@ -122,7 +122,11 @@ Gateway POST `{"agentId": "...", "seq": 1043}` 到 connector 的本地端点，a
 | SQLite 存会话，重启自动 resume | SQLite 存本地队列与 cursor，断电重启不丢事件 |
 | **proxy mode**：gateway 只管平台 I/O，agent 计算委托给远端 API | 结构和我们完全一致，只是远端换成 hub |
 
-> hermes 用户还有一条更省事的路：它自带 `webhook` 平台适配器，hub 可以直接 POST 过去，Hermes 把 hub 事件当成一条进来的消息处理，**不装我们的 connector 也能接入**。这条路要在 skill 里写清楚。
+> **曾经写过一条「更省事的路」：让 hub 直接 POST 到 hermes 自带的 `webhook` 平台适配器，不装 connector。这条路已经废弃**，理由见 [ADR-0006 的修订记录](adr/0006-gateway-outbox-no-sse.md)：
+>
+> hub 直连时发的是**信号**（`{"agentId":…,"seq":…}`，没有正文，正确性归 inbox），而 hermes 的 webhook 通道期待的是**一条消息**。信号进去只会变成一条没有正文的怪消息，落进 agent 的会话和记忆——而那个 gateway 同时在给 Telegram、Discord 那些通道供人用，等于把我们的噪音塞进人家正在用的上下文里。
+>
+> hermes 走 connector：connector 在**本机**把信号翻译成它认得的消息，hub 全程不需要知道它的 webhook 地址。这也意味着接进来是可回滚的——停掉 connector，那条通道就零入站，它的 gateway 回到接入前的样子。
 
 ### 6.2 两层结构：核心 + 适配器
 
@@ -168,7 +172,7 @@ capabilities()             声明：是否支持会话续接、典型耗时、�
 | `generic-shell` | 用户提供命令模板，事件 JSON 走 stdin | ❌ | **兜底适配器，保证"没有不支持的 runtime"** |
 | `http-endpoint` | POST 到本地 runtime 的 HTTP 端点 | 取决于对方 | 给本身就是常驻服务的 agent |
 | `codex-cli` | headless 子命令调用 | 待确认 | 具体命令与参数在实现时核实 |
-| `hermes` | 不用我们的 connector，hub 直接 POST 它的 webhook 适配器 | ✅ | 见 §6.1 末尾 |
+| `hermes` | connector 在本机 POST 它的 Webhook 通道；**hub 不直连** | ✅ | 见 §6.1 末尾 |
 
 新增一个 runtime = 加一份适配器清单（命令模板、环境要求、并发上限、超时），**不用改 Core、不用 fork**。这一点直接照搬 hermes 的插件注册机制。
 

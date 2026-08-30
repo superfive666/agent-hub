@@ -162,7 +162,12 @@ describe('需求：openclaw 的子命令必须显式配置，不猜', () => {
 });
 
 describe('需求：常驻型 runtime 走 webhook，body 要塑成对方认得的形状', () => {
-  async function captureBody(type: string, over: Record<string, unknown> = {}) {
+  async function captureBody(
+    type: string,
+    over: Record<string, unknown> = {},
+    payloadOver: Partial<WakePayload> = {},
+    hub?: { baseUrl: string; agentId?: string; tokenEnv: string },
+  ) {
     const bodies: unknown[] = [];
     const srv = createServer((req, res) => {
       let b = ''; req.on('data', (d) => { b += d; });
@@ -171,8 +176,8 @@ describe('需求：常驻型 runtime 走 webhook，body 要塑成对方认得的
     await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
     const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/hook`;
     const dir = scratch();
-    const a = createAdapter({ type, url, ...over } as never, openJournal(dir, 'auto'));
-    const out = await a.wake(payload());
+    const a = createAdapter({ type, url, ...over } as never, openJournal(dir, 'auto'), hub);
+    const out = await a.wake(payload(payloadOver));
     await new Promise<void>((r) => srv.close(() => r()));
     return { out, body: bodies[0] as Record<string, unknown>, caps: a.capabilities() };
   }
@@ -194,6 +199,37 @@ describe('需求：常驻型 runtime 走 webhook，body 要塑成对方认得的
   test('extraBody 会被合进去，用来带 chat id 这类固定字段', async () => {
     const { body } = await captureBody('hermes', { extraBody: { chatId: 'C-1' } });
     assert.equal(body.chatId, 'C-1');
+  });
+
+  /**
+   * 会话隔离是「接进来但不打扰它原来那套」的关键一条：hermes 的 gateway 同时
+   * 在给 Telegram、Discord 那些通道供人用，hub 的事件不能掉进人正在聊的那条会话里。
+   * 会话键的字段名各版本不同，所以我们只提供占位符，不预设字段名。
+   */
+  test('extraBody 的字符串值支持占位符 —— 每条 thread 落进对方自己的一条会话', async () => {
+    const { body } = await captureBody('hermes', {
+      extraBody: { session: 'agent-hub/{{threadId}}', channel: 'agent-hub', keep: 1 },
+    });
+    assert.equal(body.session, 'agent-hub/t1');
+    assert.equal(body.channel, 'agent-hub');
+    // 非字符串原样带过去，不要把数字替换成字符串。
+    assert.equal(body.keep, 1);
+  });
+
+  test('广播没有 threadId，会话键不能塌成半截 —— 否则一堆事件挤进一个没名字的会话', async () => {
+    const { body } = await captureBody(
+      'hermes',
+      { extraBody: { session: 'agent-hub/{{threadId}}' } },
+      { threadId: undefined, kind: 'tweet.published' },
+    );
+    assert.equal(body.session, 'agent-hub/broadcast');
+  });
+
+  test('{{agentId}} 取自 hub 线索，多身份共用一个 runtime 时靠它分流', async () => {
+    const { body } = await captureBody('hermes', { extraBody: { session: '{{agentId}}' } }, {}, {
+      baseUrl: 'http://127.0.0.1:1', agentId: 'a-42', tokenEnv: 'AGENT_HUB_TOKEN',
+    });
+    assert.equal(body.session, 'a-42');
   });
 
   test('不填 messageField 时原样 POST WakePayload —— 自己写的服务认得我们的字段', async () => {
@@ -224,6 +260,20 @@ describe('需求：注册表覆盖五个新 runtime', () => {
     for (const type of ['claude', 'claude-cli', 'claude-code']) {
       assert.equal(createAdapter({ type } as never, j).capabilities().runtime, 'claude-code', type);
     }
+  });
+
+  /**
+   * hermes 的 max_concurrent_sessions 是全通道共享的：我们多占一个槽，
+   * 人在 Telegram 那边就少一个。默认只占一个，且用户能自己调高。
+   */
+  test('hermes 默认只占它一个会话槽，用户显式配置能覆盖', () => {
+    const j = openJournal(scratch(), 'auto');
+    const url = 'http://127.0.0.1:1/x';
+    assert.equal(createAdapter({ type: 'hermes', url } as never, j).capabilities().maxConcurrency, 1);
+    assert.equal(
+      createAdapter({ type: 'hermes', url, maxConcurrency: 3 } as never, j).capabilities().maxConcurrency,
+      3,
+    );
   });
 
   test('不认识的 runtime 报错时要把可选值列出来，否则用户只能猜', () => {

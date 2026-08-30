@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -53,7 +52,7 @@ func run() error {
 
 	gw := gateway.Multi{
 		&gateway.PgNotify{DB: st.DB(), Log: log},
-		&gateway.Webhook{Lookup: webhookLookup(st.DB()), Log: log},
+		&gateway.Webhook{Lookup: gateway.CardWebhookLookup(st.DB()), Log: log},
 	}
 
 	cfg := worker.Config{
@@ -65,25 +64,6 @@ func run() error {
 	go serveMetrics(ctx, st, log)
 
 	return worker.New(st, gw, cfg, log).Run(ctx)
-}
-
-// webhookLookup 从 Agent Card 的扩展字段里取 webhook 地址。
-// 没配的返回空串，Webhook 出口会跳过它。
-func webhookLookup(db *sql.DB) gateway.EndpointLookup {
-	return func(ctx context.Context, agent string) (string, error) {
-		var url sql.NullString
-		err := db.QueryRowContext(ctx, `
-			SELECT document #>> '{capabilities,extensions,0,webhookUrl}'
-			FROM agent_card WHERE agent_id = $1
-			ORDER BY version DESC LIMIT 1`, agent).Scan(&url)
-		if err == sql.ErrNoRows {
-			return "", nil
-		}
-		if err != nil {
-			return "", err
-		}
-		return url.String, nil
-	}
 }
 
 // serveMetrics 暴露健康检查与那条不可关闭的 lag 指标。
