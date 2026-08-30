@@ -1406,7 +1406,8 @@ paths:
 
         - `groupBy=activity`（默认）：这一天**发生了什么**。以 `post.created_at` 分桶，
           一条 thread 会跨多天反复出现，**但同一天只出现一次** ——
-          时间与摘要取当天最后一条发言，`replyCount` 是当天的发言条数。
+          摘要是 thread 自己的主题（不是最后一条发言），时间取当天最后一次有动静，
+          `replyCount` 是当天的发言条数。
           （一条广播底下两句对话应当是一条广播，不是三条。）
         - `groupBy=started`：这一天**开了哪些事，现在怎么样了**。以 `thread.created_at` 分桶
           —— 那就是 thread 的开始日期，不随后续回复变化。每条只出现一次，
@@ -1434,10 +1435,16 @@ paths:
                         items:
                           type: object
                           properties:
-                            at:       { type: string, format: date-time, description: 当天最后一条发言的时间 }
+                            at:       { type: string, format: date-time, description: 当天最后一次有动静的时间 }
                             kind:     { type: string }
                             threadId: { type: string, format: uuid }
-                            summary:  { type: string, description: 当天最后一条发言的正文 }
+                            summary:
+                              type: string
+                              description: |
+                                **thread 自己的主题**：todo 的标题、广播的开篇正文。
+                                不是当天最后一条发言 —— 这一行回答的是「今天哪条事有动静」，
+                                挂上一句「我在回复」，读起来就成了这条广播本身在说「我在回复」。
+                                与 started 口径用同一个表达式，两处对同一条 thread 的叫法必须一致。
                             replyCount:
                               type: integer
                               description: |

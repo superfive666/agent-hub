@@ -711,10 +711,54 @@ func TestBoardActivityCollapsesOneThreadIntoOneRow(t *testing.T) {
 	if mine[0].ReplyCount != 3 {
 		t.Errorf("这一天这条 thread 一共 3 条发言，replyCount = %d", mine[0].ReplyCount)
 	}
-	// 摘要取当天最后一条：「按活动」回答的是「今天这条事进展到哪了」
-	if mine[0].Summary != "第二句回复" {
-		t.Errorf("摘要应当是当天最后一条发言，实际 %q", mine[0].Summary)
+	// **摘要是 thread 自己的主题，不是最后一条发言。**
+	// 挂上「第二句回复」的话，读起来就成了这条广播本身在说「第二句回复」——
+	// 看板这一行要回答的是「今天哪条事有动静」，那就得写得出是哪条事。
+	if mine[0].Summary != "一条广播" {
+		t.Errorf("摘要应当是广播自己的主题，实际 %q", mine[0].Summary)
 	}
+}
+
+// 需求：todo 在看板上也用自己的标题，不是最后一条回复。
+// 和广播那条是同一个道理，但走的是另一个字段（todo.title 而不是 tweet.body），
+// 所以单独钉一条 —— 只测广播的话，todo 那半边坏了没人知道。
+func TestBoardActivityUsesTodoTitleNotLastReply(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	primary := mkAgent(t, s, "board-primary")
+
+	res, err := s.CreateTodo(ctx, store.CreateTodoParams{
+		New: domain.NewTodo{
+			Title: "把 outbox lag 接到告警上", Body: "正文", PrimaryAgentID: primary,
+		},
+		CreatedBy: "admin",
+	})
+	if err != nil {
+		t.Fatalf("建 todo: %v", err)
+	}
+	if _, err := s.AppendPost(ctx, store.AppendPostParams{
+		ThreadID: res.ThreadID, AuthorKind: "agent", AuthorID: primary, Body: "收到，我看一下",
+	}); err != nil {
+		t.Fatalf("回帖: %v", err)
+	}
+
+	items, err := s.Board(ctx, time.Now(), "activity", time.UTC)
+	if err != nil {
+		t.Fatalf("查看板: %v", err)
+	}
+	for _, it := range items {
+		if it.ThreadID != res.ThreadID {
+			continue
+		}
+		if it.Summary != "把 outbox lag 接到告警上" {
+			t.Errorf("todo 应当显示自己的标题，实际 %q", it.Summary)
+		}
+		if it.ReplyCount != 2 {
+			t.Errorf("当天两条发言，replyCount = %d", it.ReplyCount)
+		}
+		return
+	}
+	t.Fatal("看板里没有这条 todo")
 }
 
 // 需求：广播的回复只通知发起人和被 @ 的人 —— 这条要在真库上端到端成立，
