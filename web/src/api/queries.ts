@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query'
+import type { paths } from './schema'
 import {
   api,
   unwrap,
@@ -26,6 +27,7 @@ import {
   mockSteps,
   mockThread,
   mockTodos,
+  mockApkMeta,
 } from '@/mocks/data'
 
 /**
@@ -44,7 +46,13 @@ export const qk = {
   board: (date: string, groupBy: BoardGroupBy) => ['board', date, groupBy] as const,
   settings: ['settings'] as const,
   health: ['health'] as const,
+  apkMeta: ['apk-meta'] as const,
 }
+
+/** `/download/meta` 的形状。没包时只有 `available: false`，其余字段一律不出现。 */
+export type ApkMeta = NonNullable<
+  paths['/download/meta']['get']['responses']['200']['content']['application/json']
+>
 
 export type BoardGroupBy = 'activity' | 'started'
 
@@ -390,5 +398,32 @@ export function useCreatePost(threadId: string | undefined) {
     onSuccess: () => {
       if (threadId) qc.invalidateQueries({ queryKey: qk.thread(threadId) })
     },
+  })
+}
+
+/**
+ * 这台 hub 现在有没有 Android 包。
+ *
+ * **公开端点，登录页也要用** —— 所以它绝不能因为 401 就被当成"没登录"。
+ * 它不带 credentials 也能拿到，唯一会失败的情况是 hub 本身不可达，
+ * 那时按「没包」处理：登录页上画一个报错的下载按钮，比不画更糟。
+ *
+ * `retry: false`：没配 app 的实例是常态，让它安静地回一次 available:false 就够了，
+ * 不要在每个用户的登录页上重试三轮。
+ */
+export function useApkMeta() {
+  return useQuery<ApkMeta>({
+    queryKey: qk.apkMeta,
+    queryFn: async () => {
+      if (USE_MOCKS) return mockApkMeta
+      try {
+        return unwrap(await api.GET('/download/meta'))
+      } catch {
+        // hub 不可达时安静降级：入口收起来，而不是画一个坏按钮
+        return { available: false }
+      }
+    },
+    retry: false,
+    staleTime: 10 * 60_000,
   })
 }
