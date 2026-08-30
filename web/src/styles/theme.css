@@ -28,6 +28,12 @@
             inset 0 -32px 56px -34px rgba(30,95,130,.36),
             0 40px 80px -34px rgba(8,45,70,.52),0 2px 12px -5px rgba(8,45,70,.24);
   --inset-bg:rgba(255,255,255,.55); --inset-bd:rgba(255,255,255,.78);
+  /* 浮层菜单（@ 提及下拉这种）。**故意不透明** —— 它悬在正文和输入框上方，
+     底下是密排的文字，毛玻璃会把两层字叠在一起，名字变得要辨认而不是一眼看到。
+     玻璃感是给「面板」的语言，不是给「读一行选一行」的列表的。 */
+  --menu-bg:rgb(252,253,255); --menu-bd:rgba(120,165,190,.30);
+  --menu-sh:0 18px 44px -18px rgba(8,45,70,.42),0 2px 8px -3px rgba(8,45,70,.20);
+  --menu-hit:rgba(90,150,175,.13);
   /* 输入框：**唯一的区别是它不透明**，颜色就是原来那层半透明白叠出来的效果
      （在渲染结果上取的色），所以看上去和原来一样，只是底下的东西透不上来了。 */
   --composer-bg:rgb(250,251,253);
@@ -65,6 +71,10 @@
   --pane-sh:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -28px 50px -36px rgba(255,255,255,.14),
             0 44px 96px -44px #000,0 0 74px -24px var(--aura);
   --inset-bg:rgba(255,255,255,.028); --inset-bd:rgba(255,255,255,.06);
+  /* 同上：暗色下也是实底。这里比 composer 再亮一档，浮层要"浮"在输入框之上 */
+  --menu-bg:rgb(30,36,42); --menu-bd:rgba(255,255,255,.13);
+  --menu-sh:0 22px 52px -20px #000,0 2px 10px -4px #000;
+  --menu-hit:rgba(255,255,255,.08);
   /* 暗色下 .028 的白几乎等于没有，输入框根本看不出边界。抬到 .085，
      描边也一起抬 —— 这是要让人一眼看到「这里能打字」。 */
   --composer-bg:rgb(36,43,46);
@@ -267,6 +277,30 @@
   .mono{font-family:var(--mono)}
   .sep{height:1px;background:var(--hair2)}
   .lbl{font:800 10px/1 var(--ui);letter-spacing:.1em;color:var(--ink3);text-transform:uppercase}
+
+  /* ═══ @ 提及的 inline popover ═══
+     两条设计决定，都不是审美：
+     1) **它贴在光标底下**，不是贴在输入框边上。位置由 JS 量出来写进 style.left/top
+        （见 lib/caret.ts）—— 眼睛不用离开正在打字的地方。
+     2) **实底，没有 backdrop-filter。** 玻璃是「面板」的语言；这块浮在正文之上，
+        底下全是密排的字，透上来会和候选人名字叠在一起，变成要辨认而不是一眼看到。
+        §1.3 那条同理：特效得表达点什么，这里它只制造噪音。 */
+  .mention-pop{position:fixed;z-index:80;width:min(280px,100%);overflow:hidden;
+    border-radius:14px;background:var(--menu-bg);border:1px solid var(--menu-bd);
+    box-shadow:var(--menu-sh);animation:pop-in .12s var(--ease) both}
+  @keyframes pop-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+  .mention-pop-hd{padding:8px 12px 6px;font:800 9.5px/1 var(--ui);letter-spacing:.09em;
+    color:var(--ink3);text-transform:uppercase;border-bottom:1px solid var(--hair2)}
+  .mention-pop-item{display:flex;width:100%;align-items:center;gap:9px;padding:7px 12px;
+    text-align:left;background:transparent;border:0;cursor:pointer}
+  .mention-pop-item:hover{background:var(--menu-hit)}
+  /* 键盘选中和鼠标悬停用同一个底色，但键盘那条再加一道左标 ——
+     一眼看出「回车会选中哪一条」，光靠底色在两条都亮着时分不清。 */
+  .mention-pop-item[aria-selected="true"]{background:var(--menu-hit);
+    box-shadow:inset 2px 0 0 var(--agent)}
+  .mention-pop-name{display:block;font:600 12.5px/1.1 var(--ui);color:var(--ink)}
+  .mention-pop-sub{display:block;margin-top:3px;font:500 9.5px/1 var(--ui);color:var(--ink3)}
+  .mention-pop-lat{margin-left:auto;font:500 9.5px/1 var(--ui);color:var(--ink3);white-space:nowrap}
   .in{background:var(--inset-bg);border:1px solid var(--inset-bd);border-radius:var(--r-pill);
     padding:13px 20px;font:600 13px/1.5 var(--ui);color:var(--ink);box-shadow:var(--inset-sh);
     transition:.28s var(--ease)}
