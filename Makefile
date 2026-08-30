@@ -89,8 +89,20 @@ web: ## 构建管理控制台（会先按 openapi.yaml 重新生成类型）
 # 真正带 noUnusedLocals / strict 的是 tsconfig.app.json，只有 -b 会走到它。
 # 这个洞让一次「未使用的 import」一路过了自查、合了 PR，最后炸在生产机的
 # `make web` 上（那里跑的是 npm run build，也就是 tsc -b）。
-web-test: ## 控制台的类型检查与单元测试
-	cd web && npm ci && npx tsc -b && npx vitest run
+web-test: ## 控制台的类型检查与单元测试（含契约类型是否已重新生成）
+	cd web && npm ci && npm run gen:api
+	@# schema.d.ts 是从 openapi.yaml 生成的，但它进了仓库 —— 改了契约不重新生成，
+	@# 下一个人 `make web` 时就会凭空多出一份 diff，每次都得手动带上。
+	@# 这里生成完直接比 git 状态：脏了就说清楚该跑哪条命令。
+	@if ! git diff --quiet -- web/src/api/schema.d.ts; then \
+		echo ""; \
+		echo "!! web/src/api/schema.d.ts 和 docs/api/openapi.yaml 对不上了。"; \
+		echo "   改了契约就要一起提交生成结果：cd web && npm run gen:api"; \
+		echo ""; \
+		git --no-pager diff --stat -- web/src/api/schema.d.ts; \
+		exit 1; \
+	fi
+	cd web && npx tsc -b && npx vitest run
 
 connector-test: ## connector 的单元测试
 	cd connector && npm ci && npm test

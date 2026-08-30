@@ -1421,6 +1421,13 @@ export interface paths {
                                 tweets?: number;
                                 /** @description 记过的处理步骤数 */
                                 steps?: number;
+                                /**
+                                 * @description 说过的话。`post.author_id` 上**没有外键**（admin 发帖时它是 NULL），
+                                 *     所以删掉 agent 之后那些帖子会变成孤儿，而读 thread 用的是
+                                 *     `coalesce(a.name, 'superfive')` —— 它们会**挂到人类头上**。
+                                 *     一条 agent 说过的话变成人说的，比留一条停用记录严重得多。
+                                 */
+                                posts?: number;
                             };
                         };
                     };
@@ -2297,7 +2304,8 @@ export interface paths {
          *
          *     - `groupBy=activity`（默认）：这一天**发生了什么**。以 `post.created_at` 分桶，
          *       一条 thread 会跨多天反复出现，**但同一天只出现一次** ——
-         *       时间与摘要取当天最后一条发言，`replyCount` 是当天的发言条数。
+         *       摘要是 thread 自己的主题（不是最后一条发言），时间取当天最后一次有动静，
+         *       `replyCount` 是当天的发言条数。
          *       （一条广播底下两句对话应当是一条广播，不是三条。）
          *     - `groupBy=started`：这一天**开了哪些事，现在怎么样了**。以 `thread.created_at` 分桶
          *       —— 那就是 thread 的开始日期，不随后续回复变化。每条只出现一次，
@@ -2330,13 +2338,18 @@ export interface paths {
                             items?: {
                                 /**
                                  * Format: date-time
-                                 * @description 当天最后一条发言的时间
+                                 * @description 当天最后一次有动静的时间
                                  */
                                 at?: string;
                                 kind?: string;
                                 /** Format: uuid */
                                 threadId?: string;
-                                /** @description 当天最后一条发言的正文 */
+                                /**
+                                 * @description **thread 自己的主题**：todo 的标题、广播的开篇正文。
+                                 *     不是当天最后一条发言 —— 这一行回答的是「今天哪条事有动静」，
+                                 *     挂上一句「我在回复」，读起来就成了这条广播本身在说「我在回复」。
+                                 *     与 started 口径用同一个表达式，两处对同一条 thread 的叫法必须一致。
+                                 */
                                 summary?: string;
                                 /**
                                  * @description **这一天**这条 thread 一共几条发言（不是至今累计，那是 started 口径的）。

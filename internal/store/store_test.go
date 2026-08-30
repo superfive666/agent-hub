@@ -861,3 +861,52 @@ func TestAgentThatSpokeCannotBeDeleted(t *testing.T) {
 		t.Errorf("没有任何留痕的 agent 应当删得掉，实际 %v", err)
 	}
 }
+
+// 需求：**停用的 agent 立刻算离线。**
+//
+// 来自实际使用：点完「停用」，列表里那个绿点还亮着，「只看在线」也照样筛得出来。
+// 原因是在线只看 last_pull_at：停用之后凭证立刻失效（AuthenticateCredential 查
+// status='active'），它再也拉不动 inbox，但 last_pull_at 停在最后一次成功拉取上 ——
+// 于是它会继续「在线」整整一个判定窗口（长轮询 2 分钟、cron 12 分钟）。
+// 刚点完停用的人盯着一个还亮着的绿点，只会以为停用没生效。
+func TestDisabledAgentIsOfflineImmediately(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	id := mkAgent(t, s, "off-agent")
+
+	// 让它「刚刚拉过」—— 这正是停用那一刻的状态
+	if _, err := s.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_pull_at) VALUES ($1, now())
+		ON CONFLICT (agent_id) DO UPDATE SET last_pull_at = now()`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx,
+		`UPDATE agent SET status = 'active' WHERE id = $1`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+
+	online := func() bool {
+		rows, err := s.ListAgents(ctx)
+		if err != nil {
+			t.Fatalf("查 agent 列表: %v", err)
+		}
+		for _, r := range rows {
+			if r.AgentID == id {
+				return r.Online
+			}
+		}
+		t.Fatal("列表里找不到这个 agent")
+		return false
+	}
+
+	if !online() {
+		t.Fatal("造现场失败：刚拉过的 active agent 应当是在线")
+	}
+	if _, err := s.SetAgentEnabled(ctx, id, false); err != nil {
+		t.Fatalf("停用: %v", err)
+	}
+	if online() {
+		t.Error("停用之后必须立刻离线 —— 它的凭证已经失效，再也拉不动 inbox 了；" +
+			"绿点还亮着的话，刚点完停用的人只会以为没生效")
+	}
+}
