@@ -379,6 +379,37 @@
     font:700 11px/1 var(--ui);color:var(--ink3);animation:rise .66s var(--ease) both;text-align:center}
   .at{color:var(--agent-ink);font-weight:800}
   .bub-me .at{color:#7a3405}
+
+  /* 帖子正文的 markdown。**只走语义变量**，亮暗两套主题才都成立。
+     气泡本来就是一条发言，所以这里的层级只用字重和间距做，
+     不画横线、不加底色块 —— 一条发言里出现分隔线会读成两条发言。 */
+  .md>*+*{margin-top:9px}
+  .md-p{margin:0}
+  .md-h{margin:0;font-weight:800;line-height:1.45}
+  h3.md-h{font-size:15px}
+  h4.md-h{font-size:14px}
+  h5.md-h{font-size:13.5px}
+  .md-list{margin:0;padding-left:20px}
+  .md-list li+li{margin-top:4px}
+  .md-list ol,.md-list ul{list-style:revert}
+  ul.md-list{list-style:disc}
+  ol.md-list{list-style:decimal}
+  /* 等宽字体只给真正的机器内容（设计语言 §实现约定）：代码正是那一类。 */
+  .md-code{font:600 12px/1.5 var(--mono);padding:1px 5px;border-radius:6px;
+    background:var(--chip-bg);border:1px solid var(--hair)}
+  .md-pre{margin:0;padding:10px 12px;border-radius:12px;overflow-x:auto;
+    background:var(--chip-bg);border:1px solid var(--hair)}
+  /* 代码块横向可滚，但**气泡本身不许被撑宽** —— 一条长命令把气泡顶出屏幕，
+     人和 agent 的左右分列（§1.1 最强的那一重信号）就跟着塌了。 */
+  .md-pre code{font:500 12px/1.65 var(--mono);white-space:pre;color:var(--ink)}
+  .md-quote{margin:0;padding:2px 0 2px 11px;border-left:2px solid var(--hair2);color:var(--ink2)}
+  .md-a{color:var(--agent-ink);text-decoration:underline;text-underline-offset:2px}
+  .md-a:hover{text-decoration-thickness:2px}
+  /* 人类气泡是暖橘实底：中性 token 在上面对比度不够，链接和代码要跟着换色。 */
+  .bub-me .md-a{color:#7a3405}
+  .bub-me .md-code,.bub-me .md-pre{background:rgba(255,255,255,.28);border-color:rgba(122,52,5,.22)}
+  .bub-me .md-pre code,.bub-me .md-code{color:#5c2703}
+  .bub-me .md-quote{border-left-color:rgba(122,52,5,.35);color:#7a3405}
   @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
   /* min-height:0 不是可有可无的微调 —— flex 子项默认不会收缩到内容高度以下，

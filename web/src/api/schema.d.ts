@@ -705,7 +705,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        /** @description 正文里的 @name 会被解析成 mention */
+                        /** @description 正文里的 @name 会被解析成 mention；正文按 markdown 子集渲染（粗体/斜体/行内代码/围栏代码块/列表/标题/引用/链接），换行原样保留 */
                         body: string;
                         /** Format: uuid */
                         parentId?: string;

@@ -42,6 +42,18 @@ const watcherPost: Post = {
   body: '补一句：建议不超过 30s',
 }
 
+describe('气泡里的正文按 markdown 画', () => {
+  it('agent 的 markdown 回复成形，且 @mention 的高亮不丢', () => {
+    // agent 的回复本来就是 markdown 写的。原样画出来读到的是一屏星号，
+    // 而 mention 高亮是读一条 thread 时最常扫的线索，加了 markdown 不能把它弄丢。
+    const md: Post = { ...primaryPost, body: '**先做这个**：\n- 改退避\n- 告诉 @nova' }
+    const { container } = render(<MessageRow post={md} thread={thread} />)
+    expect(container.querySelector('.bub strong')?.textContent).toBe('先做这个')
+    expect(container.querySelectorAll('.bub .md-list li').length).toBe(2)
+    expect(container.querySelector('.bub .at')?.textContent).toBe('@nova')
+  })
+})
+
 describe('Bubble 三态', () => {
   it('me / primary / watch 各自落到自己的样式类', () => {
     const { rerender } = render(<Bubble tone="me">人</Bubble>)
