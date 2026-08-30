@@ -30,9 +30,18 @@ type AgentRefs struct {
 	Todos  int `json:"todos"`
 	Tweets int `json:"tweets"`
 	Steps  int `json:"steps"`
+	// Posts 是它说过的话。**这一项最容易漏，也最不能漏**：
+	// post.author_id 没有外键（admin 发帖时它是 NULL，加不了 NOT NULL 的引用），
+	// 所以删掉 agent 之后那些 post 会变成孤儿 —— 而读 thread 的查询是
+	// `coalesce(a.name, 'superfive')`，孤儿帖会**挂到人类头上**。
+	// 设计语言 §1.1 的第一条就是「人和 agent 必须一眼分得开」，
+	// 一条 agent 说过的话变成人说的，比留一条停用记录严重得多。
+	Posts int `json:"posts"`
 }
 
-func (r AgentRefs) any() bool { return r.Todos > 0 || r.Tweets > 0 || r.Steps > 0 }
+func (r AgentRefs) any() bool {
+	return r.Todos > 0 || r.Tweets > 0 || r.Steps > 0 || r.Posts > 0
+}
 
 // UpdateAgentPurpose 改简介。
 //
@@ -102,13 +111,19 @@ func (s *Store) SetAgentEnabled(ctx context.Context, agent domain.AgentID, enabl
 }
 
 // CountAgentRefs 数一个 agent 在内容里的留痕。
+// countRefsSQL 只写一份。**这条查询原本抄了两份**（CountAgentRefs 一份、
+// DeleteAgent 事务里一份），于是给一处加了 post 计数、另一处没加 ——
+// 界面说「删不了，它有 1 条发言」，真去删却删成功了。抄两份的代价就是这个。
+const countRefsSQL = `
+	SELECT (SELECT count(*) FROM todo      WHERE primary_agent_id = $1),
+	       (SELECT count(*) FROM tweet     WHERE author_agent_id  = $1),
+	       (SELECT count(*) FROM todo_step WHERE actor_agent_id   = $1),
+	       (SELECT count(*) FROM post      WHERE author_id        = $1)`
+
 func (s *Store) CountAgentRefs(ctx context.Context, agent domain.AgentID) (AgentRefs, error) {
 	var r AgentRefs
-	err := s.db.QueryRowContext(ctx, `
-		SELECT (SELECT count(*) FROM todo      WHERE primary_agent_id = $1),
-		       (SELECT count(*) FROM tweet     WHERE author_agent_id  = $1),
-		       (SELECT count(*) FROM todo_step WHERE actor_agent_id   = $1)`,
-		string(agent)).Scan(&r.Todos, &r.Tweets, &r.Steps)
+	err := s.db.QueryRowContext(ctx, countRefsSQL,
+		string(agent)).Scan(&r.Todos, &r.Tweets, &r.Steps, &r.Posts)
 	if err != nil {
 		return r, fmt.Errorf("数 agent 留痕: %w", err)
 	}
@@ -135,11 +150,8 @@ func (s *Store) DeleteAgent(ctx context.Context, agent domain.AgentID) (AgentRef
 			}
 			return fmt.Errorf("查 agent: %w", err)
 		}
-		if err := tx.QueryRowContext(ctx, `
-			SELECT (SELECT count(*) FROM todo      WHERE primary_agent_id = $1),
-			       (SELECT count(*) FROM tweet     WHERE author_agent_id  = $1),
-			       (SELECT count(*) FROM todo_step WHERE actor_agent_id   = $1)`,
-			string(agent)).Scan(&refs.Todos, &refs.Tweets, &refs.Steps); err != nil {
+		if err := tx.QueryRowContext(ctx, countRefsSQL,
+			string(agent)).Scan(&refs.Todos, &refs.Tweets, &refs.Steps, &refs.Posts); err != nil {
 			return fmt.Errorf("数 agent 留痕: %w", err)
 		}
 		if refs.any() {

@@ -93,7 +93,7 @@ var once sync.Once
 // 判据不是「库叫什么名字」（生产和开发很可能都叫 agenthub），而是
 // **这个库里有没有别人的数据**：
 //
-//   - platform_config 里打过测试标记 → 是我们自己的测试库，放行（标记不在 TRUNCATE 名单里，跨用例还在）
+//   - 库里有 testdb_marker 这张表 → 是我们自己的测试库，放行
 //   - 没标记，但 agent 和 audit_log 都是空的 → 干净的新库，打上标记后放行
 //   - 没标记，却有 agent 或审计记录 → **这是别人在用的库，停下**
 //
@@ -105,11 +105,12 @@ func assertDisposable(t *testing.T, s *store.Store) {
 		ctx := context.Background()
 		db := s.DB()
 
+		// 标记放在一张**应用代码从来不碰**的表里。
+		// 一开始放在 platform_config.config 里，结果设置模块的用例会整段覆盖那个 jsonb，
+		// 标记跑着跑着就没了 —— 标记必须待在没人会顺手写的地方。
 		var marked bool
-		// platform_config 是单行表，可能一行都还没有 —— 那也算「没标记」。
 		if err := db.QueryRowContext(ctx,
-			`SELECT coalesce((SELECT config->>'testDatabase' = 'true' FROM platform_config LIMIT 1), false)`,
-		).Scan(&marked); err != nil {
+			`SELECT to_regclass('testdb_marker') IS NOT NULL`).Scan(&marked); err != nil {
 			fatal = "读测试库标记失败: " + err.Error()
 			return
 		}
@@ -141,9 +142,10 @@ func assertDisposable(t *testing.T, s *store.Store) {
 		// **强清过一次之后也要标记**：它从此就是个测试库了，
 		// 再要求每次都带 FORCE 只会训练人养成无脑加 FORCE 的习惯 —— 那这道防呆就白做了。
 		if _, err := db.ExecContext(ctx, `
-			INSERT INTO platform_config (id, config) VALUES (true, '{"testDatabase": true}'::jsonb)
-			ON CONFLICT (id) DO UPDATE
-			SET config = platform_config.config || '{"testDatabase": true}'::jsonb`); err != nil {
+			CREATE TABLE IF NOT EXISTS testdb_marker (
+				note      text NOT NULL DEFAULT '这个库会被 go test 反复 TRUNCATE，别放任何要留的东西',
+				marked_at timestamptz NOT NULL DEFAULT now()
+			)`); err != nil {
 			fatal = "写测试库标记失败: " + err.Error()
 		}
 	})

@@ -98,6 +98,8 @@ export interface AgentRefs {
   todos: number
   tweets: number
   steps: number
+  /** 说过的话。删掉之后这些帖子会挂到人类头上，所以它也算留痕 */
+  posts: number
 }
 
 /**
@@ -111,7 +113,12 @@ export function agentInUseRefs(err: unknown): AgentRefs | undefined {
   if (!(err instanceof HttpError) || err.status !== 409) return undefined
   const body = err.body as unknown as { code?: string; refs?: Partial<AgentRefs> } | undefined
   if (body?.code !== 'agent_in_use') return undefined
-  return { todos: body.refs?.todos ?? 0, tweets: body.refs?.tweets ?? 0, steps: body.refs?.steps ?? 0 }
+  return {
+    todos: body.refs?.todos ?? 0,
+    tweets: body.refs?.tweets ?? 0,
+    steps: body.refs?.steps ?? 0,
+    posts: body.refs?.posts ?? 0,
+  }
 }
 
 /** openapi-fetch 的 {data,error,response} → 要么给数据，要么抛 HttpError。 */

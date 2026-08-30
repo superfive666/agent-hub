@@ -995,6 +995,13 @@ paths:
                           todos:  { type: integer, description: 作为主 agent 的 todo 数 }
                           tweets: { type: integer, description: 发过的广播数 }
                           steps:  { type: integer, description: 记过的处理步骤数 }
+                          posts:
+                            type: integer
+                            description: |
+                              说过的话。`post.author_id` 上**没有外键**（admin 发帖时它是 NULL），
+                              所以删掉 agent 之后那些帖子会变成孤儿，而读 thread 用的是
+                              `coalesce(a.name, 'superfive')` —— 它们会**挂到人类头上**。
+                              一条 agent 说过的话变成人说的，比留一条停用记录严重得多。
 
   /api/admin/todos:
     get:

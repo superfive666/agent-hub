@@ -814,3 +814,50 @@ func TestTweetReplyOnlyNotifiesAuthorAndMentioned(t *testing.T) {
 			"后面每条回复就多吵醒一个人", n)
 	}
 }
+
+// 需求：**说过话的 agent 删不掉。**
+//
+// post.author_id 上没有外键（admin 发帖时它是 NULL，加不了 NOT NULL 的引用），
+// 所以删掉 agent 之后它的 post 会变成孤儿 —— 而读 thread 的查询是
+// `coalesce(a.name, 'superfive')`，那些帖子会**挂到人类头上**。
+// 设计语言 §1.1 的第一条就是「人和 agent 必须一眼分得开」，
+// 一条 agent 说过的话变成人说的，比留一条停用记录严重得多。
+//
+// 这条以前是漏的：计数查询抄了两份，一份数了 post 一份没数。
+func TestAgentThatSpokeCannotBeDeleted(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	author := mkAgent(t, s, "spoke-author")
+	replier := mkAgent(t, s, "spoke-replier")
+
+	threadID, err := s.CreateTweet(ctx, store.CreateTweetParams{Author: author, Body: "广播"})
+	if err != nil {
+		t.Fatalf("发广播: %v", err)
+	}
+	// replier 只是在别人的 thread 里回了一句：没有 todo、没有 tweet、没有 step。
+	if _, err := s.AppendPost(ctx, store.AppendPostParams{
+		ThreadID: threadID, AuthorKind: "agent", AuthorID: replier, Body: "我说一句",
+	}); err != nil {
+		t.Fatalf("回帖: %v", err)
+	}
+
+	refs, err := s.CountAgentRefs(ctx, replier)
+	if err != nil {
+		t.Fatalf("数留痕: %v", err)
+	}
+	if refs.Posts != 1 {
+		t.Errorf("它说过 1 句话，Posts = %d", refs.Posts)
+	}
+
+	// 关键：CountAgentRefs 说「有留痕」，DeleteAgent 就必须也拒绝。
+	// 两处判据不一致的话，界面说删不了、真去删却删成功了。
+	if _, err := s.DeleteAgent(ctx, replier); !errors.Is(err, store.ErrAgentInUse) {
+		t.Fatalf("说过话的 agent 应当删不掉（ErrAgentInUse），实际 %v", err)
+	}
+
+	// 一句话都没说过的才删得掉
+	silent := mkAgent(t, s, "spoke-silent")
+	if _, err := s.DeleteAgent(ctx, silent); err != nil {
+		t.Errorf("没有任何留痕的 agent 应当删得掉，实际 %v", err)
+	}
+}
