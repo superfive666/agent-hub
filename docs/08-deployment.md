@@ -399,7 +399,11 @@ HUB=https://hub.example.com REG_TOKEN=<注册token> RUNTIME=claude-code \
 `RUNTIME` 见 [connector/RUNTIMES.md](../connector/RUNTIMES.md)（`claude` / `claude-cli`
 是 `claude-code` 的别名）。
 
-**注册 token 是一次性的**，用过即废；泄漏了就在控制台吊销该 agent 的凭证重发。
+**注册 token 有两道保险**：用掉即刻作废，以及签发起 **24 小时自动过期**（没用过也失效）。
+过期了就在控制台给这个 agent 重新签一张，不用重建 agent。泄漏了同理——吊销凭证重发。
+
+上面那条 `onboard.sh` **可以重跑**：已经换过凭证的话它会跳过注册那一步，
+不会撞上「token 已被使用」。装服务或自检那步失败时直接再跑一遍就行。
 
 > 端点必须走 `/api/` 前缀，因为 §5 的反向代理只把 `/api/*` 和 `/healthz` 转给 hub。
 > 挂成 `/join` 的话会被静态站接走，agent 拉到的是 index.html。

@@ -75,12 +75,32 @@ if [ -n "$need_bin" ]; then
 fi
 
 # ── 1. 换长期凭证 ─────────────────────────────────────────────────────
-say "换取长期凭证"
 TOKEN_FILE="$CONF_DIR/token"
+AGENT_FILE="$CONF_DIR/agent-id"
 mkdir -p "$CONF_DIR"; chmod 700 "$CONF_DIR"
-HUB="$HUB" TOKEN_FILE="$TOKEN_FILE" AGENT_FILE="$CONF_DIR/agent-id" \
-  REG_TOKEN="${REG_TOKEN:-}" sh "$SELF_DIR/register.sh" ${REG_TOKEN:+} || die "注册失败"
-AGENT_ID=$(cat "$CONF_DIR/agent-id" 2>/dev/null || echo "")
+
+# 注册 token 用过即废，换一次就没了。而这个脚本后面还有装服务、自检两步，
+# 任何一步失败，人的第一反应都是「再跑一遍 onboard.sh」—— 如果这里无条件重注册，
+# 第二遍必然停在 409，报的是「token 已被使用」，看起来像凭证坏了，实际上凭证好好的。
+# 所以先拿现有凭证问一句 hub：认我，就跳过注册直接往下走。
+have_credential() {
+  [ -s "$TOKEN_FILE" ] || return 1
+  code=$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $(cat "$TOKEN_FILE")" "$HUB/api/agent/me" 2>/dev/null || echo 000)
+  [ "$code" = "200" ]
+}
+
+if have_credential; then
+  # 只认 200。401 说明凭证是废的，那就该重新注册；000（网络不通）也往下走，
+  # 让 register.sh 去报那个更具体的网络错误。
+  say "已有可用凭证，跳过注册"
+else
+  say "换取长期凭证"
+  HUB="$HUB" TOKEN_FILE="$TOKEN_FILE" AGENT_FILE="$AGENT_FILE" \
+    REG_TOKEN="${REG_TOKEN:-}" sh "$SELF_DIR/register.sh" || die "注册失败"
+fi
+AGENT_ID=$(cat "$AGENT_FILE" 2>/dev/null || echo "")
+[ -n "$AGENT_ID" ] || die "拿不到 agentId（$AGENT_FILE 是空的）。删掉 $CONF_DIR 重跑一遍。"
 
 # ── 2. 写 connector 配置 ──────────────────────────────────────────────
 say "写配置 $CONF_DIR/config.json"
@@ -145,6 +165,7 @@ if [ "${NO_SERVICE:-0}" = "1" ]; then
 else
   [ -d "$CONNECTOR_DIR" ] || die "找不到 connector 目录：$CONNECTOR_DIR"
   say "安装 connector 常驻服务"
+  # install.sh 是 #!/bin/sh，这里用 sh 调它是对的 —— 两边必须一直保持 POSIX
   sh "$CONNECTOR_DIR/install.sh"
 fi
 
