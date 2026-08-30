@@ -68,11 +68,11 @@ func TestHealthReportsWorkerAliveWhileItHoldsTheLock(t *testing.T) {
 	c := adminClient(t, srv.URL)
 	ctx := context.Background()
 
-	ok, release, err := st.TryWorkerLock(ctx)
+	lock, err := st.TryWorkerLock(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ok {
+	if lock == nil {
 		t.Fatal("没有别的 worker 在跑，应当拿得到单实例锁")
 	}
 
@@ -82,7 +82,7 @@ func TestHealthReportsWorkerAliveWhileItHoldsTheLock(t *testing.T) {
 	}
 
 	// 放锁之后要能立刻翻回 false —— 存活判定不能有粘滞。
-	release()
+	lock.Release()
 	raw, _ = healthOf(t, c, srv.URL)
 	if raw["workerAlive"] != false {
 		t.Errorf("worker 放锁之后 workerAlive = %v, want false", raw["workerAlive"])

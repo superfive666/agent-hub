@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -364,33 +365,134 @@ func TestWorkerLockIsSingleInstance(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	ok, release, err := s.TryWorkerLock(ctx)
+	first, err := s.TryWorkerLock(ctx)
 	if err != nil {
 		t.Fatalf("TryWorkerLock: %v", err)
 	}
-	if !ok {
+	if first == nil {
 		t.Fatal("第一个 worker 应当拿到锁")
 	}
 
-	ok2, release2, err := s.TryWorkerLock(ctx)
+	second, err := s.TryWorkerLock(ctx)
 	if err != nil {
 		t.Fatalf("第二次 TryWorkerLock: %v", err)
 	}
-	if ok2 {
-		release2()
-		release()
+	if second != nil {
+		second.Release()
+		first.Release()
 		t.Fatal("第二个 worker 不该拿到锁 —— 单实例约束失效了")
 	}
 
-	release()
-	ok3, release3, err := s.TryWorkerLock(ctx)
+	first.Release()
+	third, err := s.TryWorkerLock(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ok3 {
+	if third == nil {
 		t.Error("释放之后应当能重新拿到锁")
 	} else {
-		release3()
+		third.Release()
+	}
+}
+
+// killLockBackend 掐掉正持着单实例锁的那条后端连接。
+// 用它造「连接被中间设备悄悄掐断」的现场 —— 线上就是这么坏的，
+// 不是有人调了 unlock，而是连接没了、PG 顺手放锁、进程毫不知情。
+func killLockBackend(t *testing.T, s *store.Store) {
+	t.Helper()
+	var pid int
+	// **必须按编号过滤。** 同一个库里不止一把 advisory 锁 —— testdb 夹具自己就用一把
+	// 来串行化用例。不带编号 LIMIT 1 会掐到夹具那条连接上，这条用例就在测别的东西了。
+	err := s.DB().QueryRow(`
+		SELECT pid FROM pg_locks
+		WHERE locktype = 'advisory' AND granted
+		  AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+		  AND objid::bigint = $1 AND objsubid = 1`,
+		store.WorkerLockID&0xFFFFFFFF).Scan(&pid)
+	if err != nil {
+		t.Fatalf("找不到持锁的连接: %v", err)
+	}
+	if _, err := s.DB().Exec(`SELECT pg_terminate_backend($1)`, pid); err != nil {
+		t.Fatalf("掐连接失败: %v", err)
+	}
+	// pg_terminate_backend 是异步的，等它真的退出，否则锁可能还挂着
+	for i := 0; i < 100; i++ {
+		var still bool
+		if err := s.DB().QueryRow(
+			`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = $1)`, pid).Scan(&still); err != nil {
+			t.Fatal(err)
+		}
+		if !still {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("等了 2s 持锁连接还没退出")
+}
+
+// 需求：**持锁方要能自己发现锁掉了。**
+//
+// 这条用例来自一次真实故障：worker 容器 Up 4 小时、日志只有一行「worker 启动」，
+// 而 `pg_locks` 里一条 advisory 锁都没有。持锁的那条连接从启动起就再没被用过，
+// 被中间设备悄悄掐断之后 PostgreSQL 放了锁，进程却毫不知情 ——
+// 控制台从此永远显示「worker 无心跳」，同时锁真的空了出来。
+func TestWorkerLockNoticesItLostTheLock(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	lock, err := s.TryWorkerLock(ctx)
+	if err != nil || lock == nil {
+		t.Fatalf("拿锁失败: %v", err)
+	}
+	defer lock.Release()
+
+	// 正常情况下 Verify 什么都不该做
+	if err := lock.Verify(ctx); err != nil {
+		t.Fatalf("持锁期间 Verify 不该报错: %v", err)
+	}
+
+	// 从外面把持锁的那条连接掐掉 —— 这正是线上发生的事，
+	// 不是「优雅地 unlock」而是「连接没了，PG 顺手放了锁，进程不知道」。
+	killLockBackend(t, s)
+	if alive, err := s.WorkerAlive(ctx); err != nil {
+		t.Fatal(err)
+	} else if alive {
+		t.Fatal("造现场失败：锁应当已经不在了")
+	}
+
+	if err := lock.Verify(ctx); err != nil {
+		t.Fatalf("锁空着的时候 Verify 应当抢回来，而不是报错: %v", err)
+	}
+	if alive, err := s.WorkerAlive(ctx); err != nil {
+		t.Fatal(err)
+	} else if !alive {
+		t.Error("Verify 之后锁应当回到手上 —— 否则控制台的假告警永远不会消失")
+	}
+}
+
+// 需求：锁掉了**而且被别人拿走**时，Verify 必须报 ErrLockTaken 让本实例停下。
+// 两个 worker 同时扇出会打乱 per-agent 的因果顺序（ADR-0004），
+// 那是数据正确性问题，而且没有任何告警会报。
+func TestWorkerLockStandsDownWhenAnotherInstanceTookIt(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	lock, err := s.TryWorkerLock(ctx)
+	if err != nil || lock == nil {
+		t.Fatalf("拿锁失败: %v", err)
+	}
+	defer lock.Release()
+
+	// 锁从我这条连接上掉了，随后被另一条连接（另一个实例）拿走
+	killLockBackend(t, s)
+	other, err := s.TryWorkerLock(ctx)
+	if err != nil || other == nil {
+		t.Fatalf("另一个实例应当能拿到空着的锁: %v", err)
+	}
+	defer other.Release()
+
+	if err := lock.Verify(ctx); !errors.Is(err, store.ErrLockTaken) {
+		t.Errorf("锁被别人拿走时应当报 ErrLockTaken，实际 %v", err)
 	}
 }
 
@@ -410,9 +512,9 @@ func TestWorkerAliveFollowsTheSingleInstanceLock(t *testing.T) {
 		t.Fatal("没有 worker 持锁时 WorkerAlive 应当是 false")
 	}
 
-	ok, release, err := s.TryWorkerLock(ctx)
-	if err != nil || !ok {
-		t.Fatalf("拿单实例锁失败: ok=%v err=%v", ok, err)
+	lock, err := s.TryWorkerLock(ctx)
+	if err != nil || lock == nil {
+		t.Fatalf("拿单实例锁失败: %v", err)
 	}
 	if alive, err = s.WorkerAlive(ctx); err != nil {
 		t.Fatal(err)
@@ -421,7 +523,7 @@ func TestWorkerAliveFollowsTheSingleInstanceLock(t *testing.T) {
 	}
 
 	// 放锁之后必须立刻翻回 false，不能有粘滞：worker 挂了就得马上看得出来。
-	release()
+	lock.Release()
 	if alive, err = s.WorkerAlive(ctx); err != nil {
 		t.Fatal(err)
 	} else if alive {

@@ -301,6 +301,44 @@ Prometheus 抓 `127.0.0.1:9090/metrics`；没有 Prometheus 就先挂个 cron：
   [ "${lag:-999}" -lt 120 ] || echo "agent-hub outbox 积压 ${lag}s" | mail -s 'agent-hub 告警' you@example.com
 ```
 
+### 「outbox 投递滞后 0s · worker 无心跳」是什么意思
+
+这条横幅有两个触发条件，`0s` 说明触发它的是**后半句**：
+
+| 字段 | 怎么算 | `0s` / 无心跳 |
+|---|---|---|
+| `outboxLagSeconds` | `now() - min(occurred_at)`，只看 `pending` 的行 | outbox 里一条待扇出的都没有；表空时返回 0 |
+| `workerAlive` | 那把单实例 advisory lock 还有没有人持着 | 没人持锁 |
+
+**`0s` 不是好消息，是最坏的那种读数。** worker 挂掉之后没有新事件产生，
+旧的早处理完了，于是滞后会一直停在 0 —— 等你发现「agent 怎么都不响应了」，
+回头看这块只会看到一个绿色的 0。
+
+底下没有心跳表，只有一把会话级 advisory lock。按可能性排查：
+
+```bash
+# ① worker 到底在不在
+docker compose -f docker/compose.yaml --env-file .env ps
+docker compose -f docker/compose.yaml --env-file .env logs --tail=50 worker
+
+# ② 锁在不在（**一定要按编号过滤** —— 一个库里可能有好几把 advisory 锁）
+psql "$DATABASE_URL" -c "SELECT pid, granted, backend_start FROM pg_locks l
+  JOIN pg_stat_activity a USING (pid)
+  WHERE locktype='advisory' AND objid::bigint = 174527489 AND objsubid = 1;"
+
+# ③ api 和 worker 连的是不是同一个库（advisory lock 按 database 隔离，跨库互相看不见）
+docker compose -f docker/compose.yaml --env-file .env exec api    env | grep DATABASE_URL
+docker compose -f docker/compose.yaml --env-file .env exec worker env | grep DATABASE_URL
+```
+
+- **worker 容器不在** → 起来就好，看日志找它为什么退的。
+- **worker 在跑但 ② 查不到锁** → 持锁的那条连接被掐了。持锁连接从启动起就再没被用过，
+  是最容易被 `idle_session_timeout`、连接池、防火墙 NAT 老化悄悄掐断的东西。
+  重启 worker 即可恢复；worker 现在每 10 秒自查一次并自动抢回来，
+  所以这种状态不该再持续超过十几秒 —— 如果还在持续，说明是别的原因。
+- **两个 DATABASE_URL 不一样** → 改配置重建。这种情况下 worker 干活完全正常，只是 api 永远看不见它的锁。
+- **中间有 PgBouncer 之类的连接池** → 必须是 session 模式，transaction 模式下会话级 advisory lock 根本不成立。
+
 ### worker 只跑一个实例
 
 `replicas: 1` 是数据正确性要求，不是「暂时够用」。多个 worker 会打乱 per-agent 的因果顺序，
