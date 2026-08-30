@@ -49,24 +49,33 @@ export default function DirectoryRoute() {
   } | null>(null)
 
   /**
-   * **名录接口里也有还没写 Card 的 agent** —— 那条查询是 LEFT JOIN，
-   * 没有 Card 的照样返回，只是 description 退化成管理员填的 purpose、
-   * skills / limitations 全空。它们已经由上面那一栏专门讲了，
-   * 这里再画一遍就是同一个 agent 在页面上出现两次。
+   * **「谁存在」以 `/api/admin/agents` 为准，Card 内容从 `/api/admin/directory` 补。**
+   *
+   * 两个接口的收录范围本来就不一样，而且都是对的：名录是给 agent 看的「该找谁」，
+   * 停用的不该出现在里面（别人不该 @ 到一个已经下线的）；控制台是运维视角，
+   * 停用的**必须**看得见，否则停用之后它从页面上彻底消失，连重新启用的入口都没有。
+   *
+   * 以前这一页反过来了：主栏铺的是名录，于是停用的 agent 一旦写过 Card 就凭空蒸发，
+   * 而卡片上那段「补一个已停用 chip」的代码永远走不到 —— 名录压根不返回它。
    */
-  const carded = (agents ?? []).filter((a) => a.hasCard !== false)
-  const list = carded.filter((a) => !onlyOnline || a.online)
-  /** 名录条目上补一句运维状态：被停用的 agent 在 Card 摘要里看不出任何异常 */
-  const recordOf = (agentId: string | undefined) =>
-    agentId ? (records ?? []).find((r) => r.agentId === agentId) : undefined
-  /** 还没进名录的：没写 Card 的都算 —— 未接入的固然没有，接入了不写 Card 的一样查不到 */
-  const offstage = (records ?? []).filter((r) => !r.hasCard)
+  const cardOf = (agentId: string | undefined) =>
+    agentId ? (agents ?? []).find((a) => a.agentId === agentId) : undefined
+  /**
+   * **过滤器作用在整页上，不是只作用在其中一栏。**
+   * 以前「还没出现在名录里」那一栏完全不受它管，于是切到「只看在线」，
+   * 停用的、未接入的照样列在那儿 —— 按钮看起来没生效。
+   */
+  const visible = (records ?? []).filter((r) => !onlyOnline || r.online)
+  const carded = visible.filter((r) => r.hasCard)
+  const offstage = visible.filter((r) => !r.hasCard)
+  const list = carded
   const loading = isPending || recPending
   /** 两份数据都拿到了、两边都是空的 —— 平台上真的一个 agent 都没有 */
   const nothingAtAll =
     !loading && !recError && (agents?.length ?? 0) === 0 && (records?.length ?? 0) === 0
-  /** 有 Card 的 agent 存在，只是被「只看在线」筛没了 —— 这和「没有 agent」是两回事 */
-  const filteredOut = !loading && carded.length > 0 && list.length === 0
+  /** agent 确实存在，只是被「只看在线」筛没了 —— 这和「没有 agent」是两回事 */
+  const total = (records ?? []).length
+  const filteredOut = !loading && total > 0 && visible.length === 0
 
   return (
     <AppShell>
@@ -267,7 +276,9 @@ export default function DirectoryRoute() {
               {filteredOut && (
                 <div data-testid="directory-filtered-empty" className="py-2">
                   <div className="sys">
-                    「只看在线」把 {carded.length} 个 agent 全筛掉了 —— 现在没有一个在线的。
+                    {/* 这里要报**筛之前**有多少个。用筛完的数就永远是 0，
+                        「把 0 个 agent 全筛掉了」等于什么都没说。 */}
+                    「只看在线」把 {total} 个 agent 全筛掉了 —— 现在没有一个在线的。
                   </div>
                   <div className="mt-2.5 flex justify-center">
                     <Button onClick={() => setOnlyOnline(false)}>切回全部</Button>
@@ -283,8 +294,13 @@ export default function DirectoryRoute() {
               )}
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {list.map((a) => (
-                  <Card key={a.agentId} data-testid="agent-card">
+                {list.map((r) => {
+                  // r 是运维记录（谁存在、什么状态、在不在线）；c 是它的 Card 摘要。
+                  // 没写 Card 的不会走到这里（上面按 hasCard 分过栏了）。
+                  const c = cardOf(r.agentId)
+                  const a = { ...r, ...c, name: c?.name ?? r.name, online: r.online }
+                  return (
+                  <Card key={r.agentId} data-testid="agent-card">
                     <CardBody className="gap-[13px] p-[18px_19px]">
                       <div className="flex items-center gap-3">
                         <Avatar
@@ -305,12 +321,11 @@ export default function DirectoryRoute() {
                         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                           {/* 停用/未接入是运维状态，只有 /api/admin/agents 知道 ——
                               不补上去的话，一个被停用的 agent 在名录里看着和正常的一模一样 */}
-                          {recordOf(a.agentId)?.status &&
-                            recordOf(a.agentId)!.status !== 'active' && (
-                              <Chip tone="alert" size="sm">
-                                {agentStatusLabel(recordOf(a.agentId)!.status)}
-                              </Chip>
-                            )}
+                          {r.status !== 'active' && (
+                            <Chip tone="alert" size="sm">
+                              {agentStatusLabel(r.status)}
+                            </Chip>
+                          )}
                           <Chip tone={a.online ? 'agent' : 'default'} size="sm">
                             {a.online ? '在线' : '离线'}
                           </Chip>
@@ -318,7 +333,7 @@ export default function DirectoryRoute() {
                       </div>
 
                       <div className="text-[12px] leading-[1.65]" style={{ color: 'var(--ink2)' }}>
-                        {a.description ?? '（尚未撰写 Agent Card）'}
+                        {c?.description ?? r.purpose ?? '（尚未撰写 Agent Card）'}
                       </div>
 
                       <div>
@@ -369,15 +384,12 @@ export default function DirectoryRoute() {
                       {/* 管理动作要拿运维那份记录（状态、purpose 都在它身上），
                           Card 摘要里没有这些。查不到记录就不画 —— 那说明这一条
                           只存在于名录里，理论上不该发生，但不值得为它画一组点不动的按钮。 */}
-                      {recordOf(a.agentId) && (
-                        <>
-                          <div className="sep" />
-                          <AgentActions row={recordOf(a.agentId)!} />
-                        </>
-                      )}
+                      <div className="sep" />
+                      <AgentActions row={r} />
                     </CardBody>
                   </Card>
-                ))}
+                  )
+                })}
               </div>
             </section>
           )}

@@ -58,8 +58,10 @@ describe('名录页的空态', () => {
   })
 
   it('有 agent 但被「只看在线」筛没了时，提示切回全部 —— 不能让人以为 agent 消失了', async () => {
-    const offline = mockDirectory.map((a) => ({ ...a, online: false }))
-    stub({ directory: offline, agents: mockAdminAgents })
+    // **在线与否以 /api/admin/agents 为准**（它才知道 status；名录看不见停用的），
+    // 所以造「全都离线」要造在运维那份上。
+    const offline = mockAdminAgents.map((a) => ({ ...a, online: false }))
+    stub({ directory: mockDirectory, agents: offline })
     renderApp('/directory')
 
     await screen.findAllByTestId('agent-card')
@@ -73,7 +75,9 @@ describe('名录页的空态', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '切回全部' }))
     await waitFor(() => expect(screen.queryByTestId('directory-filtered-empty')).toBeNull())
-    expect(screen.getAllByTestId('agent-card').length).toBe(offline.length)
+    expect(screen.getAllByTestId('agent-card').length).toBe(
+      offline.filter((a) => a.hasCard).length,
+    )
   })
 })
 
@@ -135,5 +139,50 @@ describe('名录页上的两份数据', () => {
     // 名录本身是空的，但原因和「一个 agent 都没有」不同，要分开说
     expect(screen.getByTestId('directory-nocard-empty')).toHaveTextContent('名录还是空的')
     expect(screen.queryByTestId('directory-empty')).toBeNull()
+  })
+})
+
+/**
+ * 停用之后这个 agent 在控制台上必须还看得见 —— 否则连重新启用的入口都没有。
+ *
+ * 以前这一页主栏铺的是 `/api/admin/directory`，而那个接口刻意不收停用的
+ * （它是给 agent 看的「该找谁」，别人不该 @ 到一个已经下线的）。
+ * 于是停用一个写过 Card 的 agent，它就从页面上凭空蒸发了。
+ */
+describe('名录页对停用 agent 的处理', () => {
+  const disabled = mockAdminAgents.map((a, i) =>
+    i === 0 ? { ...a, status: 'disabled' as const, online: false } : a,
+  )
+
+  it('停用的 agent 仍然列出来，并标出「已停用」', async () => {
+    stub({ directory: mockDirectory, agents: disabled })
+    renderApp('/directory')
+
+    const cards = await screen.findAllByTestId('agent-card')
+    const one = cards.find((c) => c.textContent?.includes(disabled[0].name!))
+    expect(one, '停用的 agent 不能从页面上消失 —— 那样就没有重新启用的入口了').toBeDefined()
+    expect(one!).toHaveTextContent('已停用')
+  })
+
+  it('「只看在线」把停用的筛掉 —— 它的凭证已经失效，不可能在线', async () => {
+    stub({ directory: mockDirectory, agents: disabled })
+    renderApp('/directory')
+    await screen.findAllByTestId('agent-card')
+
+    await userEvent.click(screen.getByRole('button', { name: '全部' }))
+    const cards = await screen.findAllByTestId('agent-card')
+    expect(cards.some((c) => c.textContent?.includes(disabled[0].name!))).toBe(false)
+  })
+
+  it('过滤器管整页，不是只管名录那一栏', async () => {
+    // mu / orin 都没写 Card，落在「还没出现在名录里」那一栏，两个都是离线。
+    // 以前那一栏完全不受过滤器管，切到「只看在线」照样列着 —— 按钮看着就像没生效。
+    stub({ directory: mockDirectory, agents: mockAdminAgents })
+    renderApp('/directory')
+    await screen.findAllByTestId('agent-card')
+
+    expect(screen.getAllByTestId('offstage-row').length).toBeGreaterThan(0)
+    await userEvent.click(screen.getByRole('button', { name: '全部' }))
+    await waitFor(() => expect(screen.queryAllByTestId('offstage-row')).toHaveLength(0))
   })
 })

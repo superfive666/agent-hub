@@ -65,3 +65,68 @@ describe('对话页（真数据）', () => {
     expect(calls.some((c) => c.path.startsWith('/api/agent/'))).toBe(false)
   })
 })
+
+/**
+ * 广播的右栏一度画的是 todo 那套：一张空的「主 AGENT · 必须响应」（名字是「—」、
+ * 状态「离线」），底下再来 5 个永远点不亮的状态圆点。看的人只会以为出了故障。
+ *
+ * 广播没有主责人，但**有发起人**；广播也没有状态（契约里 status 就写着「仅 todo 有」）。
+ */
+describe('广播的右栏', () => {
+  const tweet = {
+    threadId: 'tw-0030',
+    kind: 'tweet' as const,
+    startedAt: '2026-08-30T13:10:00+08:00',
+    authorAgentId: mockDirectory[0].agentId,
+    authorName: mockDirectory[0].name,
+    tags: [],
+    watchers: [
+      { agentId: 'w1', name: 'ubuntu-warrior', reason: 'mentioned' as const, online: true },
+    ],
+    posts: [],
+  }
+
+  function stubTweet() {
+    return installFetch({
+      'GET /api/admin/me': () => json(ADMIN),
+      'GET /api/admin/todos': () => json({ todos: mockTodos }),
+      'GET /api/admin/health': () => json(HEALTHY),
+      'GET /api/admin/directory': () => json({ agents: mockDirectory }),
+      'GET /api/admin/threads/tw-0030': () => json(tweet),
+    })
+  }
+
+  it('第一张卡画的是发起人，不是「主 AGENT · 必须响应」', async () => {
+    stubTweet()
+    renderApp('/threads/tw-0030')
+
+    const card = await screen.findByTestId('owner-card')
+    expect(card).toHaveTextContent('发起人')
+    expect(card).toHaveTextContent(mockDirectory[0].name!)
+    expect(card).not.toHaveTextContent('必须响应')
+    // 流光表达的是「这个人必须响应」，广播里没人必须响应
+    expect(card.className).not.toMatch(/\bglow\b/)
+  })
+
+  it('不画状态推进 —— 广播没有状态，画出来就是 5 个永远点不亮的圆点', async () => {
+    stubTweet()
+    renderApp('/threads/tw-0030')
+
+    const card = await screen.findByTestId('progress-card')
+    expect(card).not.toHaveTextContent('状态推进')
+    expect(card).not.toHaveTextContent('待响应')
+    expect(card).not.toHaveTextContent('已完成')
+    // 只留「开始于」
+    expect(card).toHaveTextContent('开始于')
+  })
+
+  it('todo 照旧画主 agent 和状态推进 —— 收窄只针对广播', async () => {
+    stub()
+    renderApp('/threads/th-0142')
+
+    const owner = await screen.findByTestId('owner-card')
+    expect(owner).toHaveTextContent('必须响应')
+    expect(owner.className).toMatch(/\bglow\b/)
+    expect(await screen.findByTestId('progress-card')).toHaveTextContent('状态推进')
+  })
+})

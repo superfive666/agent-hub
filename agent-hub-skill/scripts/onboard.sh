@@ -15,6 +15,8 @@
 #                 填了就按 thread 分流会话，hub 的事件不会掉进你正在跟人聊的那条里。
 #                 字段名各家不同，本脚本不替你猜。
 #   SUBCOMMAND  仅 openclaw 需要：一次性发消息的子命令，空格分隔，如 "message send"
+#   CLAUDE_ARGS 仅 claude-code：传给 claude 的参数，默认 "--permission-mode acceptEdits"。
+#               headless 下没有权限模式会卡在确认上直到超时。
 #   TIER        可选，接入档位 longpoll(默认) | webhook | cron
 #   NO_SERVICE  可选，设为 1 就只写配置不装 systemd 服务
 #
@@ -37,6 +39,13 @@ die()  { printf '\033[31m!!\033[0m %s\n' "$*" >&2; exit 1; }
 
 WORKDIR="${WORKDIR:-$PWD}"
 TIER="${TIER:-longpoll}"
+
+# claude-code 被 headless 叫起来（claude -p），撞到权限确认就没人能点「同意」——
+# 它会一直挂到 timeoutSeconds 才被杀，表现是「唤起了、没报错、十分钟后失败重试」。
+# 所以必须给一个权限模式。默认 acceptEdits：能改工作区文件，但不放开工作区之外。
+# 要更松就 CLAUDE_ARGS='--dangerously-skip-permissions'（顾名思义，自己掂量）。
+# **注意 shell 别名在这里不算数** —— connector 直接 spawn 二进制，不经过交互 shell。
+CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode acceptEdits}"
 
 # 别名归一。**人打出来的是产品名**（claude、codex），不是我们的内部标识符
 # （claude-code）。少了这一段，`RUNTIME=claude` 会撞上最后那条 `不认识的 RUNTIME`，
@@ -73,8 +82,14 @@ case "$RUNTIME" in
 任何 runtime 都能用 generic-shell（命令行）或 http-endpoint（常驻服务）兜底接进来。" ;;
 esac
 
+BIN_PATH=""
 if [ -n "$need_bin" ]; then
-  command -v "$need_bin" >/dev/null || die "RUNTIME=$RUNTIME 需要 \`$need_bin\` 在 PATH 里，没找到"
+  # **把绝对路径记下来写进配置**，而不是只写命令名。
+  # connector 装成 systemd user service，那里的 PATH 比你交互 shell 的窄得多
+  # （默认没有 ~/.local/bin，也没有版本管理器那一套）——写命令名的话，
+  # 这里查得到、服务里叫不起来，而报错里既没有命令名也没有 PATH。
+  BIN_PATH=$(command -v "$need_bin" 2>/dev/null || true)
+  [ -n "$BIN_PATH" ] || die "RUNTIME=$RUNTIME 需要 \`$need_bin\` 在 PATH 里，没找到"
 fi
 
 # ── 1. 换长期凭证 ─────────────────────────────────────────────────────
@@ -112,10 +127,14 @@ say "写配置 $CONF_DIR/config.json"
 # 配置里带用户提供的路径和 URL，模板替换很容易在引号上出岔子。
 adapter_json() {
   case "$RUNTIME" in
-    claude-code) printf '"type":"claude-code","bin":"claude","cwd":%s' "$(json_str "$WORKDIR")" ;;
-    codex)       printf '"type":"codex","bin":"codex","sandbox":"workspace-write","cwd":%s' "$(json_str "$WORKDIR")" ;;
-    opencode)    printf '"type":"opencode","bin":"opencode","cwd":%s' "$(json_str "$WORKDIR")" ;;
-    openclaw)    printf '"type":"openclaw","bin":"openclaw","subcommand":%s,"cwd":%s' \
+    claude-code) printf '"type":"claude-code","bin":%s,"args":%s,"cwd":%s' \
+                   "$(json_str "$BIN_PATH")" "$(json_arr "$CLAUDE_ARGS")" "$(json_str "$WORKDIR")" ;;
+    codex)       printf '"type":"codex","bin":%s,"sandbox":"workspace-write","cwd":%s' \
+                   "$(json_str "$BIN_PATH")" "$(json_str "$WORKDIR")" ;;
+    opencode)    printf '"type":"opencode","bin":%s,"cwd":%s' \
+                   "$(json_str "$BIN_PATH")" "$(json_str "$WORKDIR")" ;;
+    openclaw)    printf '"type":"openclaw","bin":%s,"subcommand":%s,"cwd":%s' \
+                   "$(json_str "$BIN_PATH")" \
                    "$(json_arr "$SUBCOMMAND")" "$(json_str "$WORKDIR")" ;;
     hermes)      printf '"type":"hermes","url":%s%s' "$(json_str "$RUNTIME_URL")" "$(session_json)" ;;
     openhuman)   printf '"type":"openhuman","url":%s%s' "$(json_str "$RUNTIME_URL")" "$(session_json)" ;;

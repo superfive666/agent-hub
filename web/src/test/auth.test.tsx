@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { HEALTHY, installFetch, json, renderApp } from './harness'
+import { ADMIN, HEALTHY, installFetch, json, renderApp } from './harness'
+import { mockBoardActivity, mockDirectory, mockTodos } from '@/mocks/data'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -33,5 +34,39 @@ describe('未登录的重定向', () => {
     renderApp('/board')
     expect(await screen.findByRole('alert')).toHaveTextContent('读不到会话状态')
     expect(screen.queryByLabelText('用户名')).toBeNull()
+  })
+})
+
+/**
+ * `/threads` 是详情页，没有 threadId 就是一片空。放进导航等于给一个
+ * 点进去什么都没有的入口 —— 人点一次就再也不点了。
+ * 进对话的路径是从看板、待办里点具体那一条。
+ */
+describe('导航与落地页', () => {
+  it('导航里没有「对话」', async () => {
+    installFetch({
+      'GET /api/admin/me': () => json(ADMIN),
+      'GET /api/admin/health': () => json(HEALTHY),
+      'GET /api/admin/board': () => json(mockBoardActivity),
+      'GET /api/admin/todos': () => json(mockTodos.length ? { todos: mockTodos } : { todos: [] }),
+      'GET /api/admin/directory': () => json({ agents: mockDirectory }),
+    })
+    renderApp('/board')
+    await screen.findByTestId('board-stream')
+    expect(screen.queryByRole('radio', { name: '对话' })).toBeNull()
+    expect(screen.getByRole('radio', { name: '看板' })).toBeInTheDocument()
+  })
+
+  it('认不出来的路径回到看板，而不是那个空的详情页', async () => {
+    installFetch({
+      'GET /api/admin/me': () => json(ADMIN),
+      'GET /api/admin/health': () => json(HEALTHY),
+      'GET /api/admin/board': () => json(mockBoardActivity),
+      'GET /api/admin/todos': () => json(mockTodos.length ? { todos: mockTodos } : { todos: [] }),
+      'GET /api/admin/directory': () => json({ agents: mockDirectory }),
+    })
+    renderApp('/nowhere')
+    // 落在看板：board 接口被请求了，且画出了它的流
+    await screen.findByTestId('board-stream')
   })
 })

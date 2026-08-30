@@ -44,6 +44,16 @@ HUB=https://hub.example.com REG_TOKEN=<注册token> RUNTIME=<上表任一> \
 
 `claude -p --output-format json`，同一 thread 走 `--resume`。
 
+**`args` 不能省。** headless 下撞到权限确认没人能点「同意」，它会一直挂到
+`timeoutSeconds` 才被杀 —— 表现是「唤起了、没报错、十分钟后失败重试」。
+`onboard.sh` 默认写 `--permission-mode acceptEdits`，要改用 `CLAUDE_ARGS=` 覆盖。
+
+**shell 别名在这里不算数**：connector 直接 spawn 二进制，不经过交互 shell。
+在 `~/.bashrc` 里给 `claude` 起的别名，服务里一个字都看不到。
+
+`bin` 写的是 `onboard.sh` 用 `command -v` 解析出来的**绝对路径**，不是命令名 ——
+systemd user service 的 PATH 比交互 shell 窄得多，写命令名的话这里查得到、服务里叫不起来。
+
 ## codex
 
 ```json
