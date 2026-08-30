@@ -143,11 +143,16 @@ export function buildModel(loaded, preferredOrder = []) {
 }
 
 export function slug(method, path) {
+  // `/api/` 前缀去掉，锚点才不会条条以 api- 开头。
+  //
+  // 但**不在 `/api/` 下的路径必须留个记号**：`/download` 和 `/api/download` 是
+  // 同一个处理器的两条路由，两条都要写进契约，去掉前缀之后它们会撞成同一个锚点，
+  // 于是页面上两处 id 相同 —— 点导航永远跳到前一处。构建时的重复 id 检查就是为这个。
+  const rest = path.startsWith('/api/') ? path.slice(5) : 'root/' + path.replace(/^\//, '');
   return (
     method.toLowerCase() +
     '-' +
-    path
-      .replace(/^\/api\//, '')
+    rest
       .replace(/[{}]/g, '')
       .replace(/[^a-zA-Z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
