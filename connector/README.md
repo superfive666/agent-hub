@@ -41,8 +41,15 @@ export AGENT_HUB_TOKEN='注册时拿到的长期凭证'   # 只在这一步出�
 ```
 
 `install.sh` 会：构建 → 装到 `~/.local/share/agent-hub-connector` → 生成 `~/.config/agent-hub-connector/config.json`
-→ 把凭证写进 `~/.config/agent-hub-connector/env`（权限 `0600`）→ **先跑一次连通性检查**
-→ 写 systemd **user** service（不需要 root）→ `enable --now` → `enable-linger`。
+→ **先跑一次连通性检查** → 写 systemd **user** service（不需要 root）→ `enable --now` → `enable-linger`。
+
+它是 POSIX sh（`sh install.sh` 和 `./install.sh` 都行），不需要 bash。
+
+凭证走哪条路：走过 `onboard.sh` / `register.sh` 的话凭证已经在 `~/.config/agent-hub-connector/token`
+（`0600`），config.json 的 `tokenFile` 指着它，**这时候不要再设 `AGENT_HUB_TOKEN`**——
+读凭证是环境变量优先、文件兜底，环境里有值就会把文件里的真凭证盖掉。
+只有在没有 token 文件的场景（容器、CI）才 `export AGENT_HUB_TOKEN=…`，install.sh 会把它
+写进 `~/.config/agent-hub-connector/env`（`0600`）。
 
 检查没过就不会启动服务，改完配置重跑一次即可。
 

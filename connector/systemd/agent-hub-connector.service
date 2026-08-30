@@ -6,8 +6,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# 凭证只从这个文件读，权限 0600，不写进 unit —— unit 是 world-readable 的。
-EnvironmentFile=%h/.config/agent-hub-connector/env
+# 凭证的正常路径是 config.json 里的 tokenFile，这个文件只给「凭证从环境来」的场景用，
+# 所以前面的 `-` 不能去掉：文件不存在是常态，不是启动失败。
+# 无论走哪条路，凭证都不写进 unit —— unit 是 world-readable 的。
+EnvironmentFile=-%h/.config/agent-hub-connector/env
 ExecStart=/usr/bin/env node --experimental-sqlite %h/.local/share/agent-hub-connector/dist/src/index.js run --config %h/.config/agent-hub-connector/config.json
 Restart=always
 RestartSec=5
