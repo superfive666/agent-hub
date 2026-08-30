@@ -292,51 +292,144 @@ server {
 不发 app 的部署**跳过这一节**：`ANDROID_APK_PATH` 留空时 `/download` 返回一个
 说得清楚的 503，控制台上的下载入口会自己收起来，不会画一个点了报错的按钮。
 
-### 放产物
+### 一次性准备（做一遍，以后每次发版都不用再碰）
 
-APK **不进 git**（十几 MB 的二进制，每发一版就往仓库里塞一份）。
-CI 构建完把它放到宿主机上，hub 从那个路径读：
+#### 1）签名密钥
+
+Android 拿签名认应用的身份。**这把密钥丢了或者换了，所有已装的用户都必须
+卸载重装才能升级** —— 系统只会说「安装包与已安装应用的签名不一致」，
+数据和登录态一起没。所以第一版发出去之前就要把它定下来，而不是"先用
+debug 签名发着看看"。
+
+在**你自己的机器上**（不是 CI、不是服务器）生成：
+
+```bash
+keytool -genkeypair -v \
+  -keystore agent-hub-release.jks \
+  -alias agent-hub \
+  -keyalg RSA -keysize 4096 \
+  -validity 10000 \
+  -storetype JKS
+```
+
+`-validity 10000`（约 27 年）不是随手写的：密钥一旦过期，**没有任何办法**
+再给已装的用户推新版。
+
+> 立刻把 `agent-hub-release.jks` 和两个口令备份到离线的地方。
+> 这条风险写在 [立项书](09-android-app.md) 的风险表里。
+
+#### 2）四个 GitHub Secret
+
+```bash
+base64 -w0 agent-hub-release.jks > keystore.b64   # 灌完就删
+```
+
+仓库 `Settings → Secrets and variables → Actions` 里建（名字必须一字不差，
+`.github/workflows/android.yml` 按这几个名字读）：
+
+| Secret | 值 |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `keystore.b64` 的内容 |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore 口令 |
+| `ANDROID_KEY_ALIAS` | `agent-hub` |
+| `ANDROID_KEY_PASSWORD` | key 口令 |
+
+**没配这四个的时候日常构建不会失败**，退回 debug 签名 —— 外部贡献者的 PR
+拿不到 secret，那时仍然该能验证代码编得过。但**发版（`android-v*` tag）会
+当场失败**，这是刻意的：见上面那条"卸载重装"。
+
+#### 3）目录与反向代理
 
 ```bash
 sudo mkdir -p /opt/agent-hub/release
-# 从 CI 产物或本地构建拷过来
-sudo install -m 644 app-release.apk /opt/agent-hub/release/agent-hub.apk
 ```
 
-`.env` 里指过去：
+compose 部署用仓库目录下的 `release/`，`docker/compose.yaml` 已经把它只读挂到
+api 容器的 `/srv/release`。
+
+反代**必须显式转发 `/download`** —— 它不在 `/api/` 下（[ADR-0010](adr/0010-public-apk-download.md)），
+配置见 §5 的 Caddy / nginx 片段。漏了的话请求被静态站接走，用户下到一个改名叫
+`.apk` 的 `index.html`。
+
+### 发一版
+
+#### 第 1 步：抬版本号
+
+`android/app/build.gradle.kts` 的 `defaultConfig`：
+
+```kotlin
+versionCode = 2        // 每版 +1，只增不减 —— 不增的话 Android 拒绝覆盖安装
+versionName = "0.1.1"  // 给人看的那个
+```
+
+这里是版本号的**唯一来源**。commit 进 main。
+
+#### 第 2 步：打 tag
+
+```bash
+git tag android-v0.1.1        # 必须等于 android-v<versionName>
+git push -u origin android-v0.1.1
+```
+
+tag 推送**不走 paths 过滤**（GitHub 对 tag 事件不评估 paths），所以发版一定会构建。
+
+CI 在 tag 上比日常构建多三道闸，全在 `.github/workflows/android.yml` 里：
+
+1. **没有签名 secret 直接失败**（挡在构建之前，10 秒就有结论）；
+2. **tag 与 `versionName` 对不上就失败** —— 放行的话产物名、Release 名、
+   用户手机上显示的版本会是三个不同的值；
+3. **验签**：产出的包签名主体是 `CN=Android Debug` 就失败。secret 配了但口令
+   或 alias 写错时，Gradle 会安静地退回 debug 签名、构建照样成功，
+   只有看产物里的签名主体才戳得穿。
+
+三道闸都过了，`release` job 会建一个 GitHub Release 并把
+`agent-hub-<版本>.apk` 挂上去。
+
+> **Release 只是归档**，不是分发渠道：artifact 90 天就过期，而管理员半年后
+> 常要回去找"上一版到底是哪个包"。对外的正式下载地址永远是这台 hub 的
+> `/download` —— 内网部署上 GitHub 根本不可达，这正是 ADR-0010 否掉
+> 「`/download` 302 到 GitHub Release」的理由。
+
+#### 第 3 步：把包放到 hub 上
+
+从 Release 页面下载附件，或者：
+
+```bash
+gh release download android-v0.1.1 -p '*.apk'
+sha256sum agent-hub-0.1.1.apk    # 和 Release 说明里的 sha256 对一下
+```
+
+按版本存盘、软链指向当前版 —— 这样回滚只是改一下链接：
+
+```bash
+sudo install -m 644 agent-hub-0.1.1.apk /opt/agent-hub/release/agent-hub-0.1.1.apk
+sudo ln -sfn agent-hub-0.1.1.apk /opt/agent-hub/release/agent-hub.apk
+```
+
+#### 第 4 步：改 `.env`，重启 api
 
 ```ini
 ANDROID_APK_PATH=/opt/agent-hub/release/agent-hub.apk
-ANDROID_APK_VERSION=0.1.0
+# compose 部署填容器内路径（宿主机 ./release 已只读挂进去）：
+# ANDROID_APK_PATH=/srv/release/agent-hub.apk
+ANDROID_APK_VERSION=0.1.1
 ```
-
-容器里要能读到这个路径 —— `docker/compose.yml` 已经把 `./release` 只读挂进
-api 容器的 `/srv/release`，用 compose 部署时填容器内路径：
-
-```ini
-ANDROID_APK_PATH=/srv/release/agent-hub.apk
-```
-
-改完 `docker compose up -d api` 生效。
-
-### 发新版就是替换同一个文件
 
 ```bash
-sudo install -m 644 app-release.apk /opt/agent-hub/release/agent-hub.apk
-# 改 .env 里的 ANDROID_APK_VERSION，然后
 docker compose up -d api
 ```
 
-路径不变、只换内容，所以响应带的是 `Cache-Control: public, max-age=0, must-revalidate` ——
-中间层每次都回源校验，不会拿旧包顶新包。文件名里的版本号来自
-`ANDROID_APK_VERSION`，**忘了改的话用户下载目录里两个版本会同名**，
-这是唯一一个「不改也能跑、但事后很难查」的地方。
+⚠️ `ANDROID_APK_VERSION` **要跟着改**。它决定 `Content-Disposition` 里的文件名，
+忘了改的话用户下载目录里两个版本同名 —— 这是唯一一个「不改也能跑、但事后
+很难查」的地方。路径不变、只换内容，所以响应带的是
+`Cache-Control: public, max-age=0, must-revalidate`，中间层每次都回源校验，
+不会拿旧包顶新包。
 
 ### 验收
 
 ```bash
-# 有包时：200 + apk 的 MIME
-curl -sSI https://hub.example.com/download | head -3
+# 有包时：200 + apk 的 MIME + 带版本号的文件名
+curl -sSI https://hub.example.com/download | head -5
 
 # 没包/没配时：503 apk_unavailable，不是 404
 curl -sS https://hub.example.com/download
@@ -349,8 +442,25 @@ curl -sS https://hub.example.com/download/meta
 拿到 `text/html` 说明**反向代理没转发这条路径**（见 §5），请求被静态站接走了 ——
 浏览器里看是"下载成功"，装的时候才报「解析包时出现问题」。
 
+`Content-Disposition` 里的文件名要和这次发的版本一致；对不上就是
+`ANDROID_APK_VERSION` 忘了改。
+
+最后拿一台**已经装着上一版**的真机覆盖安装。只有这一步能证明签名是连续的 ——
+装到新机器上永远是成功的，看不出密钥换没换。
+
 > 手机上安装需要用户允许「安装未知来源的应用」。这是自建分发绕不开的一步，
 > 不是配置问题；`android/README.md` 里有给最终用户看的那段说明。
+
+### 回滚
+
+```bash
+sudo ln -sfn agent-hub-0.1.0.apk /opt/agent-hub/release/agent-hub.apk
+# .env 里 ANDROID_APK_VERSION 改回 0.1.0
+docker compose up -d api
+```
+
+已经装了新版的用户不会自动退回去 —— app 里没有更新机制，回滚只影响**之后**
+下载的人。真出了要紧的问题，除了回滚还得把消息告诉已经装上的那批人。
 
 ---
 
