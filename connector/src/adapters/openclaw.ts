@@ -1,5 +1,5 @@
 import { GenericShellAdapter, GenericShellManifest } from './generic-shell.js';
-import { RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
+import { HubHint, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 import { wakePrompt } from './prompt.js';
 
 export interface OpenclawManifest extends Partial<GenericShellManifest> {
@@ -28,8 +28,8 @@ export interface OpenclawManifest extends Partial<GenericShellManifest> {
  * 这个适配器是给「就想用命令行接进来」的场景兜底的。
  */
 export class OpenclawAdapter extends GenericShellAdapter {
-  constructor(m: OpenclawManifest) {
-    super({ command: [m.bin ?? 'openclaw'], ...m } as GenericShellManifest, 'openclaw');
+  constructor(m: OpenclawManifest, hub?: HubHint) {
+    super({ command: [m.bin ?? 'openclaw'], ...m } as GenericShellManifest, 'openclaw', hub);
   }
 
   async start(): Promise<void> {
@@ -51,7 +51,7 @@ export class OpenclawAdapter extends GenericShellAdapter {
 
   async wake(p: WakePayload): Promise<Outcome> {
     const m = this.m as OpenclawManifest;
-    const argv = [this.m.command[0], ...(m.subcommand ?? []), ...(m.args ?? []), wakePrompt(p)];
+    const argv = [this.m.command[0], ...(m.subcommand ?? []), ...(m.args ?? []), wakePrompt(p, this.hub)];
     return this.run(argv, '');
   }
 }

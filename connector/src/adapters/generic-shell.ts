@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { RuntimeAdapter, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
+import { HubHint, RuntimeAdapter, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 
 export interface GenericShellManifest {
   /** 命令模板，argv 数组。支持 {{kind}} {{threadId}} {{seq}} {{coalescedCount}} 占位符。 */
@@ -18,7 +18,11 @@ export interface GenericShellManifest {
  * 有它就不存在「不支持的 runtime」—— 能写 shell 就能接进来。
  */
 export class GenericShellAdapter implements RuntimeAdapter {
-  constructor(protected m: GenericShellManifest, protected name = 'generic-shell') {
+  constructor(
+    protected m: GenericShellManifest,
+    protected name = 'generic-shell',
+    protected hub?: HubHint,
+  ) {
     if (!m.command?.length) throw new Error('generic-shell 需要 command 模板');
   }
 
@@ -47,7 +51,10 @@ export class GenericShellAdapter implements RuntimeAdapter {
   }
 
   async wake(p: WakePayload): Promise<Outcome> {
-    return this.run(this.argv(p), JSON.stringify(p));
+    // stdin 里带上 hub 地址与凭证**路径**（不是凭证本身）。
+    // 写脚本的人不该被迫在两个地方各配一遍 hub 地址 —— 而且少了这一段，
+    // 脚本拿到一条「你有新事件」却不知道去哪读、往哪回，只能干瞪眼。
+    return this.run(this.argv(p), JSON.stringify(this.hub ? { ...p, hub: this.hub } : p));
   }
 
   protected run(argv: string[], stdin: string): Promise<Outcome> {

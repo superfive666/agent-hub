@@ -1,5 +1,5 @@
 import { GenericShellAdapter, GenericShellManifest } from './generic-shell.js';
-import { RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
+import { HubHint, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 import { Journal } from '../core/journal.js';
 import { wakePrompt, rememberSession, priorSession } from './prompt.js';
 
@@ -31,8 +31,8 @@ export class OpencodeAdapter extends GenericShellAdapter {
   #journal: Journal;
   #sessions: Map<string, string>;
 
-  constructor(m: OpencodeManifest, journal: Journal) {
-    super({ command: [m.bin ?? 'opencode'], ...m } as GenericShellManifest, 'opencode');
+  constructor(m: OpencodeManifest, journal: Journal, hub?: HubHint) {
+    super({ command: [m.bin ?? 'opencode'], ...m } as GenericShellManifest, 'opencode', hub);
     this.#journal = journal;
     this.#sessions = priorSession(journal);
   }
@@ -51,7 +51,7 @@ export class OpencodeAdapter extends GenericShellAdapter {
     if (m.agent) argv.push('--agent', m.agent);
     if (m.attach) argv.push('--attach', m.attach);
     argv.push(...(m.args ?? []));
-    argv.push(wakePrompt(p));
+    argv.push(wakePrompt(p, this.hub));
 
     const outcome = await this.run(argv, '');
     if (outcome.ok && p.threadId) {

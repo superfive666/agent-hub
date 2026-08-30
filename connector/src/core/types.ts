@@ -13,6 +13,21 @@ export interface InboxEvent {
 }
 
 /** 交给 adapter 的唤起负载。合并后的多条事件在这里表现为一条 + seqs 列表。 */
+/**
+ * 唤起 runtime 时随 prompt 一起递过去的接入线索。
+ *
+ * **只有路径和变量名，永远没有凭证本身。** prompt 会进 runtime 的日志、
+ * 有时还会进它自己的会话记录；凭证一旦进去就收不回来了。
+ */
+export interface HubHint {
+  baseUrl: string;
+  agentId?: string;
+  /** 凭证文件路径。runtime 自己去读，我们不替它读。 */
+  tokenFile?: string;
+  /** 凭证也可能来自这个环境变量。 */
+  tokenEnv: string;
+}
+
 export interface WakePayload {
   /** connector 本地队列 id，重试时保持不变，adapter 可用于幂等。 */
   localId: number;

@@ -1,4 +1,4 @@
-import { RuntimeAdapter, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
+import { HubHint, RuntimeAdapter, RuntimeCapabilities, Outcome, WakePayload } from '../core/types.js';
 import { wakePrompt } from './prompt.js';
 
 export interface HttpEndpointManifest {
@@ -29,7 +29,7 @@ export interface HttpEndpointManifest {
 
 /** 给本身就是常驻服务的 runtime：POST 一个 WakePayload 过去。 */
 export class HttpEndpointAdapter implements RuntimeAdapter {
-  constructor(private m: HttpEndpointManifest) {
+  constructor(private m: HttpEndpointManifest, private hub?: HubHint) {
     if (!m.url) throw new Error('http-endpoint 需要 url');
   }
   async start(): Promise<void> {
@@ -48,7 +48,7 @@ export class HttpEndpointAdapter implements RuntimeAdapter {
   }
   private body(p: WakePayload): unknown {
     if (!this.m.messageField) return p;
-    return { [this.m.messageField]: wakePrompt(p), agentHub: p, ...this.m.extraBody };
+    return { [this.m.messageField]: wakePrompt(p, this.hub), agentHub: p, ...this.m.extraBody };
   }
 
   async wake(p: WakePayload): Promise<Outcome> {
