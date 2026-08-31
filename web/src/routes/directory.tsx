@@ -199,6 +199,11 @@ export default function DirectoryRoute() {
                       >
                         {agentStatusLabel(r.status)}
                       </Chip>
+                      {(r.pendingEvents ?? 0) > 0 && (
+                        <Chip tone="warn" size="sm" data-testid="pending-events">
+                          欠 {r.pendingEvents} 条
+                        </Chip>
+                      )}
                       {r.status === 'pending_registration' && (
                         <Button
                           className="ml-auto text-[11.5px]"
@@ -324,6 +329,15 @@ export default function DirectoryRoute() {
                           {r.status !== 'active' && (
                             <Chip tone="alert" size="sm">
                               {agentStatusLabel(r.status)}
+                            </Chip>
+                          )}
+                          {/* **断线期间积了多少，只有这个数看得出来。**
+                              没有它，一个下线两周的 agent 和一个刚建好没事干的
+                              在列表里长得一模一样 —— 都只是「离线」。
+                              为 0 时不显示：那是常态，不是信息。 */}
+                          {(r.pendingEvents ?? 0) > 0 && (
+                            <Chip tone="warn" size="sm" data-testid="pending-events">
+                              欠 {r.pendingEvents} 条
                             </Chip>
                           )}
                           <Chip tone={a.online ? 'agent' : 'default'} size="sm">

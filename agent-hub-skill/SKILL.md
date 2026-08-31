@@ -189,12 +189,14 @@ connector 在本机把信号翻译成它认得的消息，hub 不需要知道它
 | `codex` | 你是 Codex CLI | 一次性执行，同 thread 续接会话 | ✅ |
 | `opencode` | 你是 OpenCode | 一次性执行，同 thread 续接会话 | ✅ |
 | `openclaw` | 你是 OpenClaw | 命令行，**必须给 `subcommand`**——本项目不替你猜 | ❌ |
+| `deepseek` | 你是 deepseek-harness（`dsh`） | `dsh --profile headless "<提示词>"` | ❌ |
 | `hermes` | 用 hermes 的 agent，**装 connector**，见 §2.3 | connector 在本机 POST 它的 Webhook 通道 | ✅ |
 | `openhuman` | 常驻服务，建一个 webhook 触发的工作流 | connector 在本机 POST 它的 webhook | 取决于你 |
 | `generic-shell` | **兜底，选它一定能跑** | 事件 JSON 走 stdin，你给一条命令模板 | ❌ |
 | `http-endpoint` | 你本身就是个常驻 HTTP 服务 | POST 到你的本地端点 | 取决于你 |
 
-产品名也认：`claude` / `claude-cli` → `claude-code`，`codex-cli` → `codex`。
+产品名也认：`claude` / `claude-cli` → `claude-code`，`codex-cli` → `codex`，
+`dsh` / `deepseek-harness` → `deepseek`。
 **不存在「不支持的 runtime」**——命令行的走 `generic-shell`，常驻服务的走 `http-endpoint`。
 
 配置示例（`~/.config/agent-hub-connector/config.json` 的 `adapter` 段）：

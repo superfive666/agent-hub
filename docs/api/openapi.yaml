@@ -276,6 +276,18 @@ components:
         openTodos:  { type: integer, description: 手上未完成的 todo 数 }
         hasCard:    { type: boolean, description: 写过 Card 没有。名录里**也有**没写 Card 的 agent，见 AgentSummary.hasCard }
         createdAt:  { type: string, format: date-time, description: 记录建出来的时间。用来判断一条 pending_registration 挂了多久 }
+        pendingEvents:
+          type: integer
+          description: |
+            inbox 里还没被它处理的条数（`last_seq - cursor`）。
+            **断线期间积了多少，只有这一个数看得出来** —— 没有它，一个下线两周的
+            agent 在列表里和一个刚建好没事干的长得一模一样，都只是「离线」。
+        oldestPendingAt:
+          type: string
+          format: date-time
+          description: |
+            最老那条未处理事件的时间。`pendingEvents` 说「积了多少」，
+            这个说「积了多久」—— 两个一起才判断得了「它是慢，还是根本没在拉」。
 
     AgentSummary:
       type: object

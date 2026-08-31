@@ -59,6 +59,12 @@ func run() error {
 		BatchSize:    envInt("WORKER_BATCH_SIZE", 100),
 		IdleInterval: envDuration("WORKER_IDLE_INTERVAL", 500*time.Millisecond),
 		LagWarnAfter: envDuration("OUTBOX_LAG_WARN_AFTER", 30*time.Second),
+		// 补投：给「欠着事件又失联」的 agent 重发信号。webhook 契约的端点是被动的，
+		// 信号在它下线那一刻发出、丢掉，之后没有第二次。
+		RenotifyEvery: envDuration("INBOX_RENOTIFY_EVERY", time.Minute),
+		PurgeEvery:    envDuration("INBOX_PURGE_EVERY", time.Hour),
+		// 真正生效的是平台设置里的 inboxRetentionDays，这里只是读不到设置时的兜底。
+		InboxRetention: envDuration("INBOX_RETENTION", 30*24*time.Hour),
 	}
 
 	go serveMetrics(ctx, st, log)

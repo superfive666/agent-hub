@@ -910,3 +910,144 @@ func TestDisabledAgentIsOfflineImmediately(t *testing.T) {
 			"绿点还亮着的话，刚点完停用的人只会以为没生效")
 	}
 }
+
+// 需求：**保留期只能删已经 ack 的事件，没 ack 的一条都不能动。**
+//
+// 一个断线两周的 agent，全部的救命数据就是 cursor 之后那些没 ack 的事件。
+// 按时间一刀切会把它们一起删掉 —— 而 agent 重连之后只会拉到一个空 inbox，
+// **不报错、不重试，就是什么都没有**，它永远不知道自己错过了什么。
+// 过期只是允许删的前提，已被确认才是删的理由。
+func TestPurgeNeverTouchesUnackedEvents(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	id := mkAgent(t, s, "purge-agent")
+
+	// 5 条都是「很久以前」的：过期这个前提对所有 5 条都成立
+	for i := 1; i <= 5; i++ {
+		if _, err := s.DB().ExecContext(ctx, `
+			INSERT INTO inbox_event (agent_id, seq, kind, priority, created_at)
+			VALUES ($1, $2, 'thread.replied', 2, now() - interval '90 days')`,
+			string(id), i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 它只 ack 到第 2 条 —— 3/4/5 是它断线期间积下的，还没处理
+	if _, err := s.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_seq, cursor)
+		VALUES ($1, 5, 2)
+		ON CONFLICT (agent_id) DO UPDATE SET last_seq = 5, cursor = 2`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := s.PurgeAckedInboxEvents(ctx, 30*24*time.Hour)
+	if err != nil {
+		t.Fatalf("清理: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("只该删掉 ack 过的那 2 条，实际删了 %d 条", n)
+	}
+
+	left := countRows(t, s, `SELECT count(*) FROM inbox_event WHERE agent_id = $1`, string(id))
+	if left != 3 {
+		t.Fatalf("cursor 之后的 3 条必须还在，实际剩 %d 条", left)
+	}
+	// 而且剩下的正是 3/4/5 —— agent 重连后按 cursor=2 拉，拿到的就是这三条
+	var minSeq, maxSeq int64
+	if err := s.DB().QueryRowContext(ctx,
+		`SELECT min(seq), max(seq) FROM inbox_event WHERE agent_id = $1`, string(id)).
+		Scan(&minSeq, &maxSeq); err != nil {
+		t.Fatal(err)
+	}
+	if minSeq != 3 || maxSeq != 5 {
+		t.Errorf("剩下的应当是 seq 3..5，实际 %d..%d", minSeq, maxSeq)
+	}
+
+	events, err := s.ReadInbox(ctx, id, 2, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 3 {
+		t.Errorf("重连后按 cursor 拉应当拿到 3 条，实际 %d 条 —— 这正是断线补齐那条路", len(events))
+	}
+}
+
+// 需求：保留期没配（0）时什么都不删。「没设置」不等于「立刻删」。
+func TestPurgeDoesNothingWithoutRetention(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	id := mkAgent(t, s, "purge-noretain")
+	if _, err := s.DB().ExecContext(ctx, `
+		INSERT INTO inbox_event (agent_id, seq, kind, priority, created_at)
+		VALUES ($1, 1, 'thread.replied', 2, now() - interval '900 days')`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_seq, cursor) VALUES ($1, 1, 1)`,
+		string(id)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.PurgeAckedInboxEvents(ctx, 0); err != nil || n != 0 {
+		t.Errorf("保留期为 0 时不该删任何东西，实际删了 %d 条（err=%v）", n, err)
+	}
+}
+
+// 需求：**找出「欠着事件又失联」的 agent，好给它重发信号。**
+//
+// 这是「断线重连自动补上」的 hub 那一半。走 webhook 契约的端点是被动的：
+// 信号在它下线那一刻发出、丢掉，之后没有第二次 —— 事件就一直躺在 inbox 里，
+// 而它以为自己没事可做，两端都不报错。
+func TestAgentsOwingEventsFindsTheStalledOnes(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	stalled := mkAgent(t, s, "owe-stalled")
+	busy := mkAgent(t, s, "owe-busy")
+	clean := mkAgent(t, s, "owe-clean")
+
+	// mkAgent 建出来是 pending_registration。查询只看 active 是对的 ——
+	// 没换过凭证的 agent 拉不了 inbox，戳它没有意义。这里把现场造成「已接入」。
+	if _, err := s.DB().ExecContext(ctx,
+		`UPDATE agent SET status = 'active' WHERE id = ANY($1)`,
+		"{"+string(stalled)+","+string(busy)+","+string(clean)+"}"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 欠 3 条，而且很久没拉过 —— 该被找出来
+	if _, err := s.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_seq, cursor, last_pull_at)
+		VALUES ($1, 5, 2, now() - interval '2 hours')`, string(stalled)); err != nil {
+		t.Fatal(err)
+	}
+	// 也欠着，但刚拉过 —— 它正在处理，戳它只是噪音
+	if _, err := s.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_seq, cursor, last_pull_at)
+		VALUES ($1, 9, 1, now())`, string(busy)); err != nil {
+		t.Fatal(err)
+	}
+	// 一条不欠
+	if _, err := s.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_seq, cursor, last_pull_at)
+		VALUES ($1, 4, 4, now() - interval '2 hours')`, string(clean)); err != nil {
+		t.Fatal(err)
+	}
+
+	owed, err := s.AgentsOwingEvents(ctx, 100)
+	if err != nil {
+		t.Fatalf("查欠账: %v", err)
+	}
+	got := map[domain.AgentID]store.OwedAgent{}
+	for _, o := range owed {
+		got[o.AgentID] = o
+	}
+	if _, ok := got[stalled]; !ok {
+		t.Error("欠着事件又失联的必须找出来 —— 没有它，webhook 档下线一次就再也收不到信号")
+	}
+	if _, ok := got[busy]; ok {
+		t.Error("窗口内刚拉过的不该被戳：它本来就在拉")
+	}
+	if _, ok := got[clean]; ok {
+		t.Error("一条不欠的不该出现")
+	}
+	if o := got[stalled]; o.LastSeq != 5 || o.Cursor != 2 {
+		t.Errorf("重发信号要报 last_seq，实际 lastSeq=%d cursor=%d", o.LastSeq, o.Cursor)
+	}
+}

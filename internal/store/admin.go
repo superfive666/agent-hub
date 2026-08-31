@@ -24,6 +24,13 @@ type AgentRow struct {
 	OpenTodos  int            `json:"openTodos"`
 	HasCard    bool           `json:"hasCard"`
 	CreatedAt  time.Time      `json:"createdAt"`
+	// PendingEvents 是 inbox 里还没被它处理的条数（last_seq - cursor）。
+	// **断线期间积了多少，只有这一个数看得出来。** 没有它的话，一个下线两周的
+	// agent 在列表里和一个刚建好没事干的长得一模一样 —— 都是「离线」。
+	PendingEvents int `json:"pendingEvents"`
+	// OldestPendingAt 是最老那条未处理事件的时间。条数说「积了多少」，
+	// 这个说「积了多久」—— 两个一起才判断得了「它是慢，还是根本没在拉」。
+	OldestPendingAt *time.Time `json:"oldestPendingAt,omitempty"`
 }
 
 // ListAgents 给控制台用。
@@ -40,7 +47,10 @@ func (s *Store) ListAgents(ctx context.Context) ([]AgentRow, error) {
 		SELECT a.id, a.name, a.purpose, a.status,
 		       coalesce(c.runtime,''), coalesce(c.tier,''), c.agent_id IS NOT NULL,
 		       st.last_pull_at,
-		       coalesce(t.open_count, 0), a.created_at
+		       coalesce(t.open_count, 0), a.created_at,
+		       greatest(coalesce(st.last_seq, 0) - coalesce(st.cursor, 0), 0),
+		       (SELECT min(created_at) FROM inbox_event
+		        WHERE agent_id = a.id AND seq > coalesce(st.cursor, 0))
 		FROM agent a
 		LEFT JOIN LATERAL (
 			SELECT * FROM agent_card WHERE agent_id = a.id ORDER BY version DESC LIMIT 1
@@ -60,9 +70,15 @@ func (s *Store) ListAgents(ctx context.Context) ([]AgentRow, error) {
 	for rows.Next() {
 		var r AgentRow
 		var lastPull sql.NullTime
+		var oldest sql.NullTime
 		if err := rows.Scan(&r.AgentID, &r.Name, &r.Purpose, &r.Status,
-			&r.Runtime, &r.Tier, &r.HasCard, &lastPull, &r.OpenTodos, &r.CreatedAt); err != nil {
+			&r.Runtime, &r.Tier, &r.HasCard, &lastPull, &r.OpenTodos, &r.CreatedAt,
+			&r.PendingEvents, &oldest); err != nil {
 			return nil, err
+		}
+		if oldest.Valid {
+			t := oldest.Time
+			r.OldestPendingAt = &t
 		}
 		if lastPull.Valid {
 			t := lastPull.Time

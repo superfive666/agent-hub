@@ -139,3 +139,101 @@ func TestWorkerLoopPicksUpNewEvents(t *testing.T) {
 		t.Errorf("扇出完之后 lag 应当回到 0，实得 %v", lag)
 	}
 }
+
+// 需求：**给「欠着事件又失联」的 agent 重发信号。**
+//
+// 这是「断线重连之后自动补上」的 hub 那一半。connector 那一半是 cursor 落盘、
+// 重连后续拉；但那只在「有人在拉」时成立。走 webhook 契约的端点是被动的：
+// 信号在它下线那一刻发出、丢掉，之后没有第二次 —— 事件就一直躺在 inbox 里，
+// 而它以为自己没事可做，**两端都不报错**。
+func TestWorkerRenotifiesStalledAgents(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	id, err := st.CreateAgent(ctx, "renotify-agent", "测试", "superfive")
+	if err != nil {
+		t.Fatalf("建 agent: %v", err)
+	}
+	if _, err := st.DB().ExecContext(ctx,
+		`UPDATE agent SET status = 'active' WHERE id = $1`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	// 欠 3 条，两小时没来拉过
+	if _, err := st.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_seq, cursor, last_pull_at)
+		VALUES ($1, 5, 2, now() - interval '2 hours')`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+
+	g := &spy{}
+	// RenotifyEvery 给得极短，好让这一轮立刻发生；purge 关掉，本用例不测它。
+	w := worker.New(st, g, worker.Config{
+		IdleInterval:  10 * time.Millisecond,
+		RenotifyEvery: 20 * time.Millisecond,
+		PurgeEvery:    -1,
+	}, nil)
+
+	runCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- w.Run(runCtx) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && g.count() == 0 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	<-done
+
+	if g.count() == 0 {
+		t.Fatal("失联又欠着事件的 agent 必须被重发信号 —— " +
+			"没有它，webhook 契约的端点下线一次就再也收不到任何信号")
+	}
+	// 信号里报的是 last_seq：agent 收到后按自己的 cursor 拉，增量补齐
+	g.mu.Lock()
+	first := g.ns[0]
+	g.mu.Unlock()
+	if first.AgentID != id {
+		t.Errorf("重发的对象不对：%s", first.AgentID)
+	}
+	if first.Seq != 5 {
+		t.Errorf("信号该报 last_seq=5，实际 %d", first.Seq)
+	}
+}
+
+// 需求：正在正常拉取的 agent 不该被反复戳 —— 它本来就在拉，戳它只是噪音。
+func TestWorkerDoesNotRenotifyBusyAgents(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	id, err := st.CreateAgent(ctx, "renotify-busy", "测试", "superfive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB().ExecContext(ctx,
+		`UPDATE agent SET status = 'active' WHERE id = $1`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	// 也欠着，但刚刚才拉过
+	if _, err := st.DB().ExecContext(ctx, `
+		INSERT INTO agent_inbox_state (agent_id, last_seq, cursor, last_pull_at)
+		VALUES ($1, 9, 1, now())`, string(id)); err != nil {
+		t.Fatal(err)
+	}
+
+	g := &spy{}
+	w := worker.New(st, g, worker.Config{
+		IdleInterval:  10 * time.Millisecond,
+		RenotifyEvery: 20 * time.Millisecond,
+		PurgeEvery:    -1,
+	}, nil)
+
+	runCtx, cancel := context.WithTimeout(ctx, 600*time.Millisecond)
+	done := make(chan error, 1)
+	go func() { done <- w.Run(runCtx) }()
+	time.Sleep(400 * time.Millisecond)
+	cancel()
+	<-done
+
+	if g.count() != 0 {
+		t.Errorf("窗口内刚拉过的 agent 不该被戳，实际发了 %d 条", g.count())
+	}
+}

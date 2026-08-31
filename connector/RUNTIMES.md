@@ -2,7 +2,7 @@
 
 选哪个适配器取决于 **runtime 本身的形态**，不是偏好：
 
-- **命令行型**（claude-code / codex / opencode / openclaw）：runtime 是个 CLI，
+- **命令行型**（claude-code / codex / opencode / openclaw / deepseek）：runtime 是个 CLI，
   connector 每次唤起拉起一个进程。前三个支持按 thread 续接会话。
 - **常驻服务型**（hermes / openhuman）：runtime 本身长期跑着、带自己的消息通道。
   这时拉子进程既慢又会丢掉它自己维护的会话状态，应该把事件 **推** 给它。
@@ -17,6 +17,7 @@
 | `codex` | CLI | 是 | 已核实 |
 | `opencode` | CLI | 是 | 已核实 |
 | `openclaw` | CLI | 否 | **未核实，需自己填 subcommand** |
+| `deepseek`（别名 `dsh`、`deepseek-harness`） | CLI | 否 | 命令与 headless profile 已核实；会话续接未核实，见下 |
 | `hermes` | webhook（**经 connector**，hub 不直连） | 由 hermes 自己维护 | 形态已核实，URL 与会话键字段需自取 |
 | `openhuman` | webhook（**经 connector**，hub 不直连） | 由 openhuman 自己维护 | 形态已核实，URL 需自取 |
 | `generic-shell` | CLI | 否 | 兜底，能写 shell 就能接 |
@@ -69,6 +70,32 @@ codex exec resume <SESSION_ID> --json "<提示词>"      # 同一 thread 的后�
 
 `--json` 让 stdout 变成 JSONL 事件流，会话 id 从里面取。
 默认沙箱 `workspace-write`：agent 要能改工作区文件才谈得上干活，但不放开工作区之外的写入。
+
+## deepseek（deepseek-harness / `dsh`）
+
+```json
+{ "type": "deepseek", "bin": "/usr/local/bin/dsh", "profile": "headless", "cwd": "~/work" }
+```
+
+非交互入口是 headless profile：
+
+```
+dsh --profile headless "<提示词>"      # 跑一次，打印最终答案，退出
+```
+
+**只有 headless 适合被 connector 唤起。** 其余 profile（tui / web）要么等人交互、
+要么起一个服务，被 headless 拉起来只会挂到 `timeoutSeconds`。
+
+**不接会话（`resumesSession: false`）。** `--resume <id>` 这个参数确实存在，
+但官方 CLI 文档里只在 tui profile 的例子里出现过，headless 下的行为没有文档；
+而且 headless 也没有文档化的 JSON 输出，拿不到 session id。两头都缺的情况下
+猜一个出来，表现是**每次唤起都接错会话** —— 比不接会话糟得多。
+
+不接会话不影响正确性：唤起 prompt 里已经带了 hub 地址和读 thread 的接口，
+它每次从 hub 拉全文重建上下文，那本来就是这套设计要它做的事。
+
+多数部署要 `DEEPSEEK_API_KEY`。**没有写死进 `requiresEnv`**：dsh 支持自定义 provider，
+那种部署下这个变量根本不存在，写死会让它启动就失败。要强制就在清单里自己填 `requiresEnv`。
 
 ## opencode
 

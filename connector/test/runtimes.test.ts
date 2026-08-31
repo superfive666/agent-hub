@@ -284,3 +284,68 @@ describe('需求：注册表覆盖五个新 runtime', () => {
     );
   });
 });
+
+/**
+ * deepseek-harness（`dsh`）。核实来源：官方仓库 apps/cli 的文档 ——
+ * `dsh --profile headless "<job>"` 跑一次、打印结果、退出。
+ */
+describe('需求：deepseek harness 走 headless profile', () => {
+  test('唤起时带 --profile headless，prompt 放最后一个位置参数', async () => {
+    const dir = tmpDir()
+    const seen = join(dir, 'argv')
+    // 假的 dsh：把收到的 argv 一行一个记下来
+    const fake = join(dir, 'dsh')
+    // **用 \0 分隔，不用换行** —— 唤起 prompt 本身是多行的，用换行分隔会把它切碎，
+    // 于是「prompt 是最后一个参数」这条断言测的其实是 prompt 的最后一行。
+    writeFileSync(fake, `#!/bin/sh\nfor a in "$@"; do printf '%s\\0' "$a"; done > ${seen}\nexit 0\n`, { mode: 0o755 })
+
+    const a = createAdapter(
+      { type: 'deepseek', bin: fake } as never,
+      openJournal(tmpDir(), 'jsonl'),
+    )
+    await a.start()
+    const r = await a.wake(payload({ kind: 'tweet.mentioned', threadId: 'th-9' }))
+    assert.equal(r.ok, true, `唤起应当成功，实际 ${JSON.stringify(r)}`)
+
+    const argv = readFileSync(seen, 'utf8').split('\0').filter(Boolean)
+    assert.deepEqual(argv.slice(0, 2), ['--profile', 'headless'])
+    // prompt **必须是最后一个**：dsh 把第一个非选项参数当任务描述，
+    // 夹在选项中间会被后面的选项吃掉。
+    assert.match(argv[argv.length - 1], /agent-hub 事件/)
+    assert.match(argv[argv.length - 1], /th-9/)
+  })
+
+  test('profile 可以覆盖，但默认必须是 headless', async () => {
+    const dir = tmpDir()
+    const seen = join(dir, 'argv')
+    const fake = join(dir, 'dsh')
+    // **用 \0 分隔，不用换行** —— 唤起 prompt 本身是多行的，用换行分隔会把它切碎，
+    // 于是「prompt 是最后一个参数」这条断言测的其实是 prompt 的最后一行。
+    writeFileSync(fake, `#!/bin/sh\nfor a in "$@"; do printf '%s\\0' "$a"; done > ${seen}\nexit 0\n`, { mode: 0o755 })
+
+    const a = createAdapter(
+      { type: 'deepseek', bin: fake, profile: 'custom' } as never,
+      openJournal(tmpDir(), 'jsonl'),
+    )
+    await a.start()
+    await a.wake(payload())
+    assert.deepEqual(readFileSync(seen, 'utf8').split('\0').filter(Boolean).slice(0, 2), [
+      '--profile',
+      'custom',
+    ])
+  })
+
+  test('不声称能接会话 —— headless 的 --resume 语义没核实，也拿不到 session id', async () => {
+    const a = createAdapter({ type: 'deepseek', bin: '/bin/echo' } as never, openJournal(tmpDir(), 'jsonl'))
+    assert.equal(a.capabilities().resumesSession, false,
+      '猜一个会话 id 出来，表现是每次唤起都接错会话 —— 比不接会话糟得多')
+    assert.equal(a.capabilities().runtime, 'deepseek')
+  })
+
+  test('dsh / deepseek-harness 都认', () => {
+    for (const t of ['dsh', 'deepseek-harness', 'deepseek']) {
+      const a = createAdapter({ type: t, bin: '/bin/echo' } as never, openJournal(tmpDir(), 'jsonl'))
+      assert.equal(a.capabilities().runtime, 'deepseek', `${t} 应当归一到 deepseek`)
+    }
+  })
+})
