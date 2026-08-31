@@ -635,6 +635,16 @@ make web            # 控制台：重新生成类型 + 构建，产物仍在 web
 前端的改动一个都不会生效——而且界面还是旧的，新增的按钮你根本看不到。
 反向代理指向的是同一个 `web/dist`，所以不用 reload，但浏览器要强刷一次。
 
+`make backend` 跑完会自动接一步 `make docker-prune`，把这次重建挤下来的旧镜像清掉：
+tag 挪到新镜像上以后，上一版就成了 `<none>:<none>` 的悬空镜像，谁都不引用、层还占着磁盘。
+一天重建几次就是几个 GB，而 `docker images` 默认**不列**悬空镜像——所以这块占用是
+看不见的，通常等到 build 报 `no space left on device` 才发现。
+
+清理只动**打了 agent-hub 标签的悬空镜像**：别的项目的镜像、带 tag 的版本镜像、构建缓存
+都不碰（不碰缓存是故意的，清了下次 build 要重新下一遍 Go 模块）。这次改动之前留下的
+悬空镜像没有标签，筛不到，要手动清一次——命令和边界见 [docker/README.md §4](../docker/README.md)。
+不想清的那一次：`make backend PRUNE=0`。
+
 ⚠️ **不要用 `sudo` 跑 `make web`**。那会留下 root 属主的 `node_modules/` 和 `web/dist/`，
 下次不带 sudo 就 EACCES，只能一直 sudo 下去；npm 以 root 身份还会执行第三方包的
 install 钩子。仓库属主不对就先 `sudo chown -R "$USER":"$USER" /opt/agent-hub`

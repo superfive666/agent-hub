@@ -24,6 +24,15 @@ RUN CGO_ENABLED=0 GOOS=linux GOFLAGS=-trimpath \
 # ---------- 运行阶段 ----------
 FROM gcr.io/distroless/static:nonroot
 
+# 镜像标签。**不只是元数据**：`make backend` 每次 --build 都会把上一版镜像变成悬空镜像
+# （tag 挪走了、层还占着磁盘），Makefile 的 docker-prune 就是按下面这个 source 标签
+# 把「自己的」悬空镜像挑出来清掉的 —— 物理机上跑的不止 agent-hub，不能用全局 prune。
+# ⚠️ 这个值和 Makefile 里的 IMAGE_LABEL_VALUE 必须一致，改一处要改两处。
+# 对不上的后果是**清理静默变成空操作**：命令照样返回 0，磁盘继续涨。
+# docker-prune 因此会先 grep 这两个文件核对，对不上直接报错，不让它默默失效。
+LABEL org.opencontainers.image.source="https://github.com/superfive666/agent-hub"
+LABEL org.opencontainers.image.title="agent-hub-worker"
+
 WORKDIR /
 COPY --from=build /out/worker /worker
 

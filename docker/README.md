@@ -129,6 +129,46 @@ postgres 拉起来——于是一个空库跟你真正的库并存，服务还�
 
 滚动重启时新旧 worker 会重叠几秒 —— advisory lock 就是为这个准备的，新实例拿不到锁会等/退出，不会两个一起扇出。
 
+### 重建会留下悬空镜像，`make` 顺手清掉
+
+每次带 `--build` 重建，`agent-hub-api:dev` / `agent-hub-worker:dev` 这两个 tag 会挪到
+刚建好的镜像上，**上一版就变成 `<none>:<none>` 的悬空镜像**：谁都不引用了，整份镜像层
+还压在磁盘上。一天重建几次就是几个 GB。
+
+麻烦的地方在于 `docker images` 默认**不列**悬空镜像 —— 这块占用是看不见的，
+往往等到磁盘写满、build 报 `no space left on device` 才发现。
+
+所以 `make backend` / `make docker-up` / `make docker-build` 跑完都会自动接一步
+`make docker-prune`，也可以单独跑：
+
+```bash
+make docker-prune          # 只清 agent-hub 自己的悬空镜像
+make backend PRUNE=0       # 这一次不清
+```
+
+它清得很窄，三条边界都是刻意的：
+
+- **按镜像标签筛**（`org.opencontainers.image.source`，在两个 Dockerfile 的运行阶段打），
+  不是 `docker image prune -f`，更不是 `docker system prune`。后两条清的是整台机器 ——
+  物理机上跑的不止 agent-hub，别人的悬空镜像、网络、构建缓存会一起没。
+- **不带 `-a`**，只清悬空的。**带 tag 的版本镜像一个都不动**，下面按 `VERSION` 回滚的路还在。
+  镜像正被容器引用时 docker 本来就拒绝删，所以不存在「把正在跑的那版删了」。
+- **不碰构建缓存**。清了它下次 build 要重新下一遍 Go 模块、重编一遍依赖，
+  省下的磁盘换来的是每次几分钟。
+
+标签和 Makefile 里的 `IMAGE_LABEL_VALUE` 必须一致，对不上的后果是**清理静默变成空操作**：
+命令照样返回 0，磁盘继续涨。`docker-prune` 因此会先核对两个 Dockerfile，对不上直接报错。
+
+这次改动之前建出来的悬空镜像**没有这个标签**，筛不到。它们要手动清一次
+（这条不带筛选，会清掉这台机器上**所有项目**的悬空镜像，先看清单再决定）：
+
+```bash
+docker images -f dangling=true    # 先看一眼都有什么
+docker image prune -f             # 全局，不只是 agent-hub 的
+docker buildx du                  # 构建缓存占了多少（另一块，上面那条不清它）
+docker builder prune -f           # 真要清缓存：全局，下次 build 会慢一截
+```
+
 **回滚**：改回上一个 `VERSION` 再 `up -d`。数据库迁移要单独考虑：只做**向后兼容**的迁移（加列加表，不删不改类型），否则回滚镜像时旧代码对不上新表。破坏性变更拆成两次发布。
 
 **升级前备份**：

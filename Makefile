@@ -18,9 +18,15 @@ TEST_DATABASE_URL ?= postgres://$(DEV_PG_USER):$(DEV_PG_PASS)@127.0.0.1:$(DEV_PG
 SCHEMA_FILES := $(sort $(wildcard docs/schema/*.sql))
 VERSION ?= dev
 
+# 悬空镜像的清理筛选条件，和 docker/*.Dockerfile 运行阶段的 LABEL 一一对应。
+# 改这里要连 Dockerfile 一起改 —— docker-prune 会核对，对不上就报错。
+IMAGE_LABEL_KEY   := org.opencontainers.image.source
+IMAGE_LABEL_VALUE := https://github.com/superfive666/agent-hub
+IMAGE_LABEL       := $(IMAGE_LABEL_KEY)=$(IMAGE_LABEL_VALUE)
+
 .DEFAULT_GOAL := help
 
-.PHONY: help dev-db dev-db-down schema test test-db lint build docker-build docker-up docker-down \
+.PHONY: help dev-db dev-db-down schema test test-db lint build docker-build docker-up docker-down docker-prune \
         backend web web-test connector-test api-docs android-core-test android-test android-apk verify
 
 help: ## 列出所有目标
@@ -64,9 +70,11 @@ build: ## 在本机编译两个二进制到 bin/
 docker-build: ## 构建 api / worker 镜像（构建上下文是仓库根）
 	docker build -f docker/api.Dockerfile    --build-arg VERSION=$(VERSION) -t agent-hub-api:$(VERSION)    .
 	docker build -f docker/worker.Dockerfile --build-arg VERSION=$(VERSION) -t agent-hub-worker:$(VERSION) .
+	@$(MAKE) --no-print-directory docker-prune
 
 docker-up: ## 生产编排起全套（api / worker / postgres），需要根目录有 .env
 	$(COMPOSE) -f $(PROD_COMPOSE) --env-file .env up -d --build
+	@$(MAKE) --no-print-directory docker-prune
 
 # `--no-deps` 是这条命令的重点，不是可选项。
 # compose.yaml 里 api / worker 都 `depends_on: postgres (service_healthy)`，
@@ -76,9 +84,37 @@ docker-up: ## 生产编排起全套（api / worker / postgres），需要根目�
 # 用编排自带 postgres 的部署请用 `make docker-up`，那条会连库一起管。
 backend: ## 只重建 api / worker 两个容器（用外部 postgres 的部署走这个，不要用 docker-up）
 	$(COMPOSE) -f $(PROD_COMPOSE) --env-file .env up -d --build --no-deps api worker
+	@$(MAKE) --no-print-directory docker-prune
 
 docker-down: ## 停掉生产编排（数据卷保留；加 CLEAN=1 才删数据）
 	$(COMPOSE) -f $(PROD_COMPOSE) --env-file .env down $(if $(CLEAN),-v,)
+
+# 每次带 --build 重建，都会把 agent-hub-api:$(VERSION) / agent-hub-worker:$(VERSION)
+# 这两个 tag 挪到刚建好的镜像上，上一版就变成 <none>:<none> 的悬空镜像：谁都不引用了，
+# 整份镜像层还压在磁盘上。一天重建几次就是几个 GB，而 `docker images` 默认**不列**
+# 悬空镜像 —— 所以这块占用是看不见的，通常等磁盘写满才发现。本地不留旧镜像做回滚
+# （回滚走带 tag 的版本镜像，见 docker/README.md §4），所以重建完顺手清掉。
+#
+# ⚠️ **不是 `docker image prune -f`，更不是 `docker system prune`。**
+# 那两条清的是整台机器：物理机上跑的不止 agent-hub，别人的悬空镜像、网络、构建缓存
+# 会一起没。这里靠镜像标签只挑自己的（标签在 docker/*.Dockerfile 的运行阶段打）。
+#
+# ⚠️ **没有 `-a`。** 只清悬空的，**带 tag 的版本镜像一个都不动**，按 VERSION 回滚的
+# 路还在；镜像正被容器引用时 docker 本来就拒绝删，所以不存在「删掉正在跑的那版」。
+#
+# 构建缓存故意不碰：清了它下次 build 要重新下一遍 Go 模块、重编一遍依赖，
+# 省下的磁盘换来的是每次几分钟。真要清见 docker/README.md §4。
+docker-prune: ## 清掉 agent-hub 自己的悬空镜像（重建后旧镜像的残留）；PRUNE=0 跳过
+	@if [ "$(PRUNE)" = "0" ]; then echo ">> PRUNE=0：跳过悬空镜像清理"; exit 0; fi; \
+	for f in docker/api.Dockerfile docker/worker.Dockerfile; do \
+		grep -qF '$(IMAGE_LABEL_KEY)="$(IMAGE_LABEL_VALUE)"' "$$f" && continue; \
+		echo "!! $$f 的 $(IMAGE_LABEL_KEY) 和 Makefile 的 IMAGE_LABEL_VALUE 对不上。"; \
+		echo "   就这样跑下去，筛选匹配不到任何镜像、清理静默变成空操作，磁盘继续涨。"; \
+		echo "   容器已经起好了，只有这一步没做。两边改成同一个值再跑 make docker-prune。"; \
+		exit 1; \
+	done; \
+	docker image prune -f --filter 'label=$(IMAGE_LABEL)' \
+	  || echo ">> 悬空镜像没清成（容器已经起好了，服务不受影响）。手动：docker image prune -f --filter 'label=$(IMAGE_LABEL)'"
 
 web: ## 构建管理控制台（会先按 openapi.yaml 重新生成类型）
 	cd web && npm ci && npm run gen:api && npm run build
