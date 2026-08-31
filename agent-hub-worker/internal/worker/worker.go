@@ -28,6 +28,17 @@ type Config struct {
 	// LagWarnAfter 超过这个积压时长就告警。默认 30s。
 	// 这条告警不可关闭：它是唯一能发现 worker 静默死亡的地方。
 	LagWarnAfter time.Duration
+	// RenotifyEvery 多久扫一遍「欠着事件又失联」的 agent 并重发信号。默认 60s。
+	// 设成负数关掉（测试里用）。
+	RenotifyEvery time.Duration
+	// PurgeEvery 多久清一次已 ack 且过期的 inbox 事件。默认 1 小时。
+	PurgeEvery time.Duration
+	// InboxRetention 保留期的兜底值。**只影响已经被 ack 的事件** ——
+	// 没 ack 的一条都不删，那是断线 agent 全部的救命数据。
+	//
+	// 真正生效的是平台设置里的 `inboxRetentionDays`（管理员在设置页能改）；
+	// 这里只是读不到设置时的兜底。0 表示不清理。
+	InboxRetention time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -39,6 +50,12 @@ func (c Config) withDefaults() Config {
 	}
 	if c.LagWarnAfter <= 0 {
 		c.LagWarnAfter = 30 * time.Second
+	}
+	if c.RenotifyEvery == 0 {
+		c.RenotifyEvery = time.Minute
+	}
+	if c.PurgeEvery == 0 {
+		c.PurgeEvery = time.Hour
 	}
 	return c
 }
@@ -89,6 +106,13 @@ func (w *Worker) Run(ctx context.Context) error {
 	lagTicker := time.NewTicker(10 * time.Second)
 	defer lagTicker.Stop()
 
+	// 补投与清理各自一个慢 ticker。跟着 outbox 主循环走会让它们的节奏
+	// 随负载漂：忙的时候几乎不跑，闲的时候一秒跑好几遍。
+	renotify := newTicker(w.cfg.RenotifyEvery)
+	defer renotify.Stop()
+	purge := newTicker(w.cfg.PurgeEvery)
+	defer purge.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -99,6 +123,10 @@ func (w *Worker) Run(ctx context.Context) error {
 			if err := w.checkLock(ctx, lock); err != nil {
 				return err
 			}
+		case <-renotify.C:
+			w.renotifyStalled(ctx)
+		case <-purge.C:
+			w.purgeInbox(ctx)
 		default:
 		}
 
@@ -119,6 +147,69 @@ func (w *Worker) Run(ctx context.Context) error {
 				return nil
 			}
 		}
+	}
+}
+
+// newTicker 包一层，好让「关掉」也有个统一写法。
+// 负数或 0 得到一个永远不响的 ticker —— 比在调用点到处判空干净。
+func newTicker(d time.Duration) *time.Ticker {
+	if d <= 0 {
+		t := time.NewTicker(time.Hour)
+		t.Stop() // 停掉的 ticker 的 channel 永远不会有值
+		return t
+	}
+	return time.NewTicker(d)
+}
+
+// renotifyStalled 给「欠着事件又失联」的 agent 重发一次信号。
+//
+// **这是「断线重连之后自动补上」的 hub 那一半。** connector 那一半是
+// cursor 落盘、重连后续拉；但那只在「有人在拉」时成立。走 webhook 契约的端点
+// 是被动的：信号在它下线那一刻发出、丢掉，之后没有第二次，
+// 事件就一直躺在 inbox 里，而它以为自己没事可做 —— 没有任何一端会报错。
+//
+// 重发是幂等的：信号里只有 {agentId, seq}，收到几次都只导致「去拉一次」。
+// 拉取本身按 cursor 做增量，所以重发绝不会让 agent 重复处理同一条事件。
+func (w *Worker) renotifyStalled(ctx context.Context) {
+	owed, err := w.store.AgentsOwingEvents(ctx, 200)
+	if err != nil {
+		w.log.Error("查欠账 agent 失败", "err", err)
+		return
+	}
+	if len(owed) == 0 || w.gw == nil {
+		return
+	}
+	ns := make([]store.Notification, 0, len(owed))
+	for _, o := range owed {
+		ns = append(ns, store.Notification{AgentID: o.AgentID, Seq: o.LastSeq})
+	}
+	w.gw.Notify(ctx, ns)
+	// Info 而不是 Debug：这条日志是「有 agent 掉线了」的第一手线索。
+	w.log.Info("给失联的 agent 重发信号", "agents", len(ns),
+		"worst", owed[0].LastSeq-owed[0].Cursor, "silentFor", owed[0].SilentFor.Round(time.Second))
+}
+
+// purgeInbox 清掉已 ack 且过期的事件。
+//
+// `InboxRetention` 这个设置项以前是个空壳：契约里有、设置页里有，
+// 但全仓一行清理代码都没有，表一直在长。
+func (w *Worker) purgeInbox(ctx context.Context) {
+	// 每轮都读一次设置，而不是启动时读一次：管理员在设置页把保留期改了，
+	// 不该还要重启 worker 才生效。一小时一次查询，可以忽略。
+	retain := w.cfg.InboxRetention
+	if st, err := w.store.GetSettings(ctx, "UTC"); err == nil && st.InboxRetentionDays > 0 {
+		retain = time.Duration(st.InboxRetentionDays) * 24 * time.Hour
+	}
+	if retain <= 0 {
+		return
+	}
+	n, err := w.store.PurgeAckedInboxEvents(ctx, retain)
+	if err != nil {
+		w.log.Error("清理 inbox 失败", "err", err)
+		return
+	}
+	if n > 0 {
+		w.log.Info("清理已确认的 inbox 事件", "deleted", n, "retention", retain)
 	}
 }
 

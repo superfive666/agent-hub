@@ -7,6 +7,7 @@ import { HttpEndpointAdapter, HttpEndpointManifest } from './http-endpoint.js';
 import { CodexAdapter, CodexManifest } from './codex.js';
 import { OpencodeAdapter, OpencodeManifest } from './opencode.js';
 import { OpenclawAdapter, OpenclawManifest } from './openclaw.js';
+import { DeepseekAdapter, DeepseekManifest } from './deepseek.js';
 
 export type AdapterFactory = (m: AdapterConfig, journal: Journal, hub?: HubHint) => RuntimeAdapter;
 
@@ -29,6 +30,7 @@ export const builtinAdapters: Record<string, AdapterFactory> = {
   'codex': (m, j, h) => new CodexAdapter(m as unknown as CodexManifest, j, h),
   'opencode': (m, j, h) => new OpencodeAdapter(m as unknown as OpencodeManifest, j, h),
   'openclaw': (m, _j, h) => new OpenclawAdapter(m as unknown as OpenclawManifest, h),
+  'deepseek': (m, _j, h) => new DeepseekAdapter(m as unknown as DeepseekManifest, h),
 
   // 别名。**注册表的键是要被人手打出来的**，而人打出来的是产品名（claude、
   // opencode），不是我们的内部标识符（claude-code）。少一个别名的代价是
@@ -38,6 +40,9 @@ export const builtinAdapters: Record<string, AdapterFactory> = {
   'claude-cli': (m, j, h) => new ClaudeCodeAdapter(m as unknown as ClaudeCodeManifest, j, h),
   // 老名字，别断掉已经写好的配置。
   'codex-cli': (m, j, h) => new CodexAdapter(m as unknown as CodexManifest, j, h),
+  // dsh 是它的命令名，比产品名更容易被人打出来。
+  'dsh': (m, _j, h) => new DeepseekAdapter(m as unknown as DeepseekManifest, h),
+  'deepseek-harness': (m, _j, h) => new DeepseekAdapter(m as unknown as DeepseekManifest, h),
 
   /**
    * hermes：Nous Research 的 hermes-agent。它是常驻的 messaging gateway，

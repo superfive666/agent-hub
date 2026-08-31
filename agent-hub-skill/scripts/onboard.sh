@@ -8,7 +8,7 @@
 #   HUB         必填，hub 地址
 #   REG_TOKEN   必填（非交互时），管理员给你的一次性注册 token
 #   RUNTIME     必填，你本机跑的是哪个 agent：
-#                 claude-code | codex | opencode | openclaw | hermes | openhuman | generic-shell
+#                 claude-code | codex | opencode | openclaw | deepseek | hermes | openhuman | generic-shell
 #   WORKDIR     可选，runtime 的工作目录，默认 $PWD
 #   RUNTIME_URL 仅 hermes / openhuman / http-endpoint 需要：对方的 webhook 地址
 #   SESSION_FIELD 可选，同上三者：对方 body 里表示「会话/对话键」的字段名。
@@ -35,7 +35,7 @@ say()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die()  { printf '\033[31m!!\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ -n "${HUB:-}" ]     || die "没设 HUB。例：HUB=https://hub.example.com REG_TOKEN=… RUNTIME=codex $0"
-[ -n "${RUNTIME:-}" ] || die "没设 RUNTIME。可选：claude-code codex opencode openclaw hermes openhuman generic-shell"
+[ -n "${RUNTIME:-}" ] || die "没设 RUNTIME。可选：claude-code codex opencode openclaw deepseek hermes openhuman generic-shell"
 
 WORKDIR="${WORKDIR:-$PWD}"
 TIER="${TIER:-longpoll}"
@@ -54,6 +54,7 @@ CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode acceptEdits}"
 case "$RUNTIME" in
   claude|claude-cli)  RUNTIME=claude-code ;;
   codex-cli)          RUNTIME=codex ;;
+  dsh|deepseek-harness) RUNTIME=deepseek ;;
 esac
 
 # ── 各 runtime 的前置条件，先查清楚再动手 ───────────────────────────────
@@ -62,6 +63,7 @@ case "$RUNTIME" in
   claude-code) need_bin=claude ;;
   codex)       need_bin=codex ;;
   opencode)    need_bin=opencode ;;
+  deepseek)    need_bin=dsh ;;
   openclaw)
     need_bin=openclaw
     [ -n "${SUBCOMMAND:-}" ] || die \
@@ -78,7 +80,7 @@ case "$RUNTIME" in
     need_bin=""
     [ -n "${COMMAND:-}" ] || die "generic-shell 需要 COMMAND，例：COMMAND='sh /path/wake.sh'" ;;
   *) die "不认识的 RUNTIME=$RUNTIME
-可选：claude-code（别名 claude）codex opencode openclaw hermes openhuman generic-shell http-endpoint
+可选：claude-code（别名 claude）codex opencode openclaw deepseek（别名 dsh）hermes openhuman generic-shell http-endpoint
 任何 runtime 都能用 generic-shell（命令行）或 http-endpoint（常驻服务）兜底接进来。" ;;
 esac
 
@@ -132,6 +134,8 @@ adapter_json() {
     codex)       printf '"type":"codex","bin":%s,"sandbox":"workspace-write","cwd":%s' \
                    "$(json_str "$BIN_PATH")" "$(json_str "$WORKDIR")" ;;
     opencode)    printf '"type":"opencode","bin":%s,"cwd":%s' \
+                   "$(json_str "$BIN_PATH")" "$(json_str "$WORKDIR")" ;;
+    deepseek)    printf '"type":"deepseek","bin":%s,"profile":"headless","cwd":%s' \
                    "$(json_str "$BIN_PATH")" "$(json_str "$WORKDIR")" ;;
     openclaw)    printf '"type":"openclaw","bin":%s,"subcommand":%s,"cwd":%s' \
                    "$(json_str "$BIN_PATH")" \

@@ -640,6 +640,23 @@ make web            # 控制台：重新生成类型 + 构建，产物仍在 web
 install 钩子。仓库属主不对就先 `sudo chown -R "$USER":"$USER" /opt/agent-hub`
 ——根因通常是某次 `sudo git pull`。
 
+### 补投与 inbox 清理
+
+worker 除了扇出 outbox，还有两个慢循环：
+
+| 环境变量 | 默认 | 做什么 |
+|---|---|---|
+| `INBOX_RENOTIFY_EVERY` | `1m` | 给「欠着事件又超过在线窗口没来拉」的 agent 重发信号。设 `-1s` 关掉 |
+| `INBOX_PURGE_EVERY` | `1h` | 清一次已确认且过期的 inbox 事件 |
+| `INBOX_RETENTION` | `720h` | 保留期的**兜底值**。真正生效的是设置页里的 `inboxRetentionDays` |
+
+补投是「断线重连自动补上」的 hub 那一半，详见 [04-connectivity §7.5](04-connectivity.md)。
+它是幂等的：信号里只有 `{agentId, seq}`，收到几次都只导致「去拉一次」。
+
+**清理只删 `seq <= cursor` 的。** 按时间一刀切会把一个断线两周的 agent
+全部的救命数据删掉，而它重连后只会拉到一个空 inbox —— 不报错、不重试，
+就是什么都没有。过期只是允许删的前提，已被确认才是删的理由。
+
 ### 别在生产库上跑测试
 
 `go test` 需要真库（`SKIP LOCKED`、advisory lock、事务隔离 mock 不出来），

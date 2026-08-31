@@ -186,3 +186,28 @@ describe('名录页对停用 agent 的处理', () => {
     await waitFor(() => expect(screen.queryAllByTestId('offstage-row')).toHaveLength(0))
   })
 })
+
+/**
+ * 断线期间积了多少，只有这个数看得出来。没有它，一个下线两周的 agent
+ * 和一个刚建好没事干的在列表里长得一模一样 —— 都只是「离线」。
+ */
+describe('名录页上的 inbox 欠账', () => {
+  it('欠着事件的 agent 标出条数', async () => {
+    const owing = mockAdminAgents.map((a, i) =>
+      i === 0 ? { ...a, online: false, pendingEvents: 7 } : { ...a, pendingEvents: 0 },
+    )
+    stub({ directory: mockDirectory, agents: owing })
+    renderApp('/directory')
+
+    const cards = await screen.findAllByTestId('agent-card')
+    const one = cards.find((c) => c.textContent?.includes(owing[0].name!))!
+    expect(one).toHaveTextContent('欠 7 条')
+  })
+
+  it('一条不欠时不显示 —— 那是常态，不是信息', async () => {
+    stub({ directory: mockDirectory, agents: mockAdminAgents.map((a) => ({ ...a, pendingEvents: 0 })) })
+    renderApp('/directory')
+    await screen.findAllByTestId('agent-card')
+    expect(screen.queryAllByTestId('pending-events')).toHaveLength(0)
+  })
+})

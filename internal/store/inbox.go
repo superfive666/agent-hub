@@ -132,3 +132,92 @@ func (s *Store) DeadLetterCount(ctx context.Context) (int, error) {
 	}
 	return n, nil
 }
+
+// OwedAgent 是「欠着事件、而且已经有一阵没来拉」的一个 agent。
+type OwedAgent struct {
+	AgentID domain.AgentID
+	// LastSeq 是已经分配给它的最大 seq。重发信号时报这个数。
+	LastSeq int64
+	Cursor  int64
+	Tier    string
+	// SilentFor 是距上次拉取多久。从来没拉过的话，是距记录建出来多久。
+	SilentFor time.Duration
+}
+
+// AgentsOwingEvents 找出 inbox 里还压着东西、而且超过判定窗口没来拉的 agent。
+//
+// **这是「断线重连之后自动补上」的那一半。** 另一半在 connector 里：
+// cursor 落盘，重连后按 cursor 续拉，期间的事件一条不少。
+// 但那一半只在「有人在拉」时成立 —— 走 webhook 契约的端点是被动的，
+// 信号在它下线那一刻发出、丢掉，之后**没有第二次**：
+// 事件就一直躺在 inbox 里，而它以为自己没事可做。
+//
+// 所以 worker 定期扫一遍，对这些 agent 重发一次信号。等它的端点活过来，
+// 下一轮信号就落到它头上，它按 cursor 一拉就把断线期间的全补上了。
+//
+// 判据里的「超过判定窗口没拉」很重要：不加这一条，正在正常处理积压的 agent
+// 会被每轮都戳一次 —— 它本来就在拉，戳它只是噪音。
+func (s *Store) AgentsOwingEvents(ctx context.Context, limit int) ([]OwedAgent, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.agent_id::text, s.last_seq, s.cursor, coalesce(c.tier, 'longpoll'),
+		       extract(epoch FROM (now() - coalesce(s.last_pull_at, a.created_at)))
+		FROM agent_inbox_state s
+		JOIN agent a ON a.id = s.agent_id
+		LEFT JOIN LATERAL (
+			SELECT tier FROM agent_card WHERE agent_id = a.id ORDER BY version DESC LIMIT 1
+		) c ON true
+		WHERE a.status = 'active' AND s.last_seq > s.cursor
+		ORDER BY s.last_seq - s.cursor DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("查欠账 agent: %w", err)
+	}
+	defer rows.Close()
+
+	var out []OwedAgent
+	for rows.Next() {
+		var o OwedAgent
+		var id string
+		var silent float64
+		if err := rows.Scan(&id, &o.LastSeq, &o.Cursor, &o.Tier, &silent); err != nil {
+			return nil, err
+		}
+		o.AgentID = domain.AgentID(id)
+		o.SilentFor = time.Duration(silent * float64(time.Second))
+		// 窗口内刚拉过的不算「失联」—— 它正在处理，戳它只是噪音。
+		if o.SilentFor < onlineWindow(o.Tier) {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// PurgeAckedInboxEvents 清掉**已经 ack 且超过保留期**的 inbox 事件。
+//
+// `seq <= cursor` 这个条件不能少，而且不是为了省事：cursor 之后的事件正是
+// 「agent 还没处理」的那些，一个断线两周的 agent 全部的救命数据都在那儿。
+// 按时间一刀切会把它们一起删掉 —— 而 agent 重连之后只会拉到一个空 inbox，
+// **不报错、不重试，就是什么都没有**，它永远不知道自己错过了什么。
+// 所以：过期只是允许删的前提，已被确认才是删的理由。
+//
+// 返回删掉的条数，给日志和指标用。
+func (s *Store) PurgeAckedInboxEvents(ctx context.Context, retain time.Duration) (int64, error) {
+	if retain <= 0 {
+		return 0, nil // 保留期没配就什么都不做，别把「没设置」当成「立刻删」
+	}
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM inbox_event e
+		USING agent_inbox_state s
+		WHERE s.agent_id = e.agent_id
+		  AND e.seq <= s.cursor
+		  AND e.created_at < now() - make_interval(secs => $1)`, retain.Seconds())
+	if err != nil {
+		return 0, fmt.Errorf("清理 inbox: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}

@@ -2715,6 +2715,18 @@ export interface components {
              * @description 记录建出来的时间。用来判断一条 pending_registration 挂了多久
              */
             createdAt?: string;
+            /**
+             * @description inbox 里还没被它处理的条数（`last_seq - cursor`）。
+             *     **断线期间积了多少，只有这一个数看得出来** —— 没有它，一个下线两周的
+             *     agent 在列表里和一个刚建好没事干的长得一模一样，都只是「离线」。
+             */
+            pendingEvents?: number;
+            /**
+             * Format: date-time
+             * @description 最老那条未处理事件的时间。`pendingEvents` 说「积了多少」，
+             *     这个说「积了多久」—— 两个一起才判断得了「它是慢，还是根本没在拉」。
+             */
+            oldestPendingAt?: string;
         };
         /** @description 名录条目。Card 的摘要，让 agent 判断该找谁。 */
         AgentSummary: {
