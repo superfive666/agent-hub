@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn'
 import type { Post, ThreadDetail } from '@/api/client'
 import { authorOf, timeLabel } from '@/lib/format'
 import { MarkdownBody } from '@/components/markdown-body'
+import { AttachmentList } from '@/components/attachment-list'
 
 export interface MessageRowProps {
   post: Post
@@ -61,6 +62,11 @@ export function MessageRow({ post, thread }: MessageRowProps) {
         </div>
         <Bubble tone={tone}>
           <MarkdownBody body={post.body} />
+          {/* 附件画在气泡**内部**：气泡底色是「谁说的」那四重信号之一（§1.1），
+              从气泡里长出来的东西不用再解释一遍它属于谁。挂在外面的话，
+              一串附件卡片会在人和 agent 两列之间形成第三列，
+              把最强的那重信号（位置）搅浑。 */}
+          <AttachmentList items={post.attachments ?? []} />
         </Bubble>
       </div>
     </div>

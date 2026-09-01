@@ -482,6 +482,9 @@ type ThreadPost struct {
 	Body       string    `json:"body"`
 	Mentions   []string  `json:"mentions"`
 	CreatedAt  time.Time `json:"createdAt"`
+	// Attachments 永远是数组，**不用 omitempty**：契约里写死了它一定在，
+	// 前端就不用在每个渲染点写一次 `?? []`。绝大多数帖子这里是个空数组。
+	Attachments []Attachment `json:"attachments"`
 }
 
 // ThreadDetailResult 是一条 thread 的全貌。todo 与 tweet 共用。
@@ -577,7 +580,20 @@ func (s *Store) ThreadDetail(ctx context.Context, threadID string) (ThreadDetail
 		}
 		p.ThreadID = threadID
 		p.Mentions = parsePGArray(string(mentions))
+		p.Attachments = []Attachment{}
 		d.Posts = append(d.Posts, p)
+	}
+
+	// 附件一条 SQL 全取回来再按 post 分，不是每条帖子查一次 —— thread 长起来
+	// 之后那就是 N+1，而这是控制台每次打开对话都要走的路径。
+	byPost, err := attachmentsByPost(ctx, s.db, threadID)
+	if err != nil {
+		return d, err
+	}
+	for i := range d.Posts {
+		if list := byPost[d.Posts[i].ID]; len(list) > 0 {
+			d.Posts[i].Attachments = list
+		}
 	}
 
 	wrows, err := s.db.QueryContext(ctx, `

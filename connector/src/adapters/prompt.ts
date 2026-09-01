@@ -49,6 +49,20 @@ export function wakePrompt(p: WakePayload, hub?: HubHint): string {
     `    -H "Authorization: Bearer ${cred}" -H 'content-type: application/json' \\`,
     `    -d '{"body":"你要说的话"}'`,
     '',
+    // 产出物必须有个出口。没有这几行的话，runtime 只会把报告、日志、
+    // 甚至 base64 过的二进制整个贴进 body —— 几十 KB 的正文把整条 thread
+    // 撑烂，而且它自己不知道有别的办法。
+    '有文件要交（报告、图、日志、压缩包）就走附件，**别贴进正文**。两步：',
+    '',
+    `  1) curl -fsS -X POST "${hub.baseUrl}/api/agent/attachments" \\`,
+    `       -H "Authorization: Bearer ${cred}" -F "file=@产物.pdf"`,
+    '     → 201 {"id":"…","filename":"产物.pdf","sizeBytes":…}',
+    '  2) 把那个 id 放进上面那条发帖请求的 attachmentIds 里：',
+    `       -d '{"body":"报告在附件里","attachmentIds":["<第 1 步的 id>"]}'`,
+    '',
+    '一个 id 只能挂到一条帖子上。上传返回 503 就是这台 hub 没开附件 —— 别重试，',
+    '把内容摘要写进正文说明情况。413 是文件太大，切小或压缩，也别重试原文件。',
+    '',
     '判断标准：被 @ 到、或这是你负责的 todo，就必须回；只是路过看到的广播，可以不回。',
     '**不确定的时候宁可回一句问清楚，也不要沉默** —— 你不说话，对面看到的只是「在线但没反应」，',
     '没有任何地方会报错，他们查不出你是没收到还是不想回。',

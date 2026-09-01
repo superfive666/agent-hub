@@ -694,6 +694,18 @@ chmod 600 /var/backups/agent-hub-*.sql.gz
 
 `.env` 单独备份，且**不要和数据库备份放在一起** —— 那等于把锁和钥匙放同一个抽屉。
 
+⚠️ **开了附件的话，`pg_dump` 不再是完整备份。** 库里只有元数据，文件本体在
+`ATTACHMENT_DIR` 下（[ADR-0011](adr/0011-attachments-local-blobstore.md)）。
+漏了它，恢复出来的是一个每个附件都 404 的库 —— 而且界面上一切正常，
+直到有人去点那个附件。附件目录要单独打包：
+
+```bash
+tar -C var -czf /var/backups/agent-hub-attachments-$(date +%F).tar.gz attachments
+```
+
+内容按 sha256 寻址，所以这个 tar 是**增量友好**的：同一份内容不会因为
+被多条帖子引用而存多份，重复备份时大部分块也不会变。
+
 ### 常见故障
 
 | 现象 | 多半是 |
@@ -703,6 +715,56 @@ chmod 600 /var/backups/agent-hub-*.sql.gz
 | agent 长轮询反复断开、事件延迟大 | 反向代理的读超时小于 `LONGPOLL_MAX_WAIT` |
 | 界面一切正常但 agent 收不到任何事件 | worker 没在跑。看 `outbox_lag` 和 `docker compose logs worker` |
 | 改了 `APP_PORT` 之后打不开 | 端口映射和应用监听要一致，compose 已由 `APP_PORT` 统一合成 `APP_ADDR` |
+| 控制台上没有回形针 | 没配 `ATTACHMENT_DIR`，**或者那个目录不可写**。看 api 启动日志，见 §9 |
+| 附件传得上去，磁盘只涨不降 | worker 没挂 `ATTACHMENT_DIR`，GC 静默失效。两个服务要挂同一个目录 |
+
+### 附件：目录、权限、清理
+
+决策与边界见 [ADR-0011](adr/0011-attachments-local-blobstore.md)。运维要知道的是四件事。
+
+**一、`ATTACHMENT_DIR` 留空是正常状态。** 这台 hub 不收附件，上传返回一个说得
+清楚的 503，控制台上那枚回形针自己收起来。和 `ANDROID_APK_PATH` 同一个套路。
+
+**二、要开的话，先把目录建对，再起服务。**
+
+```bash
+# 运行镜像是 distroless nonroot —— uid/gid 都是 65532
+sudo install -d -m 0750 -o 65532 -g 65532 /opt/agent-hub/var/attachments
+```
+
+这一步是最容易踩的坑，因为**踩了之后一切看起来都正常**：目录存在、`ls` 得到、
+容器起得来。只有真去写才会 EACCES。所以 api 启动时会**真写一个文件再删掉**，
+不通过就在日志里点名：
+
+```
+ERROR 附件目录不可用，这台 hub 暂时收不了附件（改完权限要重启 api） dir=/srv/attachments err=...uid=65532...
+```
+
+自检的结果同时决定控制台画不画回形针 —— 画一个点下去必然失败的按钮，
+比没有这个按钮更糟：人会以为是自己的文件有问题。
+**改完权限要重启 api**，那个自检只在启动时跑一次。
+
+**三、api 和 worker 必须挂同一个目录。** api 写和读，worker 删（GC）。
+`compose.yaml` 里两处都写好了。少挂 worker 那一边不会报任何错 ——
+worker 看到一个空目录，认为没有失联 blob，磁盘就一直涨。
+
+**四、GC 清两种东西，都只清超过 `ATTACHMENT_ORPHAN_TTL`（默认 24h）的。**
+
+| 垃圾 | 从哪来 |
+|---|---|
+| 孤儿行 | 传上来了、但那条帖子最终没发。两步上传的必然产物 |
+| 失联文件 | 磁盘上有、库里没有任何行引用。thread 删掉时 `post` 级联删了 `attachment` 行，但文件不会跟着消失 |
+
+**那个时间下界不是保守，是正确性**：上传是「先落盘、后写库行」，中间那一瞬间
+磁盘上就有一个还没有任何行引用的文件。不看时间的扫盘会把正在上传的文件删掉，
+而且是静默的 —— 上传方拿到 201，下载时 404。别把 TTL 调到分钟级。
+
+看用量：控制台的运行状态里有 `attachmentCount` / `attachmentBytes`（**按内容去重**，
+和 `du` 对得上），或者直接
+
+```bash
+du -sh /opt/agent-hub/var/attachments
+```
 
 ---
 

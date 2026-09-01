@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/superfive666/agent-hub/agent-hub-worker/internal/gateway"
+	"github.com/superfive666/agent-hub/internal/blobstore"
 	"github.com/superfive666/agent-hub/internal/store"
 )
 
@@ -39,6 +40,19 @@ type Config struct {
 	// 真正生效的是平台设置里的 `inboxRetentionDays`（管理员在设置页能改）；
 	// 这里只是读不到设置时的兜底。0 表示不清理。
 	InboxRetention time.Duration
+
+	// Blobs 是附件的磁盘存储（ADR-0011）。零值 = 这台部署没开附件，
+	// 整个附件 GC 跳过。**worker 必须和 api 挂同一个目录** ——
+	// 少挂一边的症状是 GC 静默不工作：worker 看到一个空目录，
+	// 于是认为「没有失联 blob」，磁盘慢慢涨，没有任何报错。
+	Blobs blobstore.Store
+	// AttachmentTTL 是「传上来但一直没挂到帖子上」的宽限期，也是扫盘的时间下界。
+	// 默认 24h。0 表示不清理附件。
+	//
+	// **这个时间下界不是保守，是正确性**：上传是「先落盘、后写库行」，
+	// 中间那一瞬间磁盘上就有一个还没有任何行引用的文件。不看时间的扫盘
+	// 会把正在上传的文件删掉 —— 上传方拿到 201，下载时 404。
+	AttachmentTTL time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -56,6 +70,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.PurgeEvery == 0 {
 		c.PurgeEvery = time.Hour
+	}
+	if c.AttachmentTTL == 0 {
+		c.AttachmentTTL = 24 * time.Hour
 	}
 	return c
 }
@@ -127,6 +144,7 @@ func (w *Worker) Run(ctx context.Context) error {
 			w.renotifyStalled(ctx)
 		case <-purge.C:
 			w.purgeInbox(ctx)
+			w.purgeAttachments(ctx)
 		default:
 		}
 
@@ -210,6 +228,70 @@ func (w *Worker) purgeInbox(ctx context.Context) {
 	}
 	if n > 0 {
 		w.log.Info("清理已确认的 inbox 事件", "deleted", n, "retention", retain)
+	}
+}
+
+// purgeAttachments 回收两种附件垃圾（ADR-0011 第五条）。
+//
+// 一、**孤儿行**：传上来了、但那条帖子最终没发。两步上传的必然产物。
+// 二、**失联 blob**：磁盘上有、库里没有任何行引用。thread 被删时
+//
+//	post 级联删掉 attachment 行，但磁盘上那个文件不会跟着消失。
+//
+// 两件事都只动**早于 TTL** 的东西，理由见 Config.AttachmentTTL。
+//
+// 顺序是「先清行、再扫盘」，不能反过来：反过来的话，刚被判为「还有人引用」的
+// blob，紧接着那一步就把最后一条引用它的行删了 —— 这一轮漏掉它，
+// 要等下一轮才清得掉。功能上不算错，但会让「删了 thread 磁盘没降」这种
+// 现象反复出现，运维每次都要重新确认一遍是不是 GC 坏了。
+//
+// **删行绝不等于删文件。** 去重让一份内容可能被多条行引用（同一个产物
+// 发到两条 thread）。所以扫盘那一步要回头问库：这个 sha 还有人引用吗？
+func (w *Worker) purgeAttachments(ctx context.Context) {
+	if !w.cfg.Blobs.Enabled() || w.cfg.AttachmentTTL <= 0 {
+		return
+	}
+	before := time.Now().Add(-w.cfg.AttachmentTTL)
+
+	if n, err := w.store.PurgeOrphanAttachments(ctx, before); err != nil {
+		w.log.Error("清理孤儿附件失败", "err", err)
+		// 不 return：孤儿没清掉不影响下面扫盘那一步，那一步清的是另一批东西。
+	} else if n > 0 {
+		w.log.Info("清理没挂到任何帖子上的附件", "deleted", n, "ttl", w.cfg.AttachmentTTL)
+	}
+
+	onDisk, err := w.cfg.Blobs.List(before)
+	if err != nil {
+		w.log.Error("扫附件目录失败（卷没挂上？）", "dir", w.cfg.Blobs.Dir, "err", err)
+		return
+	}
+	if len(onDisk) > 0 {
+		free, err := w.store.UnreferencedSHAs(ctx, onDisk)
+		if err != nil {
+			// **查不出来就一个都不删。** 反过来（查不出来就当没人引用）
+			// 是在一次数据库抖动里把所有附件删光，而且不可恢复。
+			w.log.Error("查失联 blob 失败，这一轮不删任何文件", "err", err)
+			return
+		}
+		removed := 0
+		for _, sha := range free {
+			if err := w.cfg.Blobs.Remove(sha); err != nil {
+				w.log.Error("删失联 blob 失败", "sha", sha, "err", err)
+				continue
+			}
+			removed++
+		}
+		if removed > 0 {
+			w.log.Info("清理没有任何记录引用的附件文件", "deleted", removed)
+		}
+	}
+
+	// 进程在上传中途被杀会留下 .upload-* 临时文件。它们不是 blob（名字不是
+	// 合法 sha），上面那趟扫描看不见它们，只能单独收一次尾。
+	if n, err := w.cfg.Blobs.SweepStale(before); err != nil {
+		w.log.Error("清理遗留临时文件失败", "err", err)
+	} else if n > 0 {
+		w.log.Info("清理上传中断留下的临时文件", "deleted", n)
 	}
 }
 

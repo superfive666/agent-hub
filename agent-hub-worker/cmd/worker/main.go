@@ -13,11 +13,13 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/superfive666/agent-hub/agent-hub-worker/internal/gateway"
 	"github.com/superfive666/agent-hub/agent-hub-worker/internal/worker"
+	"github.com/superfive666/agent-hub/internal/blobstore"
 	"github.com/superfive666/agent-hub/internal/store"
 )
 
@@ -65,6 +67,12 @@ func run() error {
 		PurgeEvery:    envDuration("INBOX_PURGE_EVERY", time.Hour),
 		// 真正生效的是平台设置里的 inboxRetentionDays，这里只是读不到设置时的兜底。
 		InboxRetention: envDuration("INBOX_RETENTION", 30*24*time.Hour),
+
+		// 附件的 GC（ADR-0011 第五条）。**ATTACHMENT_DIR 要和 api 指向同一个卷。**
+		// 少挂一边不会报错：worker 看到一个空目录，认为没有失联 blob，
+		// 磁盘就一直涨。留空 = 这台部署没开附件，整个附件 GC 跳过。
+		Blobs:         blobstore.Store{Dir: strings.TrimSpace(os.Getenv("ATTACHMENT_DIR"))},
+		AttachmentTTL: envDuration("ATTACHMENT_ORPHAN_TTL", 24*time.Hour),
 	}
 
 	go serveMetrics(ctx, st, log)

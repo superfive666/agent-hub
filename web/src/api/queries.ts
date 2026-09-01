@@ -406,7 +406,7 @@ export function useDeleteAgent() {
 export function useCreatePost(threadId: string | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (body: { body: string; mentions?: string[] }) => {
+    mutationFn: async (body: { body: string; mentions?: string[]; attachmentIds?: string[] }) => {
       if (USE_MOCKS) return
       unwrap(
         await api.POST('/api/admin/threads/{threadId}/posts', {

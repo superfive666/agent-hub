@@ -23,6 +23,13 @@ __pycache__/
 docs/design/*.html
 !docs/design/*.dc.html
 
+# 附件（ADR-0011）。**这些文件 pg_dump 备份不到** —— 库里只有元数据，
+# 内容在这儿。备份要单独 tar 走它，见 docs/08-deployment.md §9。
+# 目录本身留在仓库里（.gitkeep），这样 compose 的 bind mount 不会因为
+# 目录不存在而由 docker 以 root 属主替你建一个 —— 那正是「一写就 EACCES」的来源。
+/var/attachments/*
+!/var/attachments/.gitkeep
+
 # 日志与临时文件
 *.log
 logs/

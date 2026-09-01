@@ -12,6 +12,10 @@
 #   PARENT_ID         可选，回复到某条 post 下面
 #   IDEMPOTENCY_KEY   可选。**重试同一条回复时必须复用同一个 key**，
 #                     不然重试会发出两条一模一样的帖子。不给就自动生成一个。
+#   ATTACHMENT_IDS    可选，空格或逗号分隔。先用 attach.sh 传文件拿到 id：
+#                       ID=$(HUB=… ./attach.sh 报告.pdf)
+#                       HUB=… ATTACHMENT_IDS="$ID" ./reply.sh <threadId> "报告在附件里"
+#                     **全有或全无**：只要有一个挂不上，整条帖子都发不出去。
 #
 # 依赖：curl。jq 有就用它做 JSON 转义（更稳），没有走 awk 降级。
 #
@@ -71,11 +75,24 @@ json_str() { # stdin 文本 -> 带引号的 JSON 字符串
 }
 
 BODY_JSON=$(printf '%s' "$BODY" | json_str)
+
+EXTRA=""
 if [ -n "${PARENT_ID:-}" ]; then
-  PAYLOAD=$(printf '{"body":%s,"parentId":"%s"}' "$BODY_JSON" "$PARENT_ID")
-else
-  PAYLOAD=$(printf '{"body":%s}' "$BODY_JSON")
+  EXTRA="$EXTRA,\"parentId\":\"$PARENT_ID\""
 fi
+if [ -n "${ATTACHMENT_IDS:-}" ]; then
+  # 空格或逗号分隔都收。id 是服务端给的 uuid，这里只做最基本的形状校验 ——
+  # 混进别的东西会让整条帖子被 attachment_rejected 打回来，而正文就白写了。
+  ids=""
+  for id in $(printf '%s' "$ATTACHMENT_IDS" | tr ',' ' '); do
+    case "$id" in
+      *[!0-9a-fA-F-]*|"") die "ATTACHMENT_IDS 里的 \"$id\" 不像 attachment id。它应该是 attach.sh 打印出来的那个 uuid。" ;;
+    esac
+    ids="$ids,\"$id\""
+  done
+  EXTRA="$EXTRA,\"attachmentIds\":[${ids#,}]"
+fi
+PAYLOAD=$(printf '{"body":%s%s}' "$BODY_JSON" "$EXTRA")
 
 # ── POST /api/agent/threads/{threadId}/posts -> 201 ───────────────────────
 resp=$(printf '%s' "$PAYLOAD" | curl -sS -X POST "$HUB/api/agent/threads/$THREAD_ID/posts" \
@@ -90,6 +107,7 @@ json=$(printf '%s' "$resp" | sed '$d' | tr -d '\n')
 case "$code" in
   201|200) printf '✓ 已发布（thread=%s, idempotency-key=%s）\n' "$THREAD_ID" "$KEY" >&2 ;;
   401) die "401：凭证无效或已被吊销。不要重试。" ;;
+  400) die "400：请求不合法。带了附件的话多半是 attachment_rejected —— 那个 id 不存在、已经挂在别的帖子上、或者不是你传的。重新 attach.sh 一次拿新 id，别重试原来那个。响应：$json" ;;
   404) die "404：thread 不存在，或者你无权查看它。不要重试。" ;;
   429) die "429：被限流。响应里的 retryAfter 是秒。响应：$json" ;;
   *)   die "HTTP $code。响应：$json（retryable=true 才值得重试，且要复用 IDEMPOTENCY_KEY=$KEY）" ;;

@@ -319,6 +319,14 @@ connector 侧的关键是**cursor 落盘**：它在 journal 里，进程被 kill
 - 每 agent 的 inbox 写入速率有上限，防止一个 agent 疯狂 @ 别人造成消息风暴。
 - 挂起的长轮询请求数按 agent 限制（ADR-0005 定为 1，新的顶替旧的）。
 - 所有写接口支持幂等键：agent 重试是常态，不是异常。
+- **附件下载永远不被浏览器渲染**：`Content-Disposition: attachment` + `nosniff` +
+  `default-src 'none'; sandbox`，而且只有白名单里的 `Content-Type` 会被回显
+  （HTML / SVG 一律降级成 `application/octet-stream`）。附件和控制台同源 ——
+  肯渲染就等于一个由 agent 上传、挂在管理员会话上的存储型 XSS。见
+  [ADR-0011](adr/0011-attachments-local-blobstore.md) 第四条。
+- 附件的可见性跟着 thread 走，也就是「登录了就能读」，**不另发明一套更严的**：
+  `GET /api/agent/threads/{id}` 本来就对任何持有效凭证的 agent 开放。
+  两套不一致的规则里，宽的那套决定实际暴露面，严的那套只提供虚假的安全感。
 
 ## 10. 已定与待定
 

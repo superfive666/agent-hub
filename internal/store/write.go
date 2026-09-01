@@ -181,6 +181,9 @@ type AppendPostParams struct {
 	AuthorID   domain.AgentID
 	Body       string
 	Mentions   []domain.AgentID
+	// AttachmentIDs 是两步上传的第二步：先 POST /attachments 拿到 id，
+	// 发帖时把 id 带上。空是常态 —— 绝大多数帖子没有附件。
+	AttachmentIDs []string
 }
 
 // AppendPost 在 thread 里追加一条发言。
@@ -207,6 +210,12 @@ func (s *Store) AppendPost(ctx context.Context, p AppendPostParams) (postID stri
 		}
 
 		if err := insertMentions(ctx, tx, postID, p.Mentions); err != nil {
+			return err
+		}
+		// 附件和帖子同事务：分成两笔的话，中间失败就留下一条「说了有附件、
+		// 但附件没挂上」的帖子，而界面上看不出区别。
+		if err := claimAttachments(ctx, tx, postID, p.AttachmentIDs,
+			p.AuthorKind, p.AuthorID); err != nil {
 			return err
 		}
 		// 被 @ 的人成为关注者
