@@ -10,10 +10,18 @@ import { Inset } from '@/components/ui/inset'
 import { AppShell, PageHeader } from '@/components/app-shell'
 import { MentionTextarea, mentionedAgentIds } from '@/components/mention-textarea'
 import { MessageRow } from '@/components/message-row'
+import {
+  AttachmentPicker,
+  PendingAttachments,
+  hasUploading,
+  readyIds,
+  type Pending,
+} from '@/components/attachment-picker'
 import { OutboxBanner } from '@/components/outbox-banner'
 import {
   useCreatePost,
   useDirectory,
+  useMe,
   useThread,
   useTodoAction,
   useTodoSteps,
@@ -47,7 +55,16 @@ export default function ThreadRoute() {
   const { data: thread, isLoading: threadLoading, isError, error } = useThread(threadId)
   const { data: agents, isPending: agentsPending } = useDirectory()
   const [draft, setDraft] = useState('')
+  const [files, setFiles] = useState<Pending[]>([])
   const post = useCreatePost(threadId)
+  /**
+   * 这个部署收不收附件。**不是前端猜的** —— /api/admin/me 里的
+   * `attachments.enabled` 意思是「配了目录**而且**那个目录真的能写」。
+   * 只看「配了没」的话，权限配错时这里会画出一枚每次都失败的回形针。
+   */
+  const me = useMe()
+  const att = me.data?.attachments
+  const canAttach = !!att?.enabled
   const act = useTodoAction(threadId)
 
   // todo 列表还在拉的时候确实该显示加载中 —— threadId 正是从它身上取的
@@ -113,12 +130,25 @@ export default function ThreadRoute() {
   const send = () => {
     const body = draft.trim()
     if (!body) return
+    // 还有在传的就不发。提交一串还不存在的 id 会让整条帖子被
+    // attachment_rejected 打回来，而那段话就白写了。
+    if (hasUploading(files)) return
     // 正文里的 @name 按名录映射成 agentId 一起提交 —— 被 @ 只产生关注者，不指派（§1.2）。
     // 匹配不上的 @xxx 忽略掉：正文里本来就可能有普通的 @。
     const mentions = mentionedAgentIds(body, agents ?? [])
+    const attachmentIds = readyIds(files)
     post.mutate(
-      { body, ...(mentions.length ? { mentions } : {}) },
-      { onSuccess: () => setDraft('') },
+      {
+        body,
+        ...(mentions.length ? { mentions } : {}),
+        ...(attachmentIds.length ? { attachmentIds } : {}),
+      },
+      {
+        onSuccess: () => {
+          setDraft('')
+          setFiles([])
+        },
+      },
     )
   }
 
@@ -446,16 +476,36 @@ export default function ThreadRoute() {
                 }
               }}
             />
+            {/* 回形针只在这个部署真的收得了附件时才画。画一个点下去必然
+                失败的按钮，比没有这个按钮更糟 —— 人会以为是自己的文件有问题。 */}
+            {canAttach && (
+              <AttachmentPicker
+                items={files}
+                onChange={setFiles}
+                maxBytes={att?.maxBytes ?? 0}
+                maxPerPost={att?.maxPerPost ?? 1}
+                disabled={post.isPending}
+              />
+            )}
             <Button
               variant="pri"
               aria-label="发送"
               className="px-3.5 py-2.5"
-              disabled={!draft.trim() || post.isPending}
+              // 还有在传的就按不动。让它发出去只会拿回一个
+              // attachment_rejected，而那段话就白写了。
+              disabled={!draft.trim() || post.isPending || hasUploading(files)}
               onClick={send}
             >
               <Send size={16} />
             </Button>
           </div>
+          {canAttach && (
+            <PendingAttachments
+              items={files}
+              onRemove={(key) => setFiles(files.filter((f) => f.key !== key))}
+              maxPerPost={att?.maxPerPost ?? 1}
+            />
+          )}
           {thread && (
             <div className="mt-2.5 flex items-center gap-2 pl-1.5">
               <Chip tone="human" size="sm">

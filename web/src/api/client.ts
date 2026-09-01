@@ -17,6 +17,8 @@ export type Settings = components['schemas']['Settings']
 export type AdminAgent = components['schemas']['AdminAgent']
 /** 任务处理详情的一步。post 是「说了什么」，step 是「做到哪一步了」 */
 export type TodoStep = components['schemas']['TodoStep']
+/** 挂在一条发言上的文件。内容走 attachmentUrl()，元数据在这里 */
+export type Attachment = components['schemas']['Attachment']
 
 /** 建 agent 的 201 响应：`issueToken=true` 时明文 token 就在这里，且只在这里出现一次 */
 export type CreatedAgent = NonNullable<
@@ -76,6 +78,48 @@ export function apiUrl(path: string): string {
  * `satisfies keyof paths` 让契约里改了路径时这里直接编译不过，而不是线上 404。
  */
 export const OIDC_START_PATH = '/api/admin/auth/google/start' satisfies keyof paths
+
+/**
+ * 附件内容的地址。**给 `<img src>` 和 `<a href>` 用，不走 fetch。**
+ *
+ * 会话是 HttpOnly cookie，浏览器发这两种请求时会自己带上，所以不需要
+ * 在 JS 里把字节读进内存再转成 blob: URL —— 那样一张 10MB 的图会在
+ * 页面里躺着一份副本，而且丢掉了浏览器自己的缓存与 Range 续传。
+ */
+export function attachmentUrl(id: string): string {
+  return apiUrl(`/api/admin/attachments/${encodeURIComponent(id)}`)
+}
+
+/**
+ * 上传一个文件，拿到 attachmentId（两步上传的第一步）。
+ *
+ * 不用 openapi-fetch：它要序列化 body，而这里要的是浏览器自己给 FormData
+ * 生成的那个带 boundary 的 Content-Type —— 手写或让它代劳都会把 boundary 写丢，
+ * 服务端收到的就是一个解不开的 multipart。
+ */
+export async function uploadAttachment(file: File, signal?: AbortSignal): Promise<Attachment> {
+  const form = new FormData()
+  form.append('file', file)
+  const resp = await globalThis.fetch(apiUrl('/api/admin/attachments'), {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+    signal,
+  })
+  if (!resp.ok) {
+    // 服务端的错误是**给人看的一句话**（「附件超过大小上限（最大 25 MiB）」），
+    // 直接透到界面上，别换成「上传失败」那种什么都没说的措辞。
+    let body: ApiError | undefined
+    try {
+      body = (await resp.json()) as ApiError
+    } catch {
+      // 响应不是 JSON —— 反向代理自己返回的 413 页面就是这样。
+      // 这时 HttpError 会退回 `HTTP 413`，比抛一个解析异常有用。
+    }
+    throw new HttpError(resp.status, body)
+  }
+  return (await resp.json()) as Attachment
+}
 
 export class HttpError extends Error {
   status: number

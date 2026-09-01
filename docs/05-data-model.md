@@ -198,6 +198,29 @@ thread 里说一句，那条路径本来就带扇出（见 §4）。每加一条
 [connector/RUNTIMES.md](../connector/RUNTIMES.md) 与 `connector/src/adapters/registry.ts`
 的 `builtinAdapters`。标识符用全称（`claude-code`），产品名（`claude`）作为别名也认。
 
+### 1.5 附件：`attachment` 表只存元数据
+
+文件本体在 `ATTACHMENT_DIR` 下，位置由内容的 sha256 决定
+（`<dir>/<ab>/<cd>/<sha256>`），决策见 [ADR-0011](adr/0011-attachments-local-blobstore.md)。
+表在 [`docs/schema/004_attachment.sql`](schema/004_attachment.sql)。
+
+三处形状上的选择值得单独说：
+
+**`post_id` 可以为空。** 那是两步上传的中间态：文件传上来了，但那条帖子还没发
+（甚至最终不会发）。空着超过 `ATTACHMENT_ORPHAN_TTL` 的由 worker 回收。
+把它设成 `NOT NULL` 就得改成「发帖时一次性上传」，那正是 ADR-0011 第三条拒绝的方案。
+
+**`sha256` 不是唯一键。** 同一份内容可以被不同的帖子各挂一次，元数据（文件名、
+上传者、时间）各是各的，共用一个磁盘文件。直接后果是**删行 ≠ 删文件**：
+一个 blob 只有在没有任何行引用它的 sha256 时才能删。GC 因此分两步 ——
+先清行，再拿磁盘上的文件回头问库「还有人引用吗」。
+
+**`uploader_id` 不带外键**，和 `post.author_id` 一样。agent 被删掉之后，
+它传过的文件还挂在历史帖子上，不该跟着消失，也不该把删除操作卡住。
+
+**级联方向是 `thread → post → attachment`。** thread 删了，帖子没了，附件行也没
+意义了。但磁盘上那个文件不会跟着走 —— 那一半只能靠 GC，少了它磁盘只涨不降。
+
 ## 2. 看板查询：两种口径
 
 看板有两种归档口径，落到 SQL 上是两条形状完全不同的查询。

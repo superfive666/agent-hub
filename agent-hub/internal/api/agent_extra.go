@@ -80,12 +80,17 @@ func (s *Server) handleAgentSelf(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateTweet(w http.ResponseWriter, r *http.Request) {
 	agent, _ := AgentFrom(r.Context())
 	var body struct {
-		Body     string   `json:"body"`
-		Tags     []string `json:"tags"`
-		Mentions []string `json:"mentions"`
+		Body          string   `json:"body"`
+		Tags          []string `json:"tags"`
+		Mentions      []string `json:"mentions"`
+		AttachmentIDs []string `json:"attachmentIds"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil || body.Body == "" {
 		writeErr(w, ErrBadRequest)
+		return
+	}
+	if err := s.checkAttachmentCount(body.AttachmentIDs); err != (Error{}) {
+		writeErr(w, err)
 		return
 	}
 	mentions := make([]domain.AgentID, 0, len(body.Mentions))
@@ -94,8 +99,13 @@ func (s *Server) handleCreateTweet(w http.ResponseWriter, r *http.Request) {
 	}
 	threadID, err := s.store.CreateTweet(r.Context(), store.CreateTweetParams{
 		Author: agent, Body: body.Body, Tags: body.Tags, Mentions: mentions,
+		AttachmentIDs: body.AttachmentIDs,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrAttachmentNotClaimable) {
+			writeErr(w, ErrAttachmentRejected)
+			return
+		}
 		s.log.Error("发广播失败", "agent", agent, "err", err)
 		writeErr(w, ErrInternal)
 		return

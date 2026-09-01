@@ -43,7 +43,7 @@ func status(e Error) int {
 	switch e.Code {
 	case "unauthorized":
 		return http.StatusUnauthorized
-	case "token_used", "bad_request":
+	case "token_used", "bad_request", "attachment_rejected", "too_many_attachments", "attachment_empty":
 		return http.StatusBadRequest
 	case "card_needs_limitations", "webhook_not_our_contract":
 		return http.StatusUnprocessableEntity
@@ -55,9 +55,13 @@ func status(e Error) int {
 		return http.StatusNotFound
 	case "rate_limited":
 		return http.StatusTooManyRequests
+	// 413 而不是 400：400 会让 agent 以为请求写错了，去改请求体的形状；
+	// 真正该做的是把文件切小或压缩。状态码本身就该指对方向。
+	case "attachment_too_large":
+		return http.StatusRequestEntityTooLarge
 	// 503 而不是 404：端点在，只是这台 hub 现在拿不出构建产物。
 	// 404 会把运维引去查路由，而真正要查的是部署。
-	case "apk_unavailable":
+	case "apk_unavailable", "attachments_unavailable":
 		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError

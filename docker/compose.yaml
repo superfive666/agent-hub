@@ -98,12 +98,32 @@ services:
       # 填的是**容器内**路径，配合下面的 volumes 挂载（宿主机 ./release）。
       ANDROID_APK_PATH: ${ANDROID_APK_PATH:-}
       ANDROID_APK_VERSION: ${ANDROID_APK_VERSION:-}
+
+      # ── 聊天窗口里的附件（可选）─────────────────────────────────────
+      # 留空 = 这台 hub 不收附件，上传返回一个说得清楚的 503，控制台上的
+      # 回形针自己收起来。**这是正常状态，不是配置遗漏。**（ADR-0011）
+      #
+      # 填的是**容器内**路径，配合下面的 volumes。和 APK 那个只读挂载不同，
+      # 这个目录**必须可写**，而且 api 与 worker 要挂同一个 —— api 写和读，
+      # worker 删（GC）。少挂 worker 那边的症状是 GC 静默不工作：
+      # worker 看到一个空目录，认为没有失联 blob，磁盘慢慢涨，没有任何报错。
+      #
+      # ⚠️ 运行镜像是 distroless nonroot（uid 65532）。宿主机上那个目录
+      # 默认是 root 属主 —— 存在、能读、**一写就 EACCES**。建目录见
+      # docs/08-deployment.md §9，api 启动时会真写一个文件自检并在日志里点名。
+      ATTACHMENT_DIR: ${ATTACHMENT_DIR:-}
+      ATTACHMENT_MAX_BYTES: ${ATTACHMENT_MAX_BYTES:-26214400}
+      ATTACHMENT_MAX_PER_POST: ${ATTACHMENT_MAX_PER_POST:-8}
     volumes:
       # 发布产物目录，只读挂进来。APK 不进 git（十几 MB 的二进制，
       # 每发一版塞一份），由 CI 构建后放到宿主机的 release/ 下。
       # 目录不存在时 compose 会自动建一个空目录 —— 空目录下 /download 就是
       # 那个 503，不会让整个服务起不来。
       - ../release:/srv/release:ro
+      # 附件目录，**可写**。不用具名卷而用 bind mount，是因为这份数据
+      # `pg_dump` 备份不到（库里只有元数据），运维得能直接 tar 走它 ——
+      # 具名卷要先 docker cp 出来，多一道谁都会忘的手续。
+      - ../var/attachments:/srv/attachments
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:${APP_PORT:-8080}"
     # 健康检查：distroless 镜像里没有 shell / curl，写不了 CMD-SHELL 探针。
@@ -154,6 +174,17 @@ services:
       PLATFORM_TIMEZONE: ${PLATFORM_TIMEZONE:-Asia/Singapore}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-agenthub}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agenthub}?sslmode=disable}
       WORKER_METRICS_PORT: ${WORKER_METRICS_PORT:-9090}
+
+      # 附件 GC（ADR-0011 第五条）。**必须和 api 指向同一个目录。**
+      # 只清两种东西，而且都只清超过 TTL 的：传上来却一直没挂到帖子上的孤儿行，
+      # 以及磁盘上有、库里没有任何行引用的失联文件。
+      # 时间下界不是保守是正确性：上传是「先落盘、后写库行」，中间那一瞬间
+      # 磁盘上就有一个还没有任何行引用的文件。
+      ATTACHMENT_DIR: ${ATTACHMENT_DIR:-}
+      ATTACHMENT_ORPHAN_TTL: ${ATTACHMENT_ORPHAN_TTL:-24h}
+    volumes:
+      # 和 api 同一个目录。少挂这一边不会报错，只是 GC 从此静默失效。
+      - ../var/attachments:/srv/attachments
     ports:
       # 只暴露给宿主机本地的监控进程，不要开到公网
       - "${METRICS_BIND:-127.0.0.1}:${WORKER_METRICS_PORT:-9090}:${WORKER_METRICS_PORT:-9090}"

@@ -215,3 +215,35 @@ export function maskEmail(v: string | undefined, keep = 6): string {
   if (local.length <= keep) return s
   return `${local.slice(0, keep)}**${s.slice(at)}`
 }
+
+/**
+ * 字节数写成人读的样子。
+ *
+ * 用 1024 进制并写成 KB/MB（不是 KiB/MiB）—— 界面上跟着操作系统的习惯走。
+ * 后端错误消息里那份用的是 MiB，因为那是给 agent 读的、要和配置里的
+ * 字节数严格对得上，两处口径不同是有意的。
+ */
+export function byteLabel(n: number | undefined): string {
+  if (n === undefined || n < 0) return '—'
+  if (n < 1024) return `${n} B`
+  const units = ['KB', 'MB', 'GB']
+  let v = n / 1024
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  // 小于 10 时留一位小数：1.4 MB 和 1 MB 差着 40%，取整会把这个差抹掉
+  return `${v < 10 ? Math.round(v * 10) / 10 : Math.round(v)} ${units[i]}`
+}
+
+/**
+ * 界面上能不能给这个附件画缩略图。
+ *
+ * 判据是**后端归一化之后**的 contentType，不是文件扩展名 —— 后端只回显
+ * 白名单里的类型，所以这里看到 image/* 就意味着它已经过了那道白名单。
+ * （`image/svg+xml` 不在白名单里，所以永远走不到这里。）
+ */
+export function isPreviewableImage(contentType: string | undefined): boolean {
+  return !!contentType && contentType.startsWith('image/')
+}

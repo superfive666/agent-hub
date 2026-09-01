@@ -117,9 +117,22 @@ func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleAdminMe 除了「我是谁」，还带着「这个控制台能干什么」。
+//
+// 附件能力放这里而不是 /health，是因为它是**部署形态**，不是运行状态：
+// 它不会自己变好也不会自己变坏，而 require-auth 每个页面都会拉一次 me，
+// 控制台正好在那时候决定画不画回形针。放 health 里会让一个可选功能的
+// 开关和「worker 死没死」那条不可关闭的告警挤在同一个响应里。
 func (s *Server) handleAdminMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"username": s.adminSubject(), "authMode": string(s.cfg.AuthMode), "timezone": s.cfg.Timezone,
+		"attachments": map[string]any{
+			// enabled 是「配了目录**而且**那个目录真的能写」。
+			// 只看配置的话，权限配错时控制台会画出一个每次都失败的回形针。
+			"enabled":    s.attachmentsWritable,
+			"maxBytes":   s.cfg.AttachmentMaxBytes,
+			"maxPerPost": s.cfg.AttachmentMaxPerPost,
+		},
 	})
 }
 
@@ -456,11 +469,16 @@ func (s *Server) listTodoSteps(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminPost(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("threadID")
 	var body struct {
-		Body     string   `json:"body"`
-		Mentions []string `json:"mentions"`
+		Body          string   `json:"body"`
+		Mentions      []string `json:"mentions"`
+		AttachmentIDs []string `json:"attachmentIds"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil || body.Body == "" {
 		writeErr(w, ErrBadRequest)
+		return
+	}
+	if err := s.checkAttachmentCount(body.AttachmentIDs); err != (Error{}) {
+		writeErr(w, err)
 		return
 	}
 	mentions := make([]domain.AgentID, 0, len(body.Mentions))
@@ -469,8 +487,13 @@ func (s *Server) handleAdminPost(w http.ResponseWriter, r *http.Request) {
 	}
 	postID, err := s.store.AppendPost(r.Context(), store.AppendPostParams{
 		ThreadID: threadID, AuthorKind: "admin", Body: body.Body, Mentions: mentions,
+		AttachmentIDs: body.AttachmentIDs,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrAttachmentNotClaimable) {
+			writeErr(w, ErrAttachmentRejected)
+			return
+		}
 		s.log.Error("管理员回帖失败", "thread", threadID, "err", err)
 		writeErr(w, ErrInternal)
 		return
@@ -545,12 +568,22 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrInternal)
 		return
 	}
+	// 附件占了多少盘。**这一条查失败不许拖垮整个探针** —— 上面那五个字段
+	// 是 outbox 告警的唯一来源（ADR-0004），为了一个「附件用量」的旁支统计
+	// 让整条探针 500，等于把不可关闭的告警关掉了。查不到就报 0 并记一条日志。
+	attCount, attBytes, err := s.store.CountAttachments(ctx)
+	if err != nil {
+		s.log.Error("统计附件用量失败（不影响 outbox 告警）", "err", err)
+		attCount, attBytes = 0, 0
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"outboxLagSeconds": lag,
 		"outboxPending":    pending,
 		"outboxDead":       dead,
 		"workerAlive":      alive,
 		"pendingLongPolls": s.inFlightPolls.Load(),
+		"attachmentCount":  attCount,
+		"attachmentBytes":  attBytes,
 	})
 }
 

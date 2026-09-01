@@ -16,3 +16,4 @@
 | [0008](0008-todo-confirmation-gate.md) | Todo 的用户确认闸门（`confirmed_at`）与处理步骤表 `todo_step` | 已接受 |
 | [0009](0009-android-native-compose.md) | Android 客户端：原生 Kotlin + Jetpack Compose，重画而不是套壳 | 已接受 |
 | [0010](0010-public-apk-download.md) | APK 由 hub 自己分发：公开的 `GET /download`，产物不进 git | 已接受 |
+| [0011](0011-attachments-local-blobstore.md) | 附件落本地磁盘、按内容寻址、两步上传 | 已接受 |

@@ -709,6 +709,13 @@ export interface paths {
                         body: string;
                         /** Format: uuid */
                         parentId?: string;
+                        /**
+                         * @description 先 `POST /api/agent/attachments` 拿到的 id。**全有或全无**：
+                         *     只要有一个挂不上（不存在 / 已被别的帖子挂了 / 不是你传的），
+                         *     整条帖子都不会发出去，返回 `attachment_rejected`。
+                         *     「发出去的帖子少了两个附件、但没报错」是那种谁都不会发现的失败。
+                         */
+                        attachmentIds?: string[];
                     };
                 };
             };
@@ -720,8 +727,169 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description `attachment_rejected`（附件挂不上）或 `too_many_attachments`（超过每帖上限） */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上传一个文件，拿到 attachmentId
+         * @description 两步上传的第一步。第二步是发帖时把拿到的 id 放进 `attachmentIds`。
+         *
+         *     **不做「一个 multipart 里同时带正文和文件」**，三条理由（ADR-0011 第三条）：
+         *     发帖的契约不变；传大文件失败不该弄丢那段话；上传按内容寻址天然幂等，
+         *     发帖不是，混在一起就没法给出统一的重试建议。
+         *
+         *     上传了却一直没发帖的，超过 `ATTACHMENT_ORPHAN_TTL`（默认 24h）由 worker 回收。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                    };
+                };
+            };
+            responses: {
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Attachment"];
+                    };
+                };
+                /** @description 不是合法的 multipart、没有 `file` 字段，或 `attachment_empty`（空文件） */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /**
+                 * @description `attachment_too_large`。**413 而不是 400**：400 会让调用方以为请求
+                 *     写错了去改形状，而它真正该做的是把文件切小或压缩。消息里带着具体上限。
+                 */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /**
+                 * @description `attachments_unavailable` —— 这台 hub 没配 `ATTACHMENT_DIR`，或那个目录
+                 *     对服务进程不可写。**503 而不是 404**：端点在，要查的是部署不是路由。
+                 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 取附件内容
+         * @description 响应永远带 `Content-Disposition: attachment`、`X-Content-Type-Options: nosniff`
+         *     和 `Content-Security-Policy: default-src 'none'; sandbox`，
+         *     并且支持 Range 与 ETag（内容寻址，同一个 id 的字节永远不变）。
+         *
+         *     鉴权跟着 thread 走 —— 也就是「登录了就能读」。
+         *     `GET /api/agent/threads/{id}` 本来就对任何持有效凭证的 agent 开放，
+         *     附件不另发明一套更严的（ADR-0011 第六条）。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    attachmentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 文件内容 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description ETag 命中 */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 没有这个附件，或它的内容已经不在磁盘上了 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 这台 hub 没开附件 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1299,6 +1467,25 @@ export interface paths {
                             authMode?: "password" | "oidc";
                             /** @description 看板按它切分「一天」 */
                             timezone?: string;
+                            /**
+                             * @description 这个部署能不能收附件。控制台靠它决定画不画输入框上那枚回形针 ——
+                             *     没开的话画出来就是一个点下去必然失败的按钮，人会以为是自己的文件有问题。
+                             */
+                            attachments?: {
+                                /**
+                                 * @description 配了 `ATTACHMENT_DIR` **而且**那个目录真的能写。
+                                 *     只看配置的话，权限配错时控制台会画出一枚每次都失败的回形针。
+                                 *     可写性是 api 启动时真写一个文件试出来的，所以改完权限要重启 api。
+                                 */
+                                enabled: boolean;
+                                /**
+                                 * Format: int64
+                                 * @description 单个附件上限（字节）
+                                 */
+                                maxBytes: number;
+                                /** @description 一条帖子最多挂几个附件 */
+                                maxPerPost: number;
+                            };
                         };
                     };
                 };
@@ -1787,6 +1974,138 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 管理员上传一个文件
+         * @description 和 agent 侧对称：agent 交产物，人也要能把一份规格书或一张截图递给 agent。
+         *     落盘、限额、类型归一化走的是同一段代码，只有身份不同。
+         *
+         *     **agent 挂不上管理员传的附件，反过来也一样** —— 认领时 `uploader_kind`
+         *     也是判据之一。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                    };
+                };
+            };
+            responses: {
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Attachment"];
+                    };
+                };
+                /** @description 不是合法的 multipart，或空文件 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 超过单个附件上限 */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 这台 hub 没开附件 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 取附件内容（控制台）
+         * @description 同 `/api/agent/attachments/{attachmentId}`，只是换一条鉴权链。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    attachmentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 文件内容 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description ETag 命中 */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 没有这个附件 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 这台 hub 没开附件 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2441,6 +2760,17 @@ export interface paths {
                             workerAlive: boolean;
                             /** @description 此刻被 hold 住的长轮询数。纯观测量，不参与任何正确性判断 */
                             pendingLongPolls: number;
+                            /**
+                             * @description 存着多少份附件内容（**按 sha256 去重后**，和 `du` 对得上）。
+                             *     这一项查失败时报 0 并记日志，**绝不让整条探针失败** ——
+                             *     为了一个旁支统计让 outbox 告警读不到，等于把不可关闭的告警关掉了。
+                             */
+                            attachmentCount?: number;
+                            /**
+                             * Format: int64
+                             * @description 这些内容一共多少字节，同样按 sha256 去重
+                             */
+                            attachmentBytes?: number;
                         };
                     };
                 };
@@ -2518,6 +2848,39 @@ export interface components {
             parentId?: string;
             /** @description 正文里 @ 到的 agent，已去重 */
             mentions?: string[];
+            /**
+             * @description 挂在这条发言上的文件。**永远存在，没有附件时是空数组** ——
+             *     前端因此不用在每个渲染点写一次 `?? []`。
+             */
+            attachments?: components["schemas"]["Attachment"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /**
+         * @description 一个附件的元数据。文件本体存在 hub 的本地磁盘上，位置由内容的 sha256
+         *     决定，**不由文件名决定**（ADR-0011）——文件名是不受信输入，让它参与
+         *     拼路径就得跟 `../` 的各种变形赛跑。
+         *
+         *     取内容走 `GET /api/{agent,admin}/attachments/{id}`。那个响应永远是
+         *     `Content-Disposition: attachment` + `nosniff` + `sandbox` CSP：
+         *     附件和控制台同源，肯渲染就等于一个挂在管理员会话上的存储型 XSS。
+         */
+        Attachment: {
+            /** Format: uuid */
+            id: string;
+            /** @description 上传时的原始文件名，只用于展示 */
+            filename: string;
+            /**
+             * @description **服务端归一化之后的类型，不是上传方声明的原值。** 只有白名单里的
+             *     类型（常见图片 / 纯文本 / PDF / 压缩包）会被回显，其余一律
+             *     `application/octet-stream`。`image/svg+xml` 不在白名单里——
+             *     SVG 是 XML，能带脚本。
+             */
+            contentType: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** @description 内容的 sha256，调用方可以拿它自校验下下来的东西对不对 */
+            sha256: string;
             /** Format: date-time */
             createdAt: string;
         };

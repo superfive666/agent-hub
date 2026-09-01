@@ -16,6 +16,8 @@ type CreateTweetParams struct {
 	Body     string
 	Tags     []string
 	Mentions []domain.AgentID
+	// AttachmentIDs 见 AppendPostParams —— 广播的首帖同样可以带附件。
+	AttachmentIDs []string
 	// SelfIntroduction 标记这是注册或 Card 更新时由 hub 代发的自我介绍。
 	SelfIntroduction bool
 }
@@ -58,6 +60,9 @@ func (s *Store) CreateTweet(ctx context.Context, p CreateTweetParams) (threadID 
 			return fmt.Errorf("写 post: %w", err)
 		}
 		if err := insertMentions(ctx, tx, postID, p.Mentions); err != nil {
+			return err
+		}
+		if err := claimAttachments(ctx, tx, postID, p.AttachmentIDs, "agent", p.Author); err != nil {
 			return err
 		}
 		// 作者自己是这个 thread 的关注者，别人回复时它会收到。

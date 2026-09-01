@@ -7,6 +7,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sync/atomic"
@@ -27,6 +28,13 @@ type Server struct {
 	// 但即使只靠这个轮询，正确性也不受影响 —— 正确性在 inbox 里。
 	pollTick time.Duration
 
+	// attachmentsWritable 是启动时那次「真的写一个文件试试」的结果。
+	//
+	// 只在启动时算一次：控制台靠它决定画不画回形针，而「目录不可写」是个
+	// 部署态问题，不会自己好。改完权限要重启 api —— 这一条写进了部署文档。
+	// 每次请求都去写一下磁盘只是把一个启动期的检查摊到热路径上，不划算。
+	attachmentsWritable bool
+
 	// inFlightPolls 是此刻被 hold 住的长轮询数，/api/admin/health 用它。
 	// 它是运维观测量，不参与任何正确性判断：这个数不准也只是控制台上少一行信息。
 	// 它同时是「有多少 agent 在挂着等」的直接读数 —— 接近连接上限时能提前看到。
@@ -37,7 +45,26 @@ func New(s *store.Store, cfg config.Config, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{store: s, cfg: cfg, log: log, pollTick: 300 * time.Millisecond}
+	srv := &Server{store: s, cfg: cfg, log: log, pollTick: 300 * time.Millisecond}
+
+	// 附件目录的可写性在这里查一次。**故意不 fatal**：附件是可选功能，
+	// 为它拒绝启动等于把「附件传不了」升级成「整个平台没了」。
+	//
+	// 但也绝不能悄悄过去 —— 最常见的配错是「目录存在、能读、一写就 EACCES」
+	// （容器里跑 nonroot，宿主机上那个目录是 root 属主），只查存在性的自检
+	// 会在这种情况下报告「一切正常」，然后每一次上传都 500。
+	// 所以：ERROR 日志 + 控制台上收起回形针，两头都看得见。
+	if bs := srv.blobs(); bs.Enabled() {
+		if err := bs.Check(); err != nil {
+			log.Error("附件目录不可用，这台 hub 暂时收不了附件（改完权限要重启 api）",
+				"dir", cfg.AttachmentDir, "err", err)
+		} else {
+			srv.attachmentsWritable = true
+			log.Info("附件已开启", "dir", cfg.AttachmentDir,
+				"maxBytes", cfg.AttachmentMaxBytes, "maxPerPost", cfg.AttachmentMaxPerPost)
+		}
+	}
+	return srv
 }
 
 // Handler 返回装好路由的 http.Handler。
@@ -81,6 +108,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/agent/threads/{threadID}/posts", s.requireAgent(s.handleAppendPost))
 	mux.HandleFunc("POST /api/agent/me/dead-letters", s.requireAgent(s.handleDeadLetter))
 
+	// 附件（ADR-0011）。两步上传的第一步在这里，第二步是发帖时带上 attachmentIds。
+	//
+	// 下载**不公开**，和 /download 那个 APK 不一样：APK 是个不含任何实例数据的
+	// 空壳客户端，附件是这个平台上真实的工作产物。挂在鉴权后面。
+	mux.HandleFunc("POST /api/agent/attachments", s.requireAgent(s.handleAgentUpload))
+	mux.HandleFunc("GET /api/agent/attachments/{attachmentID}", s.requireAgent(s.handleAttachmentDownload))
+
 	mux.HandleFunc("GET /api/agent/threads/{threadID}", s.requireAgent(s.handleReadThread))
 	mux.HandleFunc("PUT /api/agent/me/card", s.requireAgent(s.handleUpsertCard))
 	mux.HandleFunc("GET /api/agent/me", s.requireAgent(s.handleAgentSelf))
@@ -118,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/directory", s.requireAdmin(s.handleDirectory))
 	mux.HandleFunc("GET /api/admin/board", s.requireAdmin(s.handleBoard))
 	mux.HandleFunc("GET /api/admin/health", s.requireAdmin(s.handleHealth))
+	mux.HandleFunc("POST /api/admin/attachments", s.requireAdmin(s.handleAdminUpload))
+	mux.HandleFunc("GET /api/admin/attachments/{attachmentID}", s.requireAdmin(s.handleAttachmentDownload))
 	mux.HandleFunc("GET /api/admin/settings", s.requireAdmin(s.handleGetSettings))
 	mux.HandleFunc("PUT /api/admin/settings", s.requireAdmin(s.handlePutSettings))
 
@@ -239,11 +275,16 @@ func (s *Server) handleAppendPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Body     string   `json:"body"`
-		Mentions []string `json:"mentions"`
+		Body          string   `json:"body"`
+		Mentions      []string `json:"mentions"`
+		AttachmentIDs []string `json:"attachmentIds"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil || body.Body == "" {
 		writeErr(w, ErrBadRequest)
+		return
+	}
+	if err := s.checkAttachmentCount(body.AttachmentIDs); err != (Error{}) {
+		writeErr(w, err)
 		return
 	}
 	mentions := make([]domain.AgentID, 0, len(body.Mentions))
@@ -253,9 +294,15 @@ func (s *Server) handleAppendPost(w http.ResponseWriter, r *http.Request) {
 
 	postID, err := s.store.AppendPost(r.Context(), store.AppendPostParams{
 		ThreadID: threadID, AuthorKind: "agent", AuthorID: agent,
-		Body: body.Body, Mentions: mentions,
+		Body: body.Body, Mentions: mentions, AttachmentIDs: body.AttachmentIDs,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrAttachmentNotClaimable) {
+			// 这是调用方的问题，不是服务的 —— 报 500 会让 agent 一直重试同一个
+			// 挂不上的 id。
+			writeErr(w, ErrAttachmentRejected)
+			return
+		}
 		s.log.Error("回帖失败", "agent", agent, "thread", threadID, "err", err)
 		writeErr(w, ErrInternal)
 		return
